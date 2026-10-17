@@ -82,10 +82,11 @@ import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Hosts the back stack. The main screen stays composed underneath so its tabs keep their lists;
@@ -309,6 +310,12 @@ private const val GestureSettleMillis = 200
 private const val GestureCommitMillis = 150
 
 /**
+ * How long the press state layer takes to fade out. COUI animates it with a critically damped spring
+ * (stiffness 438.65, response 0.3 s), which is under 1% of its strength after ~0.22 s.
+ */
+private const val SnapshotSettleMillis = 220L
+
+/**
  * The page under the top one, drawn while a back gesture is pulling the top one away. It is drawn
  * from the picture taken when it was covered, so it is exactly as the user left it, lists and all.
  * A page without one is composed instead: it is not composed the rest of the time, so it restores
@@ -321,7 +328,11 @@ private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
     if (snapshot != null) {
         Box(
             Modifier.fillMaxSize().drawBehind {
-                drawImage(snapshot, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
+                if (snapshot.width == 0 || snapshot.height == 0) return@drawBehind
+                drawImage(
+                    snapshot,
+                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                )
             },
         )
     } else {
@@ -364,11 +375,18 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
     val leaving = !navigator.stack.contains(entry)
     val covered = !leaving && navigator.stack.lastOrNull() !== entry
     val picture = rememberGraphicsLayer()
-    // A covered page stays composed while the page over it enters, and leaves composition after, so
-    // this is the moment to take its picture; it is let go again once the page is on top.
+    // The page stays composed while the one above it enters; taking a picture of it for the entry
+    // is what lets a back gesture reveal exactly where the user left it.
+    //
+    // The tap that opened the page above is released on the same frame as the push, and COUI fades
+    // its press state layer out over the following ~200 ms. The first picture therefore still
+    // carries the press overlay, so a second one is taken once the spring has settled — otherwise
+    // that overlay would come back with the reveal and blink away when the page is composed again.
     LaunchedEffect(covered) {
         if (covered) {
             withFrameNanos { }
+            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            delay(SnapshotSettleMillis)
             if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
         } else {
             entry.snapshot = null

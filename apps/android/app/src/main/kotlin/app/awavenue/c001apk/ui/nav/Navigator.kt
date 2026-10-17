@@ -33,6 +33,9 @@ class BackStackEntry internal constructor(
      * back gesture reveals the screen under the one it pulls away from this picture: composing the
      * screen again would show every list at the top, and it would jump to where the user left it
      * once the gesture is let go.
+     *
+     * The picture is taken once the press feedback of the tap that opened the page above has sprung
+     * out, so a reveal does not bring back an overlay that was already gone.
      */
     internal var snapshot: ImageBitmap? = null
 
