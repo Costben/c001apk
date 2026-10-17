@@ -43,17 +43,19 @@ import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.LoadingButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TextField
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.Hide
 import io.github.suqi8.coui.kmp.icon.extended.Show
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** The message the server sends when the picture captcha is wrong or missing. */
-private const val CAPTCHA_MESSAGE = "图形验证码不能为空\", \"图形验证码错误"
+/** The messages the server sends when the picture captcha is wrong or missing, alone or joined. */
+private val CAPTCHA_MESSAGES = setOf("图形验证码不能为空", "图形验证码错误", "图形验证码不能为空\", \"图形验证码错误")
 
 @Composable
 fun LoginScreen(onDone: () -> Unit) {
@@ -70,6 +72,10 @@ fun LoginScreen(onDone: () -> Unit) {
     var showCaptcha by remember { mutableStateOf(false) }
     var showPassword by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
+    // A login made elsewhere — the web login on top of this page — switches the session. Comparing
+    // against the session this page opened on keeps 添加账号 from closing as soon as it opens.
+    val openedOn = rememberSaveable { app.session.generation }
+    var done by remember { mutableStateOf(false) }
 
     val accountFocus = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
@@ -100,12 +106,15 @@ fun LoginScreen(onDone: () -> Unit) {
             try {
                 val outcome = app.repository.login(hash, account, password, captcha)
                 if (outcome.success) {
+                    done = true
                     context.toast("登录成功")
                     onDone()
                 } else {
                     if (outcome.message.isNotEmpty()) context.toast(outcome.message)
-                    if (outcome.message == CAPTCHA_MESSAGE || (showCaptcha && outcome.message == "密码错误")) {
+                    if (outcome.message in CAPTCHA_MESSAGES || (showCaptcha && outcome.message == "密码错误")) {
                         fetchCaptcha()
+                    } else if ("人机" in outcome.message) {
+                        navigator.push(Route.Web(Api.LOGIN_PAGE, isLogin = true))
                     }
                 }
             } catch (e: CancellationException) {
@@ -122,13 +131,16 @@ fun LoginScreen(onDone: () -> Unit) {
         accountFocus.requestFocus()
     }
 
-    LaunchedEffect(Unit) {
-        // A web login finishes on the browser route, so a session that is already on means success.
-        if (app.session.isLogin) {
+    LaunchedEffect(app.session.generation) {
+        // The page stays composed while it animates out, so a login it finished itself is skipped.
+        if (app.session.generation != openedOn && !done) {
+            done = true
             context.toast("登录成功")
             onDone()
-            return@LaunchedEffect
         }
+    }
+
+    LaunchedEffect(Unit) {
         try {
             requestHash = app.repository.loginParams().requestHash
         } catch (e: CancellationException) {
@@ -165,6 +177,12 @@ fun LoginScreen(onDone: () -> Unit) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Text(
+                "遇到人机验证或无法直接登录时，请使用右上角的“网页登录”，在酷安网页中完成验证与登录。",
+                modifier = Modifier.padding(bottom = 6.dp),
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
             TextField(
                 value = account,
                 onValueChange = { account = it },

@@ -16,11 +16,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +50,7 @@ import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Email
+import io.github.suqi8.coui.kmp.icon.extended.Hide
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val HeaderHeight = 169.dp
@@ -58,7 +66,12 @@ object UserStat {
 }
 
 @Composable
-fun UserInfoCard(user: Entity, onFollowClick: () -> Unit, onStatClick: (Int) -> Unit) {
+fun UserInfoCard(
+    user: Entity,
+    onFollowClick: () -> Unit,
+    onLocalFollow: () -> Unit,
+    onStatClick: (Int) -> Unit,
+) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     val app = LocalApp.current
@@ -69,6 +82,8 @@ fun UserInfoCard(user: Entity, onFollowClick: () -> Unit, onStatClick: (Int) -> 
     val level = user.string("level")
     val isFollow = user.string("isFollow") == "1"
     val isLogin = app.session.isLogin
+    val localFollowed = app.localFollow.contains(uid)
+    val secretFollow = isLogin && app.localFollow.secretEnabled
     // The Flutter card dims the cover on a light theme and lifts it on a dark one so the white
     // avatar ring keeps its contrast either way.
     val scrim = if (isAppInDarkTheme(app.settings.darkMode)) Color(0x5DFFFFFF) else Color(0x8D000000)
@@ -114,8 +129,23 @@ fun UserInfoCard(user: Entity, onFollowClick: () -> Unit, onStatClick: (Int) -> 
                 ) {
                     Icon(COUIIcons.Email, contentDescription = "私信")
                 }
-                Button(onClick = { if (isLogin) onFollowClick() }) {
-                    Text(if (isFollow) "取消关注" else "关注")
+                // A tap always works the account follow, or the local list for a guest; with 悄悄关注
+                // on, a long press works the local list for a signed-in account.
+                Button(
+                    onClick = onFollowClick,
+                    modifier = Modifier.longPress(enabled = secretFollow, onLongPress = onLocalFollow),
+                ) {
+                    if (isLogin && localFollowed) {
+                        Icon(COUIIcons.Hide, contentDescription = "已悄悄关注", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        when {
+                            isLogin -> if (isFollow) "取消关注" else "关注"
+                            localFollowed -> "取消本地关注"
+                            else -> "本地关注"
+                        },
+                    )
                 }
             }
         }
@@ -167,6 +197,39 @@ fun UserInfoCard(user: Entity, onFollowClick: () -> Unit, onStatClick: (Int) -> 
         )
     }
 }
+
+/**
+ * A long press that coexists with a component's own click. It watches the gesture before the
+ * component does, and once the press has been held long enough it consumes the release so the
+ * click does not fire as well.
+ */
+private fun Modifier.longPress(enabled: Boolean, onLongPress: () -> Unit): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        composed {
+            val action by rememberUpdatedState(onLongPress)
+            pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                        } while (event.changes.any { it.pressed })
+                        true
+                    }
+                    if (released == null) {
+                        action()
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                            if (event.changes.none { it.pressed }) break
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 @Composable
 private fun StatText(value: String, index: Int, onStatClick: (Int) -> Unit) {

@@ -33,12 +33,21 @@ class AppSettings(context: Context) {
     var fontScale by mutableFloatStateOf(prefs.getFloat(KEY_FONT_SCALE, 1f))
         private set
 
-    // 2 is 动态, which is the tab the Flutter client opens on.
-    var homeTab by mutableIntStateOf(prefs.getInt(KEY_HOME_TAB, 2))
+    /** The home tab by name, so adding or dropping a tab never lands on the wrong one. */
+    var homeTab by mutableStateOf(
+        prefs.getString(KEY_HOME_TAB_NAME, null)
+            ?: LEGACY_HOME_TABS.getOrNull(prefs.getInt(KEY_HOME_TAB, 2))?.takeIf { it != "Follow" }
+            ?: "Feed",
+    )
         private set
 
-    /** 0 all / 1 user / 2 topic / 3 product / 4 app, as in the Flutter follow filter. */
-    var followType by mutableIntStateOf(prefs.getInt(KEY_FOLLOW_TYPE, 0))
+    /**
+     * What the 关注 page shows: 1 user / 2 topic / 3 product / 4 app / 0 all / 5 the local list. An
+     * explicit category from the old 关注内容 setting carries over; the old mixed default becomes 用户.
+     */
+    var followSelection by mutableIntStateOf(
+        prefs.getInt(KEY_FOLLOW_SELECTION, prefs.getInt(KEY_FOLLOW_TYPE, 0).takeIf { it in 1..4 } ?: 1),
+    )
         private set
 
     var openInBrowser by mutableStateOf(prefs.getBoolean(KEY_OPEN_IN_BROWSER, false))
@@ -50,7 +59,15 @@ class AppSettings(context: Context) {
     var showEmoji by mutableStateOf(prefs.getBoolean(KEY_SHOW_EMOJI, true))
         private set
 
+    /** Installed-app updates on the 应用 tab, not this client's own. */
     var checkUpdate by mutableStateOf(prefs.getBoolean(KEY_CHECK_UPDATE, true))
+        private set
+
+    /** This client's own release check, once per cold start. */
+    var autoCheckAppUpdate by mutableStateOf(prefs.getBoolean(KEY_AUTO_CHECK_APP_UPDATE, true))
+        private set
+
+    var skippedAppUpdateVersion by mutableStateOf(prefs.getString(KEY_SKIPPED_APP_UPDATE, "").orEmpty())
         private set
 
     var szlmId by mutableStateOf(prefs.getString(KEY_SZLM_ID, "").orEmpty())
@@ -77,9 +94,9 @@ class AppSettings(context: Context) {
 
     fun updateFontScale(value: Float) = put { putFloat(KEY_FONT_SCALE, value) }.also { fontScale = value }
 
-    fun updateHomeTab(value: Int) = put { putInt(KEY_HOME_TAB, value) }.also { homeTab = value }
+    fun updateHomeTab(value: String) = put { putString(KEY_HOME_TAB_NAME, value) }.also { homeTab = value }
 
-    fun updateFollowType(value: Int) = put { putInt(KEY_FOLLOW_TYPE, value) }.also { followType = value }
+    fun updateFollowSelection(value: Int) = put { putInt(KEY_FOLLOW_SELECTION, value) }.also { followSelection = value }
 
     fun updateOpenInBrowser(value: Boolean) = put { putBoolean(KEY_OPEN_IN_BROWSER, value) }.also { openInBrowser = value }
 
@@ -88,6 +105,12 @@ class AppSettings(context: Context) {
     fun updateShowEmoji(value: Boolean) = put { putBoolean(KEY_SHOW_EMOJI, value) }.also { showEmoji = value }
 
     fun updateCheckUpdate(value: Boolean) = put { putBoolean(KEY_CHECK_UPDATE, value) }.also { checkUpdate = value }
+
+    fun updateAutoCheckAppUpdate(value: Boolean) =
+        put { putBoolean(KEY_AUTO_CHECK_APP_UPDATE, value) }.also { autoCheckAppUpdate = value }
+
+    fun skipAppUpdate(version: String) =
+        put { putString(KEY_SKIPPED_APP_UPDATE, version) }.also { skippedAppUpdateVersion = version }
 
     fun updateSzlmId(value: String) {
         szlmId = value
@@ -146,11 +169,17 @@ class AppSettings(context: Context) {
         const val KEY_SEED_COLOR = "staticColor"
         const val KEY_FONT_SCALE = "fontScale"
         const val KEY_HOME_TAB = "homeTab"
+        const val KEY_HOME_TAB_NAME = "homeTabName"
+        /** The tab order the index under [KEY_HOME_TAB] was saved against, 关注 still first. */
+        val LEGACY_HOME_TABS = listOf("Follow", "App", "Feed", "Hot", "Topic", "Product", "CoolPic")
         const val KEY_FOLLOW_TYPE = "followType"
+        const val KEY_FOLLOW_SELECTION = "followFeedSelectionV1"
         const val KEY_OPEN_IN_BROWSER = "openInBrowser"
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_SHOW_EMOJI = "showEmoji"
         const val KEY_CHECK_UPDATE = "checkUpdate"
+        const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
+        const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"
         const val KEY_SZLM_ID = "szlmId"
         const val KEY_INSTALL_TIME = "installTime"
         val DEVICE_KEYS = listOf(

@@ -21,13 +21,14 @@ enum class FFFListType(val label: String) {
     CollectionItem("收藏夹"),
 }
 
-/** The five notification lists behind `/notification`. */
+/** The notification lists behind `/notification`; 酷安小秘书 opens from inside 私信与信息. */
 enum class NotificationType(val label: String) {
     At("@我的动态"),
     Comment("@我的评论"),
     Like("我收到的赞"),
     Follow("好友关注"),
-    Message("私信"),
+    Message("私信与信息"),
+    System("酷安小秘书"),
 }
 
 /**
@@ -40,6 +41,9 @@ sealed interface Route {
     data object AppUpdate : Route
     data object Params : Route
     data object About : Route
+    data object Settings : Route
+    data object Accounts : Route
+    data object LocalFollowList : Route
     /** [preview] is the list entry the post was opened from, drawn while the full post loads. */
     data class Feed(val id: String, val preview: Entity? = null) : Route
     data class Reply2Reply(val id: String, val replyId: String = "", val originUid: String = "") : Route
@@ -59,7 +63,8 @@ sealed interface Route {
     data class Dyh(val id: String, val title: String) : Route
     data class CoolPic(val title: String) : Route
     data class ImageView(val images: List<String>, val initialPage: Int = 0) : Route
-    data class Notification(val type: NotificationType) : Route
+    /** [systemCount] is the unread 酷安小秘书 count 私信与信息 shows on its leading row. */
+    data class Notification(val type: NotificationType, val systemCount: Int = 0) : Route
     data class FFFList(
         val type: FFFListType,
         val uid: String? = null,

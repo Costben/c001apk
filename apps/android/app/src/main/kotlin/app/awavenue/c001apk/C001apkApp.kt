@@ -1,12 +1,15 @@
 package app.awavenue.c001apk
 
 import android.app.Application
+import app.awavenue.c001apk.data.AccountStore
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
 import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.HistoryStore
+import app.awavenue.c001apk.data.LocalFollowStore
 import app.awavenue.c001apk.data.SearchHistoryStore
 import app.awavenue.c001apk.data.SessionStore
+import app.awavenue.c001apk.data.UpdateService
 import app.awavenue.c001apk.network.ApiClient
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -19,6 +22,12 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
     lateinit var settings: AppSettings
         private set
     lateinit var session: SessionStore
+        private set
+    lateinit var accounts: AccountStore
+        private set
+    lateinit var localFollow: LocalFollowStore
+        private set
+    lateinit var updates: UpdateService
         private set
     lateinit var blacklist: BlacklistStore
         private set
@@ -37,11 +46,14 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         settings = AppSettings(this)
         session = SessionStore(this)
+        accounts = AccountStore(this, session)
+        localFollow = LocalFollowStore(this)
         blacklist = BlacklistStore(this)
         history = HistoryStore(this)
         searchHistory = SearchHistoryStore(this)
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
-        repository = CoolapkRepository(apiClient, settings, blacklist, session)
+        repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
+        updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
     }
 
     // image.coolapk.com answers generic client agents with HTTP 567, so images go out with the

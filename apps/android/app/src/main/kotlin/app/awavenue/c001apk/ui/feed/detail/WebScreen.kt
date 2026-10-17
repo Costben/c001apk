@@ -94,7 +94,7 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
     var externalLink by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(url) {
-        val ok = withContext(Dispatchers.IO) { runCatching { prepareWebSession(app) }.isSuccess }
+        val ok = withContext(Dispatchers.IO) { runCatching { prepareWebSession(app, includeAccount = !isLogin) }.isSuccess }
         if (ok) cookiesReady = true else cookiesFailed = true
     }
 
@@ -168,7 +168,8 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
                                             val username = cookieValue(COOLAPK_HOME, "username")
                                             val token = cookieValue(COOLAPK_HOME, "token")
                                             if (!uid.isNullOrEmpty() && !username.isNullOrEmpty() && !token.isNullOrEmpty()) {
-                                                app.repository.saveWebLogin(uid, username, token)
+                                                runCatching { app.repository.saveWebLogin(uid, username, token) }
+                                                    .onFailure { context.toast("无法保存网页登录状态，请重试") }
                                             }
                                             navigator.pop()
                                             return true
@@ -278,7 +279,8 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
 }
 
 /** Clears the previous account's Coolapk cookies, then plants this session's, as upstream does. */
-private fun prepareWebSession(app: C001apkApp) {
+/** A web login starts signed out, so it can add a different account than the active one. */
+private fun prepareWebSession(app: C001apkApp, includeAccount: Boolean) {
     val manager = CookieManager.getInstance()
     manager.setAcceptCookie(true)
     for (name in listOf("uid", "username", "token", "SESSID", "ddid")) {
@@ -287,7 +289,7 @@ private fun prepareWebSession(app: C001apkApp) {
             manager.setCookie("https://$host/", "$name=; domain=$host; path=/; max-age=0")
         }
     }
-    if (!app.session.isLogin) {
+    if (!includeAccount || !app.session.isLogin) {
         manager.flush()
         return
     }

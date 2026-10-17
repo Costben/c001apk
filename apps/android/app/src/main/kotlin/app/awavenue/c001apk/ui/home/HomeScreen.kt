@@ -45,9 +45,8 @@ import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
-/** The home tabs in the order the Flutter client lays them out. */
+/** The home tabs in the order the Flutter client lays them out; 关注 has its own main tab. */
 enum class HomeTab(val label: String) {
-    Follow("关注"),
     App("应用"),
     Feed("动态"),
     Hot("热门"),
@@ -58,13 +57,9 @@ enum class HomeTab(val label: String) {
 
     /**
      * The tabs whose body is a plain feed. 话题 and 数码 own their own layout and 应用 its own page, so
-     * they have no loader here. 关注 is the one tab whose request depends on a setting.
+     * they have no loader here.
      */
-    fun loader(repository: CoolapkRepository, followType: Int): PageLoader? = when (this) {
-        Follow -> PageLoader { page, first, last ->
-            repository.dataList(followUrl(followType), followTitle(followType), page, first, last)
-        }
-
+    fun loader(repository: CoolapkRepository): PageLoader? = when (this) {
         Feed -> PageLoader { page, first, last -> repository.homeFeed(page, first, last) }
         Hot -> PageLoader { page, first, last ->
             repository.dataList("/page?url=V9_HOME_TAB_RANKING", "热榜", page, first, last)
@@ -76,24 +71,6 @@ enum class HomeTab(val label: String) {
 
         App, Topic, Product -> null
     }
-}
-
-private const val FOLLOW_BASE = "/page?url=V9_HOME_TAB_FOLLOW"
-
-private fun followUrl(type: Int) = when (type) {
-    1 -> "$FOLLOW_BASE&type=circle"
-    2 -> "$FOLLOW_BASE&type=topic"
-    3 -> "$FOLLOW_BASE&type=product"
-    4 -> "$FOLLOW_BASE&type=apk"
-    else -> FOLLOW_BASE
-}
-
-private fun followTitle(type: Int) = when (type) {
-    1 -> "好友关注"
-    2 -> "话题关注"
-    3 -> "数码关注"
-    4 -> "应用关注"
-    else -> "全部关注"
 }
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
@@ -109,7 +86,7 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
     // the behavior swallow every upward drag as bar travel.
     val scrollBehavior = COUIScrollBehavior(state = rememberTopAppBarState(initialHeightOffsetLimit = 0f))
 
-    LaunchedEffect(pagerState.settledPage) { settings.updateHomeTab(pagerState.settledPage) }
+    LaunchedEffect(pagerState.settledPage) { settings.updateHomeTab(tabs[pagerState.settledPage].name) }
 
     val backdrop = rememberGlassBackdrop()
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -169,11 +146,9 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                 HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, contentPadding)
                 HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, contentPadding)
                 else -> {
-                    // 关注 filters server-side, so its cached page is only valid for one follow type;
-                    // every stream is personalised, so it is also only valid for one account.
-                    val account = app.session.uid
-                    val key = if (tab == HomeTab.Follow) "home-follow-${settings.followType}-$account" else "home-${tab.name}-$account"
-                    val loader = tab.loader(app.repository, settings.followType)
+                    // Every stream is personalised, so its cached page is only valid for one account.
+                    val key = "home-${tab.name}-${app.session.uid}"
+                    val loader = tab.loader(app.repository)
                     val viewModel = viewModel(key = key) { FeedListViewModel(loader!!) }
                     FeedList(
                         viewModel = viewModel,

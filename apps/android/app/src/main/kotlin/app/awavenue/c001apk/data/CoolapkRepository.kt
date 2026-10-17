@@ -43,6 +43,7 @@ class CoolapkRepository(
     private val settings: AppSettings,
     private val blacklist: BlacklistStore,
     private val session: SessionStore,
+    private val accounts: AccountStore,
 ) {
     // ---- lists -------------------------------------------------------------------------------
 
@@ -95,7 +96,14 @@ class CoolapkRepository(
         return dataObject(json)
     }
 
-    suspend fun userFeed(uid: String, page: Int, firstItem: String?, lastItem: String?): List<Entity> = parse(
+    /** [includeTop] off leaves out pinned posts, which would break a newest-first merge. */
+    suspend fun userFeed(
+        uid: String,
+        page: Int,
+        firstItem: String?,
+        lastItem: String?,
+        includeTop: Boolean = true,
+    ): List<Entity> = parse(
         api.get(
             Api.USER_FEED,
             mapOf(
@@ -104,7 +112,7 @@ class CoolapkRepository(
                 "firstItem" to firstItem?.ifEmpty { null },
                 "lastItem" to lastItem?.ifEmpty { null },
                 "showAnonymous" to 0,
-                "isIncludeTop" to 1,
+                "isIncludeTop" to if (includeTop) 1 else 0,
                 "showDoing" to 0,
             ),
         ),
@@ -424,12 +432,12 @@ class CoolapkRepository(
         if (uid.isNullOrEmpty() || username.isNullOrEmpty() || token.isNullOrEmpty()) {
             return LoginOutcome(false, message)
         }
-        session.saveLogin(uid, username, token)
+        accounts.saveLogin(uid, username, token)
         return LoginOutcome(true, message)
     }
 
     /** The cookies are re-seeded by the web login flow, which reads them off the browser. */
-    fun saveWebLogin(uid: String, username: String, token: String) = session.saveLogin(uid, username, token)
+    fun saveWebLogin(uid: String, username: String, token: String) = accounts.saveLogin(uid, username, token)
 
     // ---- parsing -----------------------------------------------------------------------------
 

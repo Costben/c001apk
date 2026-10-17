@@ -32,6 +32,7 @@ import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.data.SeedColors
+import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.glassSource
@@ -41,7 +42,7 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import coil3.SingletonImageLoader
-import io.github.suqi8.coui.kmp.basic.BasicComponentColors
+import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
@@ -59,12 +60,18 @@ import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Background
 import io.github.suqi8.coui.kmp.icon.extended.Blocklist
+import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.Clear
+import io.github.suqi8.coui.kmp.icon.extended.Contacts
+import io.github.suqi8.coui.kmp.icon.extended.ContactsBook
+import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
+import io.github.suqi8.coui.kmp.icon.extended.Download
+import io.github.suqi8.coui.kmp.icon.extended.Hide
 import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.icon.extended.Link
-import io.github.suqi8.coui.kmp.icon.extended.Lock
 import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.icon.extended.Photos
+import io.github.suqi8.coui.kmp.icon.extended.Refresh
 import io.github.suqi8.coui.kmp.icon.extended.Recent
 import io.github.suqi8.coui.kmp.icon.extended.Settings
 import io.github.suqi8.coui.kmp.icon.extended.Theme
@@ -87,14 +94,11 @@ import java.util.Locale
 /** The scale steps the Flutter slider dialog snaps to. */
 private val fontScaleSteps = listOf(0.8f, 0.85f, 0.9f, 0.95f, 1f, 1.05f, 1.1f, 1.15f, 1.2f, 1.25f, 1.3f)
 
-/** The 关注内容 options, labelled the way the settings page prints them. */
-private val followTypes = listOf("全部", "用户", "话题", "数码", "应用")
-
 /** The 深色模式 options in the order the Flutter dropdown lists them. */
 private val darkModes = listOf(DarkMode.Off, DarkMode.On, DarkMode.System)
 
 @Composable
-fun SettingsScreen(outerPadding: PaddingValues) {
+fun SettingsScreen() {
     val app = LocalApp.current
     val settings = app.settings
     val context = LocalContext.current
@@ -107,7 +111,8 @@ fun SettingsScreen(outerPadding: PaddingValues) {
     var showFontScale by remember { mutableStateOf(false) }
     var cacheSize by remember { mutableStateOf<Long?>(null) }
     var askClearCache by remember { mutableStateOf(false) }
-    var askLogout by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var update by remember { mutableStateOf<UpdateResult.Available?>(null) }
     var menu by remember { mutableStateOf(false) }
 
     // Upstream reads the cache size when the page opens, so the row shows it before any tap.
@@ -121,6 +126,11 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                 TopAppBar(
                     title = "设置",
                     scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                        }
+                    },
                     actions = {
                         Box {
                             IconButton(onClick = { menu = true }) {
@@ -164,7 +174,7 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding(),
-                bottom = outerPadding.calculateBottomPadding() + 12.dp,
+                bottom = innerPadding.calculateBottomPadding() + 12.dp,
             ),
         ) {
             item {
@@ -225,13 +235,6 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                         startAction = { PreferenceStartIcon(COUIIcons.Tune) },
                         onClick = { showFontScale = true },
                     )
-                    WindowDropdownPreference(
-                        title = "关注内容",
-                        items = followTypes,
-                        selectedIndex = settings.followType,
-                        onSelectedIndexChange = settings::updateFollowType,
-                        startAction = { PreferenceStartIcon(COUIIcons.Recent) },
-                    )
                     SwitchPreference(
                         title = "在浏览器中打开",
                         checked = settings.openInBrowser,
@@ -251,7 +254,8 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                         startAction = { PreferenceStartIcon(AppIcons.EmojiEmotions) },
                     )
                     SwitchPreference(
-                        title = "检查更新",
+                        title = "检查已安装应用更新",
+                        summary = "在应用列表中显示已安装应用的更新入口",
                         checked = settings.checkUpdate,
                         onCheckedChange = settings::updateCheckUpdate,
                         startAction = { PreferenceStartIcon(COUIIcons.Update) },
@@ -259,8 +263,72 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                 }
             }
             item {
+                val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
+                SmallTitle("关注")
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    if (app.session.isLogin) {
+                        SwitchPreference(
+                            title = "悄悄关注",
+                            summary = "开启后，长按用户主页的关注按钮添加或取消。仅保存在本机，不会同步到账号",
+                            checked = app.localFollow.secretEnabled,
+                            onCheckedChange = app.localFollow::updateSecretEnabled,
+                            startAction = { PreferenceStartIcon(COUIIcons.Hide) },
+                        )
+                    } else {
+                        BasicComponent(
+                            title = "本地关注",
+                            summary = "游客可在用户主页直接关注，并在底栏“关注”查看内容。名单仅保存在本机",
+                            startAction = { PreferenceStartIcon(COUIIcons.Contacts) },
+                        )
+                    }
+                    ArrowPreference(
+                        title = "管理$label",
+                        summary = "查看本机关注名单、进入用户主页或取消关注",
+                        startAction = { PreferenceStartIcon(COUIIcons.ContactsBook) },
+                        onClick = { navigator.push(Route.LocalFollowList) },
+                    )
+                }
+            }
+            item {
+                SmallTitle("更新")
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SwitchPreference(
+                        title = "自动检查 c001apk 更新",
+                        summary = "每次启动时检查一次最新正式版本",
+                        checked = settings.autoCheckAppUpdate,
+                        onCheckedChange = settings::updateAutoCheckAppUpdate,
+                        startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                    )
+                    ArrowPreference(
+                        title = if (checkingUpdate) "正在检查更新…" else "检查更新",
+                        summary = "查看 c001apk 的最新正式版本",
+                        startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                        enabled = !checkingUpdate,
+                        onClick = {
+                            scope.launch {
+                                checkingUpdate = true
+                                when (val result = app.updates.check()) {
+                                    is UpdateResult.Available -> update = result
+                                    UpdateResult.UpToDate -> context.toast("已是最新版本")
+                                    is UpdateResult.Failed -> context.toast(result.message)
+                                    UpdateResult.Busy -> context.toast("正在检查更新，请稍候")
+                                    UpdateResult.Suppressed -> Unit
+                                }
+                                checkingUpdate = false
+                            }
+                        },
+                    )
+                }
+            }
+            item {
                 SmallTitle("其他")
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    ArrowPreference(
+                        title = "账号管理",
+                        summary = "已保存 ${app.accounts.accounts.size} 个账号 · 切换、添加或移除",
+                        startAction = { PreferenceStartIcon(COUIIcons.ContactsCircle) },
+                        onClick = { navigator.push(Route.Accounts) },
+                    )
                     ArrowPreference(
                         title = "关于",
                         summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
@@ -278,18 +346,6 @@ fun SettingsScreen(outerPadding: PaddingValues) {
                             }
                         },
                     )
-                    if (app.session.isLogin) {
-                        ArrowPreference(
-                            title = "退出登录",
-                            summary = app.session.username,
-                            titleColor = BasicComponentColors(
-                                COUITheme.colorScheme.error,
-                                COUITheme.colorScheme.error,
-                            ),
-                            startAction = { PreferenceStartIcon(COUIIcons.Lock) },
-                            onClick = { askLogout = true },
-                        )
-                    }
                 }
             }
         }
@@ -302,6 +358,8 @@ fun SettingsScreen(outerPadding: PaddingValues) {
             onClose = { showFontScale = false },
         )
     }
+
+    update?.let { AppUpdateDialog(it, onDismiss = { update = null }) }
 
     if (askClearCache) {
         ClearCacheDialog(
@@ -319,15 +377,6 @@ fun SettingsScreen(outerPadding: PaddingValues) {
         )
     }
 
-    if (askLogout) {
-        LogoutDialog(
-            onConfirm = {
-                askLogout = false
-                app.session.logout()
-            },
-            onCancel = { askLogout = false },
-        )
-    }
 }
 
 /** The start icon every preference row on the settings pages shares. */
@@ -345,19 +394,6 @@ private fun ClearCacheDialog(cacheSize: Long, onConfirm: () -> Unit, onCancel: (
         show = true,
         title = "清理缓存",
         summary = "当前缓存大小：${formatSize(cacheSize)}",
-        confirmText = "确定",
-        cancelText = "取消",
-        onConfirm = onConfirm,
-        onCancel = onCancel,
-    )
-}
-
-@OptIn(ExperimentalCOUIApi::class)
-@Composable
-private fun LogoutDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
-    OverlayAlertDialog(
-        show = true,
-        title = "确定退出登录？",
         confirmText = "确定",
         cancelText = "取消",
         onConfirm = onConfirm,

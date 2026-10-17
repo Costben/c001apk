@@ -167,17 +167,18 @@
 | 状态 | 项 | Flutter 来源 | Compose 落点 |
 | :--- | :--- | :--- | :--- |
 | 已完成 | 验证码 Cookie 协议 | 见第一节 | `network/ApiClient.kt` |
-| 未开始 | 主导航改为「主页 / 关注 / 我的」，首页去掉「关注」分段，设置从「我的」右上角进入 | `pages/main/main_page.dart`、`pages/home/home_page.dart` | |
-| 未开始 | 关注页：用户 / 话题 / 数码 / 应用 / 全部 / 悄悄关注 切换并记住选择，游客只显示本地关注 | `pages/local_follow/local_follow_page.dart` | |
-| 未开始 | 本地关注与悄悄关注：本机名单、多用户时间线合并（并发 4、失败可重试）、用户页关注按钮短按 / 长按、名单管理页 | `logic/local_follow/`、`pages/local_follow/`、`components/cards/user_info_card.dart` | |
-| 未开始 | 多账号：本机保存、切换、添加、移除、游客模式，切换后重建页面并丢弃旧请求 | `logic/accounts/account_store.dart`、`pages/accounts/accounts_page.dart` | |
-| 未开始 | 「我的」页：账号管理与设置入口、「私信与信息」、酷安小秘书会话 | `pages/message/`、`pages/noitfication/` | |
+| 已完成 | 主导航改为「主页 / 关注 / 我的」，首页去掉「关注」分段，设置从「我的」右上角进入 | `pages/main/main_page.dart`、`pages/home/home_page.dart` | `ui/main/MainScreen.kt`、`ui/home/HomeScreen.kt`、`Route.Settings` |
+| 已完成 | 关注页：用户 / 话题 / 数码 / 应用 / 全部 / 悄悄关注 切换并记住选择，游客只显示本地关注 | `pages/local_follow/local_follow_page.dart` | `ui/follow/FollowScreen.kt` |
+| 已完成 | 本地关注与悄悄关注：本机名单、多用户时间线合并（并发 4、失败可重试）、用户页关注按钮短按 / 长按、名单管理页 | `logic/local_follow/`、`pages/local_follow/`、`components/cards/user_info_card.dart` | `data/LocalFollowStore.kt`、`data/LocalFollowPager.kt`、`ui/follow/LocalFollowFeed.kt`、`ui/follow/LocalFollowListScreen.kt`、`ui/user/UserInfoCard.kt` |
+| 已完成 | 多账号：本机保存、切换、添加、移除、游客模式，切换后重建页面并丢弃旧请求 | `logic/accounts/account_store.dart`、`pages/accounts/accounts_page.dart` | `data/AccountStore.kt`、`ui/account/AccountsScreen.kt`、`ui/main/MainScreen.kt`（按会话代次重建） |
+| 已完成 | 「我的」页：账号管理与设置入口、「私信与信息」、酷安小秘书会话 | `pages/message/`、`pages/noitfication/` | `ui/message/MessageScreen.kt`、`ui/notification/NotificationScreen.kt` |
 | 未开始 | 设置页分类：外观与字号 / 关注与内容 / 浏览与隐私 / 存储与更新 / 协议与设备 | `pages/settings/settings_page.dart` | |
 | 未开始 | 私信：发送动态、逐条发送状态与重试、动态链接卡片、会话置顶与删除 | `pages/chat/`、`components/cards/chat_card.dart`、`message_card.dart` | |
 | 未开始 | 活动页 `/event/:id` 与站内活动链接 | `pages/event/event_page.dart`、`utils/utils.dart` | |
 | 未开始 | 32 个牛牛表情 | `assets/emojis/niuniu_*`、`utils/emoji_util.dart`、`pages/feed/reply/emoji_panel.dart` | |
-| 未开始 | 自身更新检查：每次冷启动查一次最新正式版、按 ABI 选包、跳过版本 | `logic/app_update/`、`components/update_check_tile.dart` | 待定：需改为检查本仓库发布的 Compose 版 |
-| 未开始 | 零碎修复：分享链接去掉查询串再取动态 id、用户动态 `includeTop`、登录遇人机验证提示网页登录、字号与系统缩放叠加 | `utils/utils.dart`、`logic/network/network_repo.dart`、`pages/login/login_page.dart`、`utils/app_theme.dart` | |
+| 已完成 | 自身更新检查：每次冷启动查一次最新正式版、按 ABI 选包、跳过版本；来源为本仓库 `Costben/c001apk` 的 Release | `logic/app_update/`、`components/update_check_tile.dart` | `data/AppUpdate.kt`、`ui/settings/AppUpdateDialog.kt` |
+| 已完成 | 用户动态 `includeTop`、登录页提示网页登录并在遇人机验证时打开、网页登录不带入当前账号（可添加其他账号） | `logic/network/network_repo.dart`、`pages/login/login_page.dart`、`pages/webview/webview_page.dart` | `data/CoolapkRepository.kt`、`ui/login/LoginScreen.kt`、`ui/feed/detail/WebScreen.kt` |
+| 未开始 | 零碎修复：分享链接去掉查询串再取动态 id、字号与系统缩放叠加 | `utils/utils.dart`、`utils/app_theme.dart` | |
 
 ## 六、接口对照
 
@@ -195,7 +196,10 @@
 | 内嵌浏览器用系统 WebView | `flutter_inappwebview` 无 Compose 对应物 |
 | 首页分段用 coui17 的 `TabRowWithContour` | Flutter 用 Material `TabBar`，外观换成 ColorOS 规格 |
 | 「设备标识（SZLM ID）」放在协议参数页 | Flutter 放在设置页首屏；改设备标识要同时重建设备参数，和该页其余字段同处一屏更合适 |
-| 「退出登录」放在设置页 | Flutter 放在消息页的账号头部；两处入口语义相同 |
+| 没有「退出登录」入口 | 与上游 1.2.x 一致：改为在账号管理里移除本机登录或切换游客模式 |
+| 关注页标题菜单不显示「账号关注」小标题与分隔线 | coui17 的 `ListPopupColumn` 没有不可选的标题项；六个选项与顺序同 Flutter |
+| 自身更新只认 `c001apk-coui-<版本>[+构建号][-<ABI>].apk` 资源，tag 为 `x.y.z` 或 `x.y.z-release` | Flutter 版的 `c001apk-<版本>-android-<ABI>.apk` 是另一个应用；找不到匹配资源时打开发布页面。当前版本带 `-dev` 等后缀时视为低于同号正式版 |
+| 设置页尚未分类，「关注」「更新」「账号管理」按现有分组插入 | 分类改版是第五节单独一项 |
 | 设置页「关于」进独立页面 | Flutter 溢出菜单里的「关于」弹 `MAboutDialog`，「其他」分组里的「关于」进 `/about`；Compose 两处都进关于页，内容相同 |
 | 「发布动态」悬浮按钮不做滚动方向的进出动画 | Flutter 用 `SlideTransition` 随滚动方向收起；Compose 侧常驻，功能一致 |
 | 点赞与删除只在登录后可用 | 与 Flutter 的 `GlobalData().isLogin` 判断一致，非差异，列此以免被当作缺失 |
@@ -216,7 +220,7 @@
 
 设备：OnePlus 8 Pro（IN2020 / Android 16，`192.168.31.216`），安装方式 `install -r --no-incremental`。
 
-已实机走通：首页 7 分段（关注 / 应用 / 动态 / 热门 / 话题 / 数码 / 酷图）、
+已实机走通（1.1.0 移植时）：首页 7 分段（关注 / 应用 / 动态 / 热门 / 话题 / 数码 / 酷图）、
 底栏三屏（首页 / 消息 / 设置）、搜索与结果页、帖内详情入口（不跳浏览器，匿名时弹人机验证）、
 登录页与网页登录、应用更新、用户 / 话题 / 主题黑名单、协议参数、关于、浏览历史，
 信息流卡片的「更多」面板（复制 / 屏蔽 / 举报）与话题实体的统计行。
@@ -297,3 +301,14 @@
   32 位十六进制 ID 不是真实的数盟 ID，登录与否都不影响；这和本次改动无关。
 - 尚存问题：卡片延伸到悬浮底栏下方时，展开第一帧起底栏就被卡片副本盖住，缩回到最后一帧底栏才重新出现。
 - `logcat -b crash` 无记录。
+
+上游 1.2.x 移植复测（2026-10-17，`192.168.31.165`，`install -r --no-incremental` 覆盖旧版）：
+
+- 升级后原有登录自动写入账号库，`activeUid` 指向原账号，仍为登录状态；首页分段为应用 / 动态 / 热门 / 话题 / 数码 / 酷图，底栏为主页 / 关注 / 我的。
+- 关注页：标题下拉六项齐全，「用户关注」加载服务端关注流；切到「悄悄关注」显示说明行、「管理」与空状态文案。
+- 设置开启「悄悄关注」后，在用户主页长按「关注」1 秒：本机名单写入该用户，按钮出现「已悄悄关注」图标，账号关注未被触发；关注页随即合并出该用户的动态。
+- 账号管理切到游客：账号管理页自动关闭、停在「我的」、显示「点击登录」并隐藏统计卡；游客的关注页仍读同一份本机名单。再点已保存账号切回，资料与等级恢复。
+- 「我的 → 私信与信息」首行为酷安小秘书，点开为系统通知流；会话列表正常。
+- 手动「检查更新」：本仓库尚无 Release，接口返回 404，应用提示且不崩溃。
+- 测完已恢复：本机名单清空、悄悄关注关闭、关注页回到「用户关注」、原账号登录。`logcat -b crash` 无记录。
+- 未实机验证：密码登录与网页登录添加第二个账号（需要真实账号）、有 Release 时的更新弹窗与下载（单元测试覆盖解析与选包）。

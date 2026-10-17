@@ -51,18 +51,40 @@ class SessionStore(context: Context) {
         prefs.edit { putString(KEY_SESSID, value) }
     }
 
-    /** Writes the cookie triple the login response carries, and flips the session on. */
-    fun saveLogin(uid: String, username: String, token: String) {
-        this.uid = uid
-        this.username = username
-        this.token = token
-        isLogin = uid.isNotEmpty() && token.isNotEmpty()
+    /**
+     * Bumped whenever the active account changes, so pages built for the previous account are
+     * rebuilt and its late responses can be told apart. Not persisted: it only orders this process.
+     */
+    var generation by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Makes [account] the active session, or switches to guest when it is null. Only
+     * [AccountStore] calls this, after it has recorded the change in the account vault.
+     */
+    internal fun activate(account: SavedAccount?, notify: Boolean) {
+        uid = account?.uid.orEmpty()
+        username = account?.username.orEmpty()
+        token = account?.token.orEmpty()
+        isLogin = account != null
+        userAvatar = account?.avatar.orEmpty()
+        level = account?.level ?: 0
+        exp = account?.exp ?: 0
+        nextExp = account?.nextExp ?: 1
+        // The pre-login SESSID belongs to whoever was signing in; a new identity starts without it.
+        if (notify || account == null) sessid = ""
         prefs.edit {
             putString(KEY_UID, uid)
             putString(KEY_USERNAME, username)
             putString(KEY_TOKEN, token)
             putBoolean(KEY_IS_LOGIN, isLogin)
+            putString(KEY_AVATAR, userAvatar)
+            putInt(KEY_LEVEL, level)
+            putInt(KEY_EXP, exp)
+            putInt(KEY_NEXT_EXP, nextExp)
+            putString(KEY_SESSID, sessid)
         }
+        if (notify) generation++
     }
 
     fun saveProfile(avatar: String, level: Int, exp: Int, nextExp: Int) {
@@ -77,19 +99,6 @@ class SessionStore(context: Context) {
             putInt(KEY_LEVEL, level)
             putInt(KEY_EXP, exp)
             putInt(KEY_NEXT_EXP, nextExp)
-        }
-    }
-
-    fun logout() {
-        uid = ""
-        username = ""
-        token = ""
-        isLogin = false
-        prefs.edit {
-            putString(KEY_UID, "")
-            putString(KEY_USERNAME, "")
-            putString(KEY_TOKEN, "")
-            putBoolean(KEY_IS_LOGIN, false)
         }
     }
 

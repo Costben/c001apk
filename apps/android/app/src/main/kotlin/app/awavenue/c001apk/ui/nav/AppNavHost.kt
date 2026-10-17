@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import app.awavenue.c001apk.ui.account.AccountsScreen
 import app.awavenue.c001apk.ui.app.ApkScreen
 import app.awavenue.c001apk.ui.app.AppUpdateScreen
 import app.awavenue.c001apk.ui.blacklist.BlacklistScreen
@@ -61,6 +62,7 @@ import app.awavenue.c001apk.ui.feed.detail.FeedDetailScreen
 import app.awavenue.c001apk.ui.feed.detail.Reply2ReplyScreen
 import app.awavenue.c001apk.ui.feed.detail.WebScreen
 import app.awavenue.c001apk.ui.ffflist.FFFListScreen
+import app.awavenue.c001apk.ui.follow.LocalFollowListScreen
 import app.awavenue.c001apk.ui.history.HistoryScreen
 import app.awavenue.c001apk.ui.image.ImageOrigins
 import app.awavenue.c001apk.ui.image.ImageViewScreen
@@ -72,6 +74,7 @@ import app.awavenue.c001apk.ui.search.SearchResultScreen
 import app.awavenue.c001apk.ui.search.SearchScreen
 import app.awavenue.c001apk.ui.settings.AboutScreen
 import app.awavenue.c001apk.ui.settings.ParamsScreen
+import app.awavenue.c001apk.ui.settings.SettingsScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
 import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
@@ -385,6 +388,9 @@ private fun RouteHost(route: Route) {
         Route.AppUpdate -> AppUpdateScreen()
         Route.Params -> ParamsScreen()
         Route.About -> AboutScreen()
+        Route.Settings -> SettingsScreen()
+        Route.Accounts -> AccountsScreen()
+        Route.LocalFollowList -> LocalFollowListScreen()
         is Route.Feed -> FeedDetailScreen(id = route.id, preview = route.preview)
         is Route.Reply2Reply -> Reply2ReplyScreen(
             id = route.id,
@@ -408,7 +414,7 @@ private fun RouteHost(route: Route) {
         is Route.Dyh -> DyhScreen(id = route.id, title = route.title)
         is Route.CoolPic -> CoolPicScreen(title = route.title)
         is Route.ImageView -> ImageViewScreen(images = route.images, initialPage = route.initialPage)
-        is Route.Notification -> NotificationScreen(type = route.type)
+        is Route.Notification -> NotificationScreen(type = route.type, systemCount = route.systemCount)
         is Route.FFFList -> FFFListScreen(type = route.type, uid = route.uid, id = route.id, title = route.title)
         is Route.History -> HistoryScreen(type = route.type)
         is Route.Blacklist -> BlacklistScreen(type = route.type)

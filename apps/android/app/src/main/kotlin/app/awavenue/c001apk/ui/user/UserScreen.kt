@@ -130,7 +130,33 @@ fun UserScreen(uid: String) {
     }
     val opaque = collapsed || !hasFeed
 
-    val onFollow: () -> Unit = {
+    var followBusy by remember(uid) { mutableStateOf(false) }
+
+    val onLocalFollow: () -> Unit = onLocalFollow@{
+        val data = user ?: return@onLocalFollow
+        if (followBusy || (app.session.isLogin && !app.localFollow.secretEnabled)) return@onLocalFollow
+        val following = app.localFollow.contains(resolvedUid)
+        val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
+        runCatching {
+            if (following) {
+                app.localFollow.unfollow(resolvedUid)
+            } else {
+                app.localFollow.follow(resolvedUid, data.username, data.userAvatar)
+            }
+        }.onSuccess {
+            context.toast(if (following) "已取消$label，仅修改本机名单" else "已$label，仅保存在本机，不会同步到账号")
+        }.onFailure {
+            context.toast("本地关注保存失败，请重试")
+        }
+    }
+
+    val onFollow: () -> Unit = onFollow@{
+        if (!app.session.isLogin) {
+            onLocalFollow()
+            return@onFollow
+        }
+        if (followBusy) return@onFollow
+        followBusy = true
         val isFollow = user?.string("isFollow") == "1"
         scope.launch {
             runCatching { app.repository.followUser(resolvedUid, isFollow) }
@@ -145,6 +171,8 @@ fun UserScreen(uid: String) {
                         }
                     }
                 }
+                .onFailure { context.toast(ApiFailure.from(it).message) }
+            followBusy = false
         }
     }
 
@@ -235,6 +263,7 @@ fun UserScreen(uid: String) {
                                 UserInfoCard(
                                     user = data,
                                     onFollowClick = onFollow,
+                                    onLocalFollow = onLocalFollow,
                                     onStatClick = { index ->
                                         val target = when (index) {
                                             UserStat.Feed -> FFFListType.Feed

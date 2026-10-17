@@ -1,6 +1,19 @@
 package app.awavenue.c001apk.ui.notification
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import io.github.suqi8.coui.kmp.basic.Badge
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.icon.extended.Help
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,14 +78,18 @@ private fun notificationUrl(type: NotificationType): String = when (type) {
     NotificationType.Like -> "/v6/notification/feedLikeList"
     NotificationType.Follow -> "/v6/notification/contactsFollowList"
     NotificationType.Message -> "/v6/message/list"
+    NotificationType.System -> "/v6/notification/list"
 }
 
 @Composable
-fun NotificationScreen(type: NotificationType) {
+fun NotificationScreen(type: NotificationType, systemCount: Int = 0) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val scrollBehavior = COUIScrollBehavior()
     val backdrop = rememberGlassBackdrop()
+
+    // Opened from 私信与信息 the count is cleared by reading it, as the Flutter row does.
+    var unreadSystem by rememberSaveable { mutableIntStateOf(systemCount) }
 
     val viewModel = viewModel(key = "notification-${type.name}") {
         FeedListViewModel(
@@ -101,6 +118,16 @@ fun NotificationScreen(type: NotificationType) {
             viewModel = viewModel,
             scrollBehavior = scrollBehavior,
             backdrop = backdrop,
+            leading = if (type == NotificationType.Message) {
+                {
+                    SystemEntry(unreadSystem) {
+                        unreadSystem = 0
+                        navigator.push(Route.Notification(NotificationType.System))
+                    }
+                }
+            } else {
+                null
+            },
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding() + 10.dp,
                 bottom = innerPadding.calculateBottomPadding() + 10.dp,
@@ -115,6 +142,7 @@ private fun NotificationList(
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
     contentPadding: PaddingValues,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
@@ -138,8 +166,11 @@ private fun NotificationList(
     when (val status = viewModel.status) {
         ListStatus.Loading -> CenterBox(contentPadding) { InfiniteProgressIndicator() }
 
-        ListStatus.Empty -> CenterBox(contentPadding) {
-            EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+        ListStatus.Empty -> Column(Modifier.fillMaxSize().padding(contentPadding)) {
+            leading?.invoke()
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+            }
         }
 
         is ListStatus.Error -> CenterBox(contentPadding) {
@@ -163,6 +194,7 @@ private fun NotificationList(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (leading != null) item(contentType = "leading") { leading() }
                 items(viewModel.items.filterNot(FeedActions::isHidden), key = { it.id.ifEmpty { it.entityId } }) { item ->
                     when (item.entityType) {
                         "notification" -> NotificationItem(item, onChanged = viewModel::refresh)
@@ -206,6 +238,32 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
             )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
+        }
+    }
+}
+
+/** 酷安小秘书: the system notification stream, listed as its own conversation. */
+@Composable
+private fun SystemEntry(count: Int, onClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(10.dp), onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(COUITheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(COUIIcons.Help, contentDescription = null, tint = COUITheme.colorScheme.onSecondaryContainer)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("酷安小秘书", maxLines = 1)
+                Text(
+                    "系统通知与信息",
+                    maxLines = 1,
+                    style = COUITheme.textStyles.footnote1,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            if (count > 0) Badge(count = count)
         }
     }
 }

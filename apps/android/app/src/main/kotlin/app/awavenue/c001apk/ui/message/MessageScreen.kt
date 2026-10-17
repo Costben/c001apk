@@ -88,13 +88,14 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronForward
 import io.github.suqi8.coui.kmp.icon.extended.Community
 import io.github.suqi8.coui.kmp.icon.extended.ContactsBook
+import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
 import io.github.suqi8.coui.kmp.icon.extended.Email
 import io.github.suqi8.coui.kmp.icon.extended.Favorites
 import io.github.suqi8.coui.kmp.icon.extended.Folder
-import io.github.suqi8.coui.kmp.icon.extended.Lock
 import io.github.suqi8.coui.kmp.icon.extended.Location
 import io.github.suqi8.coui.kmp.icon.extended.Recent
 import io.github.suqi8.coui.kmp.icon.extended.Reply
+import io.github.suqi8.coui.kmp.icon.extended.Settings
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
@@ -111,8 +112,21 @@ private val EntryColors = listOf(
     Color(0xFFFF9800),
 )
 
-private val EntryTitles = listOf("@我的动态", "@我的评论", "我收到的赞", "好友关注", "私信")
+private val EntryTitles = listOf("@我的动态", "@我的评论", "我收到的赞", "好友关注", "私信与信息")
 
+/** The entries the 我的 page lists, in [EntryTitles] order; 酷安小秘书 opens from inside 私信与信息. */
+private val EntryTypes = listOf(
+    NotificationType.At,
+    NotificationType.Comment,
+    NotificationType.Like,
+    NotificationType.Follow,
+    NotificationType.Message,
+)
+
+/**
+ * 我的: the account header, its counters and shortcuts, and the notification entries. Conversations
+ * live behind 私信与信息; switching or adding accounts happens on 账号管理.
+ */
 @Composable
 fun MessageScreen(outerPadding: PaddingValues) {
     val app = LocalApp.current
@@ -124,42 +138,33 @@ fun MessageScreen(outerPadding: PaddingValues) {
     val isLogin = app.session.isLogin
     var profile by remember { mutableStateOf<Entity?>(null) }
     var counts by remember { mutableStateOf<List<Int?>>(emptyList()) }
-    var clearedMessages by remember { mutableStateOf(emptySet<String>()) }
-    var confirmLogout by remember { mutableStateOf(false) }
-
-    // The conversation stream needs an account; asking for it while logged out would only raise a
-    // challenge.
-    val viewModel = if (isLogin) {
-        // Keyed by account, so a re-login never shows the previous account's conversations.
-        viewModel(key = "message-list-${app.session.uid}") {
-            FeedListViewModel(
-                PageLoader { page, first, last ->
-                    app.repository.notificationList("/v6/notification/list", page, first, last)
-                },
-            )
-        }
-    } else {
-        null
-    }
+    // 酷安小秘书's own unread count; 私信与信息 shows it on its leading row.
+    var systemCount by remember { mutableStateOf<Int?>(null) }
+    var refreshing by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         if (!app.session.isLogin) return
         try {
             val user = app.repository.profile(app.session.uid)
+            if (user.uid.isNotEmpty() && user.uid != app.session.uid) return
             profile = user
-            app.session.saveProfile(
+            app.accounts.refreshCurrent(
+                username = null,
                 avatar = user.userAvatar,
-                level = user.int("level") ?: 0,
-                exp = user.int("experience") ?: 0,
-                nextExp = user.int("nextLevelExperience") ?: 1,
+                level = user.int("level"),
+                exp = user.int("experience"),
+                nextExp = user.int("nextLevelExperience"),
             )
             val count = app.repository.checkCount()
+            val message = count.int("message")
+            val notification = count.int("notification")
+            systemCount = notification
             counts = listOf(
                 count.int("atme"),
                 count.int("atcommentme"),
                 count.int("feedlike"),
                 count.int("contacts_follow"),
-                count.int("message"),
+                if (message != null || notification != null) (message ?: 0) + (notification ?: 0) else null,
             )
         } catch (e: CancellationException) {
             throw e
@@ -174,6 +179,7 @@ fun MessageScreen(outerPadding: PaddingValues) {
         } else {
             profile = null
             counts = emptyList()
+            systemCount = null
         }
     }
 
@@ -184,47 +190,29 @@ fun MessageScreen(outerPadding: PaddingValues) {
                     user = profile,
                     isLogin = isLogin,
                     onLogin = { navigator.push(Route.Login) },
-                    onLogout = { confirmLogout = true },
                 )
             }
         },
     ) { innerPadding ->
-        val listState = rememberLazyListState()
-
-        if (viewModel != null) {
-            LaunchedEffect(viewModel.refreshError) {
-                viewModel.refreshError?.let {
-                    context.toast(it)
-                    viewModel.refreshError = null
-                }
-            }
-            LaunchedEffect(listState, viewModel) {
-                snapshotFlow {
-                    val layout = listState.layoutInfo
-                    val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    layout.totalItemsCount > 0 && last >= layout.totalItemsCount - 4
-                }.distinctUntilChanged().filter { it }.collect { viewModel.loadMore() }
-            }
-        }
-
         MessageList(
-            listState = listState,
-            viewModel = viewModel,
             backdrop = backdrop,
             isLogin = isLogin,
             profile = profile,
             counts = counts,
-            clearedMessages = clearedMessages,
-            onClearMessage = { clearedMessages = clearedMessages + it },
-            onClearCount = { index ->
-                if (index < counts.size) {
-                    counts = counts.toMutableList().also { it[index] = null }
-                }
+            refreshing = refreshing,
+            onOpen = { index ->
+                val type = EntryTypes[index]
+                navigator.push(
+                    Route.Notification(type, systemCount = if (type == NotificationType.Message) systemCount ?: 0 else 0),
+                )
+                if (index < counts.size) counts = counts.toMutableList().also { it[index] = null }
+                if (type == NotificationType.Message) systemCount = null
             },
             onRefresh = {
                 scope.launch {
+                    refreshing = true
                     reload()
-                    viewModel?.refresh()
+                    refreshing = false
                 }
             },
             contentPadding = PaddingValues(
@@ -235,19 +223,6 @@ fun MessageScreen(outerPadding: PaddingValues) {
             ),
         )
     }
-
-    if (confirmLogout) {
-        LogoutDialog(
-            onConfirm = {
-                confirmLogout = false
-                clearedMessages = emptySet()
-                counts = emptyList()
-                profile = null
-                app.session.logout()
-            },
-            onCancel = { confirmLogout = false },
-        )
-    }
 }
 
 @Composable
@@ -255,7 +230,6 @@ private fun MessageHeader(
     user: Entity?,
     isLogin: Boolean,
     onLogin: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
@@ -275,9 +249,20 @@ private fun MessageHeader(
                 fallback = Modifier.background(COUITheme.colorScheme.surface),
             )
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
-            .padding(top = 10.dp)
             .padding(bottom = 10.dp),
     ) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("我的", modifier = Modifier.weight(1f), style = COUITheme.textStyles.title3)
+            IconButton(onClick = { navigator.push(Route.Accounts) }) {
+                Icon(COUIIcons.ContactsCircle, contentDescription = "账号管理")
+            }
+            IconButton(onClick = { navigator.push(Route.Settings) }) {
+                Icon(COUIIcons.Settings, contentDescription = "设置")
+            }
+        }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (!isLogin) {
                 TextButton(text = "点击登录", onClick = onLogin)
@@ -318,10 +303,7 @@ private fun MessageHeader(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onLogout) {
-                        Icon(COUIIcons.Lock, contentDescription = "退出登录")
-                    }
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(20.dp))
                 }
             }
         }
@@ -331,29 +313,24 @@ private fun MessageHeader(
 
 @Composable
 private fun MessageList(
-    listState: LazyListState,
-    viewModel: FeedListViewModel?,
     backdrop: LayerBackdrop?,
     isLogin: Boolean,
     profile: Entity?,
     counts: List<Int?>,
-    clearedMessages: Set<String>,
-    onClearMessage: (String) -> Unit,
-    onClearCount: (Int) -> Unit,
+    refreshing: Boolean,
+    onOpen: (Int) -> Unit,
     onRefresh: () -> Unit,
     contentPadding: PaddingValues,
 ) {
-    val app = LocalApp.current
     val navigator = LocalNavigator.current
 
     PullToRefresh(
-        isRefreshing = viewModel?.isRefreshing == true,
+        isRefreshing = refreshing,
         onRefresh = onRefresh,
         pullToRefreshState = rememberPullToRefreshState(),
         contentPadding = contentPadding,
     ) {
         LazyColumn(
-            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .glassSource(backdrop)
@@ -361,17 +338,20 @@ private fun MessageList(
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item(contentType = "stats") {
-                CellCard(
-                    values = listOf(profile?.int("feed"), profile?.int("follow"), profile?.int("fans")),
-                    titles = listOf("动态", "关注", "粉丝"),
-                    icons = null,
-                    onClicks = listOf(
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Feed)) },
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Follow)) },
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Fan)) },
-                    ),
-                )
+            // A guest has no counters to show, so the page starts at the shortcuts.
+            if (isLogin) {
+                item(contentType = "stats") {
+                    CellCard(
+                        values = listOf(profile?.int("feed"), profile?.int("follow"), profile?.int("fans")),
+                        titles = listOf("动态", "关注", "粉丝"),
+                        icons = null,
+                        onClicks = listOf(
+                            { navigator.push(Route.FFFList(FFFListType.Feed)) },
+                            { navigator.push(Route.FFFList(FFFListType.Follow)) },
+                            { navigator.push(Route.FFFList(FFFListType.Fan)) },
+                        ),
+                    )
+                }
             }
             item(contentType = "shortcuts") {
                 Column {
@@ -398,76 +378,14 @@ private fun MessageList(
                     )
                 }
             }
-            items(count = NotificationType.entries.size) { index ->
+            items(count = EntryTypes.size) { index ->
                 NotificationEntry(
                     color = EntryColors[index],
                     icon = EntryIcons[index],
                     title = EntryTitles[index],
                     badge = counts.getOrNull(index),
-                    onClick = {
-                        if (!isLogin) return@NotificationEntry
-                        navigator.push(Route.Notification(NotificationType.entries[index]))
-                        onClearCount(index)
-                    },
+                    onClick = { if (isLogin) onOpen(index) },
                 )
-            }
-
-            if (viewModel != null) {
-                when (val status = viewModel.status) {
-                    ListStatus.Loading -> item(contentType = "loading") {
-                        Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                            InfiniteProgressIndicator()
-                        }
-                    }
-
-                    ListStatus.Empty -> item(contentType = "empty") {
-                        MessageNotice("暂无内容", viewModel::refresh)
-                    }
-
-                    is ListStatus.Error -> item(contentType = "error") {
-                        MessageNotice(status.message, viewModel::refresh)
-                    }
-
-                    ListStatus.Content -> {
-                        items(viewModel.items.filterNot(FeedActions::isHidden), key = { it.id.ifEmpty { it.entityId } }) { item ->
-                            when (item.entityType) {
-                                "message" -> MessageRow(item, showUnread = item.id !in clearedMessages) {
-                                    onClearMessage(item.id)
-                                    navigator.push(
-                                        Route.Chat(
-                                            item.string("ukey"),
-                                            item.string("messageUid"),
-                                            item.string("messageUsername"),
-                                        ),
-                                    )
-                                }
-
-                                "notification" -> NotificationItem(item, onChanged = viewModel::refresh)
-
-                                else -> EntityItem(item)
-                            }
-                        }
-                        item(contentType = "footer") {
-                            Box(
-                                Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                when (val footer = viewModel.footer) {
-                                    FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
-                                    FooterStatus.End -> Text(
-                                        "没有更多了",
-                                        style = COUITheme.textStyles.footnote1,
-                                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                                    )
-                                    is FooterStatus.Error -> TextButton(
-                                        text = "${footer.message}，点击重试",
-                                        onClick = viewModel::retryFooter,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -559,31 +477,4 @@ private fun NotificationEntry(
             Icon(COUIIcons.ChevronForward, contentDescription = null, tint = COUITheme.colorScheme.outline)
         }
     }
-}
-
-@Composable
-private fun MessageNotice(message: String, onReload: () -> Unit) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(80.dp)
-            .clickable(onClick = onReload)
-            .padding(10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(message)
-    }
-}
-
-@OptIn(ExperimentalCOUIApi::class)
-@Composable
-private fun LogoutDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
-    OverlayAlertDialog(
-        show = true,
-        title = "确定退出登录？",
-        confirmText = "确定",
-        cancelText = "取消",
-        onConfirm = onConfirm,
-        onCancel = onCancel,
-    )
 }
