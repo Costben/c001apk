@@ -7,6 +7,7 @@
 ```text
 c001apk/
 ├── apps/
+│   ├── android/             # Kotlin / Compose 重写中的 Android 应用（coui17 界面）
 │   └── flutter/             # 当前 Flutter 应用
 │       ├── lib/             # 页面、组件、网络层、模型与工具
 │       ├── assets/          # 应用资源
@@ -20,6 +21,8 @@ c001apk/
 │   ├── media/               # README 横幅与界面截图
 │   ├── THIRD_PARTY_NOTICES.md
 │   └── licenses/            # 第三方许可原文
+├── third_party/
+│   └── coui17/              # coui17 组件库（git submodule，源码参与构建）
 ├── LICENSE
 └── README.md
 ```
@@ -142,6 +145,38 @@ Remove-Item Env:COOLAPK_LIVE_PROBE
 游客动态、文章详情检查使用 `COOLAPK_GUEST_DETAIL_PROBE=1` 和 `test/live/guest_detail_test.dart`。在线检查的脱敏结构结果写入 Flutter 工程下忽略的 `.local/reports/`；验证码或业务拒绝会如实导致检查失败。
 
 若代理配置影响本机测试连接，可在当前 PowerShell 会话设置 `$env:NO_PROXY = 'localhost,127.0.0.1,::1'` 后重试。
+
+## Android Compose 应用
+
+`apps/android/` 是 Android 端的 Kotlin / Jetpack Compose 重写，界面使用
+[coui17](https://github.com/Costben/coui17)（ColorOS 风格的 Compose Multiplatform 组件库）。
+coui17 以 git submodule 放在 `third_party/coui17/`，通过 Gradle 复合构建直接参与编译，
+替换 `io.github.suqi8.coui.kmp` 的发布坐标，因此始终使用子模块里的 ColorOS 17 改动。
+
+当前进度：Flutter 版的页面与交互已完成移植。首页 7 个分段（关注 / 应用 / 动态 / 热门 /
+话题 / 数码 / 酷图）、详情与回复、搜索、登录与人机验证、消息与私信、用户 / 应用 / 话题 /
+酷图 / 动态号、设置及各子页均已接通，信息流卡片的图片查看、点赞、屏蔽、删除、举报等
+交互与站内链接分发同 Flutter 版一致。逐项进度与落点见
+[移植清单](PORTING.md)，已知差异与真机验证记录也在该文件。
+功能对齐前，Compose 版使用独立的 applicationId `app.awavenue.c001apk.coui`，
+与 Flutter 包并存安装，数据互不迁移。
+
+工具链要求与 coui17 一致：JDK 21、Android SDK compileSdk 37 / build-tools 37.0.0。
+AGP（9.3.1）与 Kotlin（2.4.10）版本必须与 `third_party/coui17/gradle/libs.versions.toml`
+保持一致，升级子模块时一并核对。
+
+```bash
+git clone --recurse-submodules https://github.com/TG-Twilight/c001apk.git
+# 已有仓库：git submodule update --init
+
+cd c001apk/apps/android
+./gradlew :app:testDebugUnitTest   # 单元测试：请求签名与 Flutter 实现逐字节对照、响应错误分类、列表解析
+./gradlew :app:assembleDebug       # 调试 APK：app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleRelease     # 正式包，签名配置同上文 Flutter Android
+```
+
+正式签名读取与 Flutter Android 相同的环境变量；本地 `key.properties` 放在 `apps/android/` 下。
+缺少签名时 release 构建直接失败。
 
 ## 参与维护
 

@@ -69,7 +69,7 @@
 - [x] 恢复主要游客浏览流程，为部分受限动态、文章提供公开详情回退。
 - [x] 基本修复账号登录与状态管理，补齐验证码交互。
 - [ ] 继续完善验证码放行与部分账号操作。
-- [ ] Android 迁移到 Kotlin / Jetpack Compose，采用 Material 3 Expressive。
+- [ ] Android 迁移到 Kotlin / Jetpack Compose，采用 [coui17](https://github.com/Costben/coui17) ColorOS 风格组件库：已完成主导航与首页列表，见 [开发指南](docs/DEVELOPMENT.md#android-compose-应用)。
 - [ ] 完善 Flutter 桌面端随窗口尺寸变化的自适应布局与图片保存。
 
 当前重点维护 **Android 与 Windows**，代码仍为 Flutter。Android 包名为 `app.awavenue.c001apk`；Linux 已通过云端 release 构建，iOS 已通过无签名编译检查，运行体验仍待验收。新包与旧包独立安装，登录及本地数据不会自动迁移。

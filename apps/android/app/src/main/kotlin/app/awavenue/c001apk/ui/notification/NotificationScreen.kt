@@ -1,0 +1,211 @@
+package app.awavenue.c001apk.ui.notification
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.chat.MessageRow
+import app.awavenue.c001apk.ui.common.glassSource
+import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.feed.EntityItem
+import app.awavenue.c001apk.ui.feed.FeedActions
+import app.awavenue.c001apk.ui.feed.FeedListViewModel
+import app.awavenue.c001apk.ui.feed.FooterStatus
+import app.awavenue.c001apk.ui.feed.ListStatus
+import app.awavenue.c001apk.ui.feed.PageLoader
+import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.NotificationType
+import app.awavenue.c001apk.ui.nav.Route
+import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.EmptyState
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
+import io.github.suqi8.coui.kmp.basic.PullToRefresh
+import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
+import io.github.suqi8.coui.kmp.blur.LayerBackdrop
+import io.github.suqi8.coui.kmp.blur.LocalBackdrop
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+
+/** The endpoint each notification list reads, as the Flutter client maps them. */
+private fun notificationUrl(type: NotificationType): String = when (type) {
+    NotificationType.At -> "/v6/notification/atMeList"
+    NotificationType.Comment -> "/v6/notification/atCommentMeList"
+    NotificationType.Like -> "/v6/notification/feedLikeList"
+    NotificationType.Follow -> "/v6/notification/contactsFollowList"
+    NotificationType.Message -> "/v6/message/list"
+}
+
+@Composable
+fun NotificationScreen(type: NotificationType) {
+    val app = LocalApp.current
+    val navigator = LocalNavigator.current
+    val scrollBehavior = COUIScrollBehavior()
+    val backdrop = rememberGlassBackdrop()
+
+    val viewModel = viewModel(key = "notification-${type.name}") {
+        FeedListViewModel(
+            PageLoader { page, first, last ->
+                app.repository.notificationList(notificationUrl(type), page, first, last)
+            },
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                TopAppBar(
+                    title = type.label,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                        }
+                    },
+                )
+            }
+        },
+    ) { innerPadding ->
+        NotificationList(
+            viewModel = viewModel,
+            scrollBehavior = scrollBehavior,
+            backdrop = backdrop,
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 10.dp,
+                bottom = innerPadding.calculateBottomPadding() + 10.dp,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun NotificationList(
+    viewModel: FeedListViewModel,
+    scrollBehavior: ScrollBehavior,
+    backdrop: LayerBackdrop?,
+    contentPadding: PaddingValues,
+) {
+    val context = LocalContext.current
+    val navigator = LocalNavigator.current
+    val listState = rememberLazyListState()
+    // Reading a conversation drops its unread badge, the way the Flutter list clears it on tap.
+    var clearedMessages by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(viewModel.refreshError) {
+        viewModel.refreshError?.let {
+            context.toast(it)
+            viewModel.refreshError = null
+        }
+    }
+    LaunchedEffect(listState, viewModel) {
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            layout.totalItemsCount > 0 && last >= layout.totalItemsCount - 4
+        }.distinctUntilChanged().filter { it }.collect { viewModel.loadMore() }
+    }
+
+    when (val status = viewModel.status) {
+        ListStatus.Loading -> CenterBox(contentPadding) { InfiniteProgressIndicator() }
+
+        ListStatus.Empty -> CenterBox(contentPadding) {
+            EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+        }
+
+        is ListStatus.Error -> CenterBox(contentPadding) {
+            EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
+        }
+
+        ListStatus.Content -> PullToRefresh(
+            isRefreshing = viewModel.isRefreshing,
+            onRefresh = viewModel::refresh,
+            pullToRefreshState = rememberPullToRefreshState(),
+            contentPadding = contentPadding,
+            topAppBarScrollBehavior = scrollBehavior,
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(viewModel.items.filterNot(FeedActions::isHidden), key = { it.id.ifEmpty { it.entityId } }) { item ->
+                    when (item.entityType) {
+                        "notification" -> NotificationItem(item, onChanged = viewModel::refresh)
+
+                        "message" -> MessageRow(item, showUnread = item.id !in clearedMessages) {
+                            clearedMessages = clearedMessages + item.id
+                            navigator.push(
+                                Route.Chat(
+                                    item.string("ukey"),
+                                    item.string("messageUid"),
+                                    item.string("messageUsername"),
+                                ),
+                            )
+                        }
+
+                        else -> EntityItem(item)
+                    }
+                }
+                item(contentType = "footer") { Footer(viewModel.footer, viewModel::retryFooter) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CenterBox(contentPadding: PaddingValues, content: @Composable () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+@Composable
+private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+        when (status) {
+            FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
+            FooterStatus.End -> Text(
+                "没有更多了",
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
+        }
+    }
+}

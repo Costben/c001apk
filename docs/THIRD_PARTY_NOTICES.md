@@ -3,7 +3,8 @@
 本项目保留原有 [LICENSE](../LICENSE) 与上游署名。
 
 `apps/flutter/lib/utils/token_util.dart` 中的 Token V3 兼容实现及
-`apps/flutter/lib/utils/token_v3_data.dart` 中的协议查找表参考自
+`apps/flutter/lib/utils/token_v3_data.dart` 中的协议查找表（Compose 版移植为
+`apps/android/app/src/main/kotlin/app/awavenue/c001apk/data/TokenUtils.kt` 与 `TokenV3Data.kt`）参考自
 [daimiaopeng/coolapk-desktop](https://github.com/daimiaopeng/coolapk-desktop)，
 来源提交 `3ef2ad4da6d171e118d2b29b0f18d7ffa6da9086`，文件
 `src-tauri/src/coolapk/auth.rs` 与 `auth_blob.b64`，采用日期 2026-10-14。
@@ -35,3 +36,9 @@ SDK 接入回调另核对 [网易易盾官方示例](https://github.com/yidun/ca
 `android/app/src/main/res/values-night-v31/colors.xml`。
 该项目采用 GPL-3.0，完整许可证见 [PiliPlus GPL-3.0](licenses/PiliPlus-GPL-3.0.txt)。
 仅参考系统颜色资源搭配，保留 c001apk 原有无穷符号和单色层，未引入 PiliPlus 图形素材。
+
+2026-10-15，Android Compose 应用的界面组件来自 [Costben/coui17](https://github.com/Costben/coui17)，
+以 git submodule 形式位于 `third_party/coui17/`，其上游为
+[suqi8/coui](https://github.com/suqi8/coui) 与 [compose-miuix-ui/miuix](https://github.com/compose-miuix-ui/miuix)，
+均采用 Apache-2.0，许可证与 NOTICE 随子模块保存在 `third_party/coui17/LICENSE`、`third_party/coui17/NOTICE`。
+`ui/common/Icons.kt` 中点赞、评论图标的路径数据取自 Material Icons（Apache-2.0）。

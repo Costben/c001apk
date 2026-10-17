@@ -1,0 +1,3 @@
+[submodule "third_party/coui17"]
+	path = third_party/coui17
+	url = https://github.com/Costben/coui17.git

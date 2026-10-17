@@ -1,0 +1,60 @@
+package app.awavenue.c001apk
+
+import android.app.Application
+import app.awavenue.c001apk.data.AppSettings
+import app.awavenue.c001apk.data.BlacklistStore
+import app.awavenue.c001apk.data.CoolapkRepository
+import app.awavenue.c001apk.data.HistoryStore
+import app.awavenue.c001apk.data.SearchHistoryStore
+import app.awavenue.c001apk.data.SessionStore
+import app.awavenue.c001apk.network.ApiClient
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.util.DebugLogger
+import okhttp3.OkHttpClient
+
+class C001apkApp : Application(), SingletonImageLoader.Factory {
+    lateinit var settings: AppSettings
+        private set
+    lateinit var session: SessionStore
+        private set
+    lateinit var blacklist: BlacklistStore
+        private set
+    lateinit var history: HistoryStore
+        private set
+    lateinit var searchHistory: SearchHistoryStore
+        private set
+    lateinit var apiClient: ApiClient
+        private set
+    lateinit var repository: CoolapkRepository
+        private set
+
+    private val httpClient = OkHttpClient()
+
+    override fun onCreate() {
+        super.onCreate()
+        settings = AppSettings(this)
+        session = SessionStore(this)
+        blacklist = BlacklistStore(this)
+        history = HistoryStore(this)
+        searchHistory = SearchHistoryStore(this)
+        apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
+        repository = CoolapkRepository(apiClient, settings, blacklist, session)
+    }
+
+    // image.coolapk.com answers generic client agents with HTTP 567, so images go out with the
+    // same CoolMarket agent as API calls.
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val imageClient = httpClient.newBuilder()
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().header("User-Agent", settings.deviceParams.userAgent).build())
+            }
+            .build()
+        return ImageLoader.Builder(context)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { imageClient })) }
+            .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
+            .build()
+    }
+}
