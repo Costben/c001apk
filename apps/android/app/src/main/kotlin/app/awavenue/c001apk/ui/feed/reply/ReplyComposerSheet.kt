@@ -1,7 +1,14 @@
 package app.awavenue.c001apk.ui.feed.reply
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +36,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +70,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Photos
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -343,11 +353,35 @@ private fun ToolbarIcon(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    IconButton(
-        onClick = onClick,
-        backgroundColor = if (selected) COUITheme.colorScheme.secondaryContainer else Color.Unspecified,
-        cornerRadius = 8.dp,
-        modifier = Modifier.size(36.dp),
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    // Quick press-in, then a springy release that overshoots past 1 before settling.
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = if (pressed) {
+            tween(durationMillis = 70)
+        } else {
+            spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium)
+        },
+        label = "toolbarIconPressScale",
+    )
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .squircleSurface(
+                color = if (selected) COUITheme.colorScheme.secondaryContainer else Color.Unspecified,
+                cornerRadius = 8.dp,
+            )
+            .clickable(
+                role = Role.Button,
+                interactionSource = interactionSource,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             icon,

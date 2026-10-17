@@ -43,6 +43,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.openCoolapkLink
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -118,13 +119,13 @@ fun FeedCard(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val origin = rememberExpandOrigin(CardDefaults.CornerRadius, CardDefaults.defaultColors().color)
-    val openFeed = { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
+    val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
 
     val like = FeedActions.like(feed)
     val liked = like?.liked ?: feed.isLiked
     val likeNum = like?.count ?: feed.likeNum
-    val onLike: () -> Unit = {
+    val onLike: () -> Unit = rememberHapticClick {
         scope.launch {
             try {
                 val result = app.repository.like(feed.id, liked, isFeed = true)
@@ -149,8 +150,8 @@ fun FeedCard(
     ) {
         FeedHeader(
             feed,
-            onUserClick = { navigator.push(Route.User(feed.uid)) },
-            onMore = { menuOpen = true },
+            onUserClick = rememberHapticClick { navigator.push(Route.User(feed.uid)) },
+            onMore = rememberHapticClick { menuOpen = true },
         )
         // Title and body sizes follow the Flutter feed card: 16sp, title bold.
         if (feed.messageTitle.isNotEmpty()) {
@@ -367,7 +368,7 @@ private fun ExtraLink(feed: Entity) {
     val context = LocalContext.current
     val openInBrowser = LocalApp.current.settings.openInBrowser
     InsetBlock(
-        onClick = {
+        onClick = rememberHapticClick {
             openCoolapkLink(context, navigator, feed.extraUrl, feed.extraTitle, openInBrowser)
         },
     ) {
@@ -407,7 +408,7 @@ private fun RelationChip(entry: Entity) {
         Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(COUITheme.colorScheme.surface)
-            .clickable { openLink(entry.url, entry.title) }
+            .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
             .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -74,8 +76,10 @@ import androidx.compose.ui.util.lerp
 import androidx.core.view.WindowCompat
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.saveImage
+import app.awavenue.c001apk.ui.common.saveLivePhoto
 import app.awavenue.c001apk.ui.common.shareImage
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.common.toast
@@ -86,6 +90,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -111,6 +116,12 @@ private const val ChromeFadeStart = 0.6f
 
 // Below this the picture counts as unzoomed, so float residue from pinching never blocks a swipe.
 private const val ZoomEpsilon = 0.01f
+
+// The full picture fades in and the loading spinner fades out over this, so neither is a hard cut.
+private const val LoadFadeMillis = 200
+
+// A picture already in the cache arrives at once; hold the spinner back so it does not blink.
+private const val IndicatorDelayMillis = 150
 
 /**
  * Full-screen picture pager. The picture sits under translucent bars, fitted to the whole screen —
@@ -153,6 +164,16 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
         }
     }
 
+    fun saveLive(url: String) {
+        sheetPage = null
+        scope.launch {
+            saving = true
+            val ok = saveLivePhoto(context, url)
+            saving = false
+            context.toast(if (ok) "已保存实况照片" else "实况照片保存失败")
+        }
+    }
+
     Box(Modifier.fillMaxSize().onPlaced { frame.host = it }) {
         Box(Modifier.fillMaxSize().drawBehind { drawRect(Color.Black, alpha = progress()) })
 
@@ -186,6 +207,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                 ZoomablePage(
                     url = images[page],
                     isCurrent = pagerState.currentPage == page,
+                    isSettled = pagerState.settledPage == page,
                     isSettledElsewhere = pagerState.settledPage != page,
                     frame = frame,
                     onTap = { chromeVisible = !chromeVisible },
@@ -240,6 +262,9 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
         val url = images[page]
         OverlayBottomSheet(show = true, onDismissRequest = { sheetPage = null }) {
             Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                if (url.isLivePhotoUrl()) {
+                    ActionSheetItem(COUIIcons.Download, "保存实况照片", onClick = { saveLive(url) })
+                }
                 ActionSheetItem(COUIIcons.Download, "保存图片", onClick = { save(listOf(url)) })
                 if (images.size != 1) {
                     ActionSheetItem(COUIIcons.Image, "保存全部图片", onClick = { save(images) })
@@ -367,6 +392,7 @@ private fun fitSize(boxWidth: Float, boxHeight: Float, aspect: Float): Size =
 private fun ZoomablePage(
     url: String,
     isCurrent: Boolean,
+    isSettled: Boolean,
     isSettledElsewhere: Boolean,
     frame: ViewerFrame,
     onTap: () -> Unit,
@@ -374,10 +400,18 @@ private fun ZoomablePage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     var box by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    val remote = url.startsWith("http://") || url.startsWith("https://")
     var loaded by remember(url) { mutableStateOf(false) }
+    var failed by remember(url) { mutableStateOf(false) }
+    // The full picture's own alpha, so it eases in over the thumbnail instead of snapping in.
+    var reveal by remember(url) { mutableFloatStateOf(0f) }
+    val live = remember(url) { LivePhotoState() }
+    val zoomed = scale > 1f + ZoomEpsilon
+    val player = rememberLivePhotoPlayer(url, isSettled, zoomed, live)
 
     // The picture as laid out at scale 1; a picture whose shape is not known yet fills the box.
     fun shown(): Size {
@@ -437,63 +471,120 @@ private fun ZoomablePage(
     LaunchedEffect(isCurrent) {
         if (isCurrent) snapshotFlow { scale > 1f + ZoomEpsilon }.collect { frame.zoomed = it }
     }
+    LaunchedEffect(loaded) {
+        if (loaded) animate(0f, 1f, animationSpec = tween(LoadFadeMillis)) { value, _ -> reveal = value }
+    }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .onSizeChanged { box = it }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { onTap() },
-                    onDoubleTap = { toggleZoom(it) },
-                    onLongPress = { onLongPress() },
+    Box(Modifier.fillMaxSize()) {
+        // The picture and its live-photo video share the zoom transform.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onSizeChanged { box = it }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                },
+        ) {
+            // The thumbnail the list already decoded stands in until the full picture arrives, and
+            // stays under it while it fades in, so the growth out of the thumbnail shows the picture
+            // itself and not an empty frame.
+            if (!loaded || reveal < 1f) {
+                AsyncImage(
+                    model = (if (url.isLivePhotoUrl()) url else thumbnail(url))
+                        .takeIf { it.startsWith("http://") || it.startsWith("https://") },
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-            .pointerInput(Unit) {
-                detectZoomAndPan { focus, pan, zoom, pointers ->
-                    val current = scale
-                    // One finger on a fitted picture is a swipe between pictures, not ours.
-                    if (pointers == 1 && current <= 1f + ZoomEpsilon) return@detectZoomAndPan false
-                    val next = (current * zoom).coerceIn(1f, MaxZoom)
-                    val moved = clamp(zoomedOffset(offset, next / current, focus) + pan, next)
-                    // A single finger pushing on an edge it has already reached is the pager's.
-                    val atEdge = pointers == 1 && abs(pan.x) >= abs(pan.y) && moved.x == offset.x
-                    if (atEdge) return@detectZoomAndPan false
-                    scale = next
-                    offset = if (next <= 1f) Offset.Zero else moved
-                    true
-                }
-            }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = offset.x
-                translationY = offset.y
-            },
-    ) {
-        // The thumbnail the list already decoded stands in until the full picture arrives, so the
-        // growth out of the thumbnail shows the picture itself and not an empty frame.
-        if (!loaded) {
             AsyncImage(
-                model = thumbnail(url).takeIf { it.startsWith("http://") || it.startsWith("https://") },
+                model = ImageRequest.Builder(context)
+                    .data(url.takeIf { remote })
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+                onSuccess = { state ->
+                    loaded = true
+                    val picture = state.painter.intrinsicSize
+                    if (picture.width > 0f && picture.height > 0f) frame.aspects[url] = picture.width / picture.height
+                },
+                onError = { failed = true },
+            )
+            if (live.playing && player != null) {
+                val fit = shown()
+                LivePhotoPlayerView(
+                    player = player,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(
+                            with(density) { fit.width.toDp() },
+                            with(density) { fit.height.toDp() },
+                        ),
+                )
+            }
+        }
+
+        // Gestures sit above the picture and the video surface, so neither can swallow a swipe.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onDoubleTap = { toggleZoom(it) },
+                        onLongPress = { onLongPress() },
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectZoomAndPan { focus, pan, zoom, pointers ->
+                        val current = scale
+                        // One finger on a fitted picture is a swipe between pictures, not ours.
+                        if (pointers == 1 && current <= 1f + ZoomEpsilon) return@detectZoomAndPan false
+                        val next = (current * zoom).coerceIn(1f, MaxZoom)
+                        val moved = clamp(zoomedOffset(offset, next / current, focus) + pan, next)
+                        // A single finger pushing on an edge it has already reached is the pager's.
+                        val atEdge = pointers == 1 && abs(pan.x) >= abs(pan.y) && moved.x == offset.x
+                        if (atEdge) return@detectZoomAndPan false
+                        scale = next
+                        offset = if (next <= 1f) Offset.Zero else moved
+                        true
+                    }
+                },
+        )
+
+        // Nothing here takes pointer input, so zoom, pan and swipes still reach the gesture layer
+        // below. Only the page on screen shows it, and never over a live photo already playing.
+        AnimatedVisibility(
+            visible = isCurrent && remote && !loaded && !failed && !live.playing,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(LoadFadeMillis, delayMillis = IndicatorDelayMillis)),
+            exit = fadeOut(tween(LoadFadeMillis)),
+        ) {
+            InfiniteProgressIndicator(color = Color.White, size = 24.dp)
+        }
+
+        if (url.isLivePhotoUrl()) {
+            LivePhotoControls(
+                state = live,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 16.dp, bottom = 16.dp),
+                onTogglePlayback = {
+                    if (live.playing) {
+                        player?.pause()
+                        live.playing = false
+                    } else if (player != null) {
+                        live.playRequest++
+                    }
+                },
+                onToggleMute = { live.muted = !live.muted },
             )
         }
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(url.takeIf { it.startsWith("http://") || it.startsWith("https://") })
-                .build(),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize(),
-            onSuccess = { state ->
-                loaded = true
-                val picture = state.painter.intrinsicSize
-                if (picture.width > 0f && picture.height > 0f) frame.aspects[url] = picture.width / picture.height
-            },
-        )
     }
 }
 

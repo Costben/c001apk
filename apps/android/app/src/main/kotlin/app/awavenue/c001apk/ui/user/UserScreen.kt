@@ -36,6 +36,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
@@ -185,7 +186,7 @@ fun UserScreen(uid: String) {
                     dividerColor = if (opaque) COUITheme.colorScheme.dividerLine else Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -193,7 +194,7 @@ fun UserScreen(uid: String) {
                         if (user != null) {
                             if (!blocked) {
                                 IconButton(
-                                    onClick = {
+                                    onClick = rememberHapticClick {
                                         navigator.push(
                                             Route.Search(title = username, pageType = "user", pageParam = resolvedUid),
                                         )
@@ -203,7 +204,7 @@ fun UserScreen(uid: String) {
                                 }
                             }
                             Box {
-                                IconButton(onClick = { menuOpen = true }) {
+                                IconButton(onClick = rememberHapticClick { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "更多")
                                 }
                                 UserMenu(
@@ -241,7 +242,10 @@ fun UserScreen(uid: String) {
             when {
                 loading -> CenterState(innerPadding) { InfiniteProgressIndicator() }
                 user == null -> CenterState(innerPadding) {
-                    TextButton(text = error ?: "暂无内容", onClick = { scope.launch { loadUser() } })
+                    TextButton(
+                        text = error ?: "暂无内容",
+                        onClick = rememberHapticClick { scope.launch { loadUser() } },
+                    )
                 }
                 blocked -> CenterState(innerPadding) {
                     Text("已屏蔽用户 $username", color = COUITheme.colorScheme.onSurfaceVariantSummary)
@@ -262,8 +266,8 @@ fun UserScreen(uid: String) {
                             user?.let { data ->
                                 UserInfoCard(
                                     user = data,
-                                    onFollowClick = onFollow,
-                                    onLocalFollow = onLocalFollow,
+                                    onFollowClick = rememberHapticClick(onClick = onFollow),
+                                    onLocalFollow = rememberHapticClick(onClick = onLocalFollow),
                                     onStatClick = { index ->
                                         val target = when (index) {
                                             UserStat.Feed -> FFFListType.Feed
@@ -400,7 +404,10 @@ private fun UserFeed(
 @Composable
 private fun FeedMessage(message: String, onRetry: () -> Unit) {
     Box(
-        Modifier.fillMaxWidth().padding(vertical = 24.dp).clickable(onClick = onRetry),
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp)
+            .clickable(onClick = rememberHapticClick(onClick = onRetry)),
         contentAlignment = Alignment.Center,
     ) {
         Text(message, color = COUITheme.colorScheme.onSurfaceVariantSummary)

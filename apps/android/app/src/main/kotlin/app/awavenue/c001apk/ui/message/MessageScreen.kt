@@ -55,6 +55,7 @@ import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
 import app.awavenue.c001apk.ui.feed.FeedActions
@@ -256,16 +257,16 @@ private fun MessageHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("我的", modifier = Modifier.weight(1f), style = COUITheme.textStyles.title3)
-            IconButton(onClick = { navigator.push(Route.Accounts) }) {
+            IconButton(onClick = rememberHapticClick { navigator.push(Route.Accounts) }) {
                 Icon(COUIIcons.ContactsCircle, contentDescription = "账号管理")
             }
-            IconButton(onClick = { navigator.push(Route.Settings) }) {
+            IconButton(onClick = rememberHapticClick { navigator.push(Route.Settings) }) {
                 Icon(COUIIcons.Settings, contentDescription = "设置")
             }
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (!isLogin) {
-                TextButton(text = "点击登录", onClick = onLogin)
+                TextButton(text = "点击登录", onClick = rememberHapticClick(onClick = onLogin))
             } else {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -277,10 +278,12 @@ private fun MessageHeader(
                         Modifier
                             .size(45.dp)
                             .clip(CircleShape)
-                            .clickable {
-                                val uid = user?.uid.orEmpty().ifEmpty { app.session.uid }
-                                if (uid.isNotEmpty()) navigator.push(Route.User(uid))
-                            },
+                            .clickable(
+                                onClick = rememberHapticClick {
+                                    val uid = user?.uid.orEmpty().ifEmpty { app.session.uid }
+                                    if (uid.isNotEmpty()) navigator.push(Route.User(uid))
+                                },
+                            ),
                         contentDescription = username,
                     )
                     Spacer(Modifier.width(10.dp))
@@ -412,7 +415,7 @@ private fun CellCard(
                 Column(
                     Modifier
                         .weight(1f)
-                        .clickable(onClick = onClicks[index])
+                        .clickable(onClick = rememberHapticClick(onClick = onClicks[index]))
                         .padding(vertical = 5.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -457,7 +460,11 @@ private fun NotificationEntry(
     badge: Int?,
     onClick: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(10.dp), onClick = onClick) {
+    Card(
+        Modifier.fillMaxWidth(),
+        insideMargin = PaddingValues(10.dp),
+        onClick = rememberHapticClick(onClick = onClick),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier

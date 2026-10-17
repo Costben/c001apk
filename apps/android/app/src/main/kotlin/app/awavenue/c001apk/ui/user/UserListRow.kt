@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -64,7 +65,7 @@ fun UserRow(item: Entity, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         insideMargin = PaddingValues(10.dp),
-        onClick = onClick,
+        onClick = rememberHapticClick(onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(

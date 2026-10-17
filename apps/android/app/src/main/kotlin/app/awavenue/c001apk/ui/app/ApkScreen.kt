@@ -49,6 +49,7 @@ import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
@@ -212,7 +213,7 @@ fun ApkScreen(packageName: String) {
                     title = if (scrolledPastHeader) appName else "",
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -220,7 +221,7 @@ fun ApkScreen(packageName: String) {
                         if (detail != null) {
                             if (commentsOpen) {
                                 IconButton(
-                                    onClick = {
+                                    onClick = rememberHapticClick {
                                         navigator.push(
                                             Route.Search(title = appName, pageType = "apk", pageParam = id),
                                         )
@@ -230,7 +231,7 @@ fun ApkScreen(packageName: String) {
                                 }
                             }
                             Box {
-                                IconButton(onClick = { menu = true }) {
+                                IconButton(onClick = rememberHapticClick { menu = true }) {
                                     Icon(COUIIcons.More, contentDescription = "菜单")
                                 }
                                 OverlayListPopup(
@@ -278,7 +279,7 @@ fun ApkScreen(packageName: String) {
             AppFloatingActionButton(
                 visible = app.session.isLogin && detail != null && commentsOpen,
                 backdrop = backdrop,
-                onClick = { compose = true },
+                onClick = rememberHapticClick { compose = true },
                 icon = COUIIcons.Add,
                 contentDescription = "发布动态",
             )
@@ -327,8 +328,10 @@ fun ApkScreen(packageName: String) {
                     item(contentType = "header") {
                         ApkHeader(
                             app = current,
-                            onOpenIcon = { navigator.push(Route.ImageView(listOf(current.logo))) },
-                            onDownload = { onDownloadClick() },
+                            onOpenIcon = rememberHapticClick {
+                                navigator.push(Route.ImageView(listOf(current.logo)))
+                            },
+                            onDownload = rememberHapticClick { onDownloadClick() },
                         )
                     }
                     stickyHeader(key = "comments") {

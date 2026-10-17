@@ -1,16 +1,22 @@
 package app.awavenue.c001apk.ui.notification
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.suqi8.coui.kmp.basic.Badge
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.icon.extended.Help
@@ -38,8 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.chat.MessageRow
+import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
 import app.awavenue.c001apk.ui.feed.FeedActions
@@ -66,6 +74,7 @@ import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
+import io.github.suqi8.coui.kmp.icon.extended.Email
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -82,7 +91,12 @@ private fun notificationUrl(type: NotificationType): String = when (type) {
 }
 
 @Composable
-fun NotificationScreen(type: NotificationType, systemCount: Int = 0) {
+fun NotificationScreen(
+    type: NotificationType,
+    systemCount: Int = 0,
+    title: String? = null,
+    showShortcuts: Boolean = false,
+) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val scrollBehavior = COUIScrollBehavior()
@@ -103,10 +117,10 @@ fun NotificationScreen(type: NotificationType, systemCount: Int = 0) {
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
-                    title = type.label,
+                    title = title ?: type.label,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -118,17 +132,29 @@ fun NotificationScreen(type: NotificationType, systemCount: Int = 0) {
             viewModel = viewModel,
             scrollBehavior = scrollBehavior,
             backdrop = backdrop,
-            leading = if (type == NotificationType.Message) {
-                {
-                    SystemEntry(unreadSystem) {
-                        unreadSystem = 0
-                        navigator.push(Route.Notification(NotificationType.System))
+            leading = when {
+                showShortcuts -> {
+                    {
+                        NotificationShortcuts { target ->
+                            navigator.push(Route.Notification(target))
+                        }
                     }
                 }
-            } else {
-                null
+
+                type == NotificationType.Message -> {
+                    {
+                        SystemEntry(unreadSystem) {
+                            unreadSystem = 0
+                            navigator.push(Route.Notification(NotificationType.System))
+                        }
+                    }
+                }
+
+                else -> null
             },
             contentPadding = PaddingValues(
+                start = 10.dp,
+                end = 10.dp,
                 top = innerPadding.calculateTopPadding() + 10.dp,
                 bottom = innerPadding.calculateBottomPadding() + 10.dp,
             ),
@@ -245,7 +271,11 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
 /** 酷安小秘书: the system notification stream, listed as its own conversation. */
 @Composable
 private fun SystemEntry(count: Int, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(10.dp), onClick = onClick) {
+    Card(
+        Modifier.fillMaxWidth(),
+        insideMargin = PaddingValues(10.dp),
+        onClick = rememberHapticClick(onClick = onClick),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(COUITheme.colorScheme.secondaryContainer),
@@ -265,5 +295,48 @@ private fun SystemEntry(count: Int, onClick: () -> Unit) {
             }
             if (count > 0) Badge(count = count)
         }
+    }
+}
+
+private val LikeTileColors = Color(0xFFFFE9E7) to Color(0xFFE8503A)
+private val AtTileColors = Color(0xFFE8F1FF) to Color(0xFF2F7CF6)
+private val MessageTileColors = Color(0xFFFFF1E2) to Color(0xFFF0A020)
+
+/** The three stacks the notification centre opens with, as the official 通知 page lays them out. */
+@Composable
+private fun NotificationShortcuts(onOpen: (NotificationType) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ShortcutTile(AppIcons.ThumbUpOutlined, "点赞", LikeTileColors) { onOpen(NotificationType.Like) }
+        ShortcutTile(AppIcons.ChatBubbleOutlined, "@我", AtTileColors) { onOpen(NotificationType.At) }
+        ShortcutTile(COUIIcons.Email, "私信", MessageTileColors) { onOpen(NotificationType.Message) }
+    }
+}
+
+@Composable
+private fun RowScope.ShortcutTile(
+    icon: ImageVector,
+    label: String,
+    colors: Pair<Color, Color>,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = rememberHapticClick(onClick = onClick))
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(58.dp).clip(RoundedCornerShape(19.dp)).background(colors.first),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(28.dp), tint = colors.second)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(label, style = COUITheme.textStyles.body2)
     }
 }

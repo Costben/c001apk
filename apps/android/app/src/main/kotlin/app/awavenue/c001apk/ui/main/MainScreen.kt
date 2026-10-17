@@ -116,9 +116,20 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val session = LocalApp.current.session
     val settings = LocalApp.current.settings
     val homeTab = settings.homeTab
+    // The same visible-tab list HomeScreen builds: the pager, the ball checks and the tab bodies
+    // must agree on what page N means.
+    val homeTabs = HomeTab.entries.filterNot { it.name in settings.hiddenHomeTabs }.ifEmpty { HomeTab.entries }
     val homePagerState = rememberPagerState(
-        initialPage = HomeTab.entries.indexOfFirst { it.name == homeTab }.takeIf { it >= 0 } ?: HomeTab.Feed.ordinal,
-    ) { HomeTab.entries.size }
+        initialPage = homeTabs.indexOfFirst { it.name == homeTab }
+            .takeIf { it >= 0 } ?: homeTabs.indexOf(HomeTab.Feed).coerceAtLeast(0),
+    ) { homeTabs.size }
+    // Hiding tabs can leave the current page past the new end; pageCount follows the state, but the
+    // position still has to be pulled back into range.
+    LaunchedEffect(homeTabs) {
+        if (homePagerState.currentPage > homeTabs.lastIndex) {
+            homePagerState.scrollToPage(homeTabs.lastIndex)
+        }
+    }
     var compose by remember { mutableStateOf(false) }
 
     // Back returns to the first tab; on it the host backgrounds the app, as upstream does.
@@ -141,9 +152,11 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
                     // One ball melts out of the capsule's trailing end at a time: 发布动态 on 动态
-                    // (signed in) and 更新 on 应用 (when the update check is on).
-                    val onFeed = onHome && homePagerState.currentPage == HomeTab.Feed.ordinal
-                    val onApp = onHome && homePagerState.currentPage == HomeTab.App.ordinal
+                    // (signed in) and 更新 on 应用 (when the update check is on). The page index is
+                    // an index into the visible tabs, not the HomeTab enum ordinal.
+                    val currentHomeTab = homeTabs.getOrNull(homePagerState.currentPage)
+                    val onFeed = onHome && currentHomeTab == HomeTab.Feed
+                    val onApp = onHome && currentHomeTab == HomeTab.App
                     val composeBall = onFeed && session.isLogin
                     val updateBall = onApp && settings.checkUpdate
                     BottomFloatingNavigationBar(

@@ -1,5 +1,7 @@
 package app.awavenue.c001apk.ui.nav
 
+import android.os.Build
+import android.view.RoundedCorner
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,6 +33,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -54,6 +58,17 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
     /** False once the element is gone, e.g. its list item was recycled or its screen disposed. */
     internal val isAvailable: Boolean
         get() = coordinates?.isAttached == true && !layer.isReleased
+
+    /**
+     * The element's bounds the last time they could be read. Pushing a page over the one that owns
+     * the element disposes that page, which detaches the element; freezing its position here lets a
+     * pop still shrink into where it was instead of falling back to a plain slide.
+     */
+    internal var lastBounds: Rect? = null
+
+    /** Whether a page can still grow out of, or shrink back into, this element. */
+    internal val hasBounds: Boolean
+        get() = isAvailable || lastBounds != null
 }
 
 /** [cornerRadius] and [color] describe the element's own surface, which the frame starts from. */
@@ -75,6 +90,21 @@ fun Modifier.expandOrigin(origin: ExpandOrigin): Modifier =
             origin.layer.record { this@drawWithContent.drawContent() }
             drawLayer(origin.layer)
         }
+
+/** The display's own corner radius, or zero on a square display or below Android 12. */
+@Composable
+private fun rememberScreenCornerRadius(): Dp {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    return remember(context, density) {
+        val px = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius ?: 0
+        } else {
+            0
+        }
+        with(density) { px.toDp() }
+    }
+}
 
 /** COUI's move curve: a quick start that settles softly, the way system cards open. */
 internal val ExpandEasing = CubicBezierEasing(0.3f, 0f, 0.1f, 1f)
@@ -104,8 +134,9 @@ internal fun ExpandFrame(
     val squircle = isSquircleEnabled()
     val statusBars = WindowInsets.statusBars
     val frame = remember { ExpandGeometry() }
+    val screenCornerRadius = rememberScreenCornerRadius()
 
-    fun active(): ExpandOrigin? = origin?.takeIf { progress() < 1f && it.isAvailable }
+    fun active(): ExpandOrigin? = origin?.takeIf { progress() < 1f && it.hasBounds }
 
     Box(
         Modifier
@@ -138,7 +169,7 @@ internal fun ExpandFrame(
                 translationY = top
                 scaleX = scale
                 scaleY = scale
-                val radius = lerp(source.cornerRadius.toPx(), 0f, p) / scale
+                val radius = lerp(source.cornerRadius.toPx(), screenCornerRadius.toPx(), p) / scale
                 shape = FrameShape(height / scale, (radius / density).dp, squircle)
                 clip = true
             }
@@ -160,7 +191,9 @@ internal fun ExpandFrame(
                 // colour it sits on in the list, so once the frame is back at its bounds it looks
                 // exactly like the card it hands over to.
                 val alpha = 1f - (f / CardFadeEnd).coerceIn(0f, 1f)
-                if (alpha > 0f) {
+                // A frozen origin has no live layer left; the page shrinks into its bounds and the
+                // revealed page already draws the element there.
+                if (alpha > 0f && source.isAvailable) {
                     val k = size.width / bounds.width
                     withTransform({ scale(k, k, pivot = Offset.Zero) }) {
                         drawIntoCanvas { canvas ->
@@ -196,9 +229,11 @@ private class ExpandGeometry {
 
     /** The element's bounds in the page host, read live so a pop shrinks into where it is now. */
     fun bounds(origin: ExpandOrigin): Rect? {
-        val host = host?.takeIf { it.isAttached } ?: return null
-        val element = origin.coordinates?.takeIf { it.isAttached } ?: return null
-        return host.localBoundingBoxOf(element, clipBounds = false).takeIf { it.width > 0f && it.height > 0f }
+        val host = host?.takeIf { it.isAttached } ?: return origin.lastBounds
+        val element = origin.coordinates?.takeIf { it.isAttached } ?: return origin.lastBounds
+        return host.localBoundingBoxOf(element, clipBounds = false)
+            .takeIf { it.width > 0f && it.height > 0f }
+            ?.also { origin.lastBounds = it }
     }
 }
 
@@ -221,4 +256,4 @@ internal fun BackStackEntry.growsFromOrigin(): Boolean =
     (origin?.isAvailable == true || route is Route.ImageView) && !shown
 
 /** Whether a popped route can shrink back into its origin. */
-internal fun BackStackEntry.shrinksToOrigin(): Boolean = origin?.isAvailable == true || route is Route.ImageView
+internal fun BackStackEntry.shrinksToOrigin(): Boolean = origin?.hasBounds == true || route is Route.ImageView

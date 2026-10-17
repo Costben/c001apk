@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -133,7 +134,7 @@ private fun AppRow(item: Entity, modifier: Modifier) {
     Card(
         modifier.fillMaxWidth(),
         insideMargin = PaddingValues(10.dp),
-        onClick = { openLink(item.url, item.title) },
+        onClick = rememberHapticClick { openLink(item.url, item.title) },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
@@ -171,7 +172,11 @@ private fun TitleCard(item: Entity, modifier: Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (item.url.isNotEmpty()) Modifier.clickable { openLink(item.url, item.title) } else Modifier,
+                if (item.url.isNotEmpty()) {
+                    Modifier.clickable(onClick = rememberHapticClick { openLink(item.url, item.title) })
+                } else {
+                    Modifier
+                },
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -194,7 +199,7 @@ private fun CollectionRow(item: Entity, modifier: Modifier) {
     Card(
         modifier.fillMaxWidth(),
         insideMargin = PaddingValues(10.dp),
-        onClick = {
+        onClick = rememberHapticClick {
             navigator.push(Route.FFFList(FFFListType.CollectionItem, id = item.id, title = item.title))
         },
     ) {
@@ -257,7 +262,7 @@ private fun CarouselCard(item: Entity, modifier: Modifier) {
     Box(modifier.fillMaxWidth().aspectRatio(3f).clip(RoundedCornerShape(17.dp))) {
         HorizontalPager(state = pagerState) { page ->
             val entry = pages[page]
-            Card(cornerRadius = 0.dp, onClick = { openLink(entry.url, entry.title) }) {
+            Card(cornerRadius = 0.dp, onClick = rememberHapticClick { openLink(entry.url, entry.title) }) {
                 NetworkImage(entry.pic, Modifier.fillMaxWidth().aspectRatio(3f), contentDescription = entry.title)
             }
         }
@@ -296,7 +301,7 @@ private fun IconGridCard(item: Entity, modifier: Modifier) {
                     ) {
                         Card(
                             cornerRadius = 12.dp,
-                            onClick = { openLink(entry.url, entry.title) },
+                            onClick = rememberHapticClick { openLink(entry.url, entry.title) },
                         ) {
                             NetworkImage(entry.pic.ifEmpty { entry.logo }, Modifier.size(40.dp), contentDescription = entry.title)
                         }
@@ -337,7 +342,7 @@ private fun ImageSquareScrollCard(item: Entity) {
                     Modifier
                         .size(cell)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { openLink(entry.url, entry.title) },
+                        .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) }),
                 ) {
                     NetworkImage(entry.pic, Modifier.fillMaxSize(), contentDescription = entry.title)
                     Box(Modifier.fillMaxSize().background(Color(0x8D000000)))
@@ -370,7 +375,7 @@ private fun ImageTextScrollCard(item: Entity, modifier: Modifier) {
                     Card(
                         Modifier.width(cell),
                         cornerRadius = 12.dp,
-                        onClick = { openLink(entry.url, entry.title) },
+                        onClick = rememberHapticClick { openLink(entry.url, entry.title) },
                     ) {
                         NetworkImage(
                             entry.pic,
@@ -409,7 +414,7 @@ private fun IconScrollCard(item: Entity, modifier: Modifier) {
                         Modifier
                             .width(cell)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { openLink(entry.url, entry.title) }
+                            .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
                             .padding(5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
@@ -433,7 +438,7 @@ private fun MiniItem(entry: Entity, modifier: Modifier = Modifier) {
     Row(
         modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable { openLink(entry.url, entry.title) }
+            .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -484,7 +489,7 @@ private fun EntityRowCard(item: Entity, modifier: Modifier) {
     Card(
         modifier.fillMaxWidth(),
         insideMargin = PaddingValues(12.dp),
-        onClick = {
+        onClick = rememberHapticClick {
             val url = item.url.ifEmpty { if (isUser) "/u/${item.uid}" else "" }
             // A dedicated screen beats the generic dispatcher for the kinds we model directly.
             when {

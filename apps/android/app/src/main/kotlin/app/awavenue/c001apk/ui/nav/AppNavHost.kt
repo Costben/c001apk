@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.account.AccountsScreen
 import app.awavenue.c001apk.ui.app.ApkScreen
 import app.awavenue.c001apk.ui.app.AppUpdateScreen
@@ -58,8 +59,10 @@ import app.awavenue.c001apk.ui.blacklist.BlacklistScreen
 import app.awavenue.c001apk.ui.carousel.CarouselScreen
 import app.awavenue.c001apk.ui.chat.ChatScreen
 import app.awavenue.c001apk.ui.common.CopyScreen
+import app.awavenue.c001apk.ui.common.openCoolapkLink
 import app.awavenue.c001apk.ui.coolpic.CoolPicScreen
 import app.awavenue.c001apk.ui.dyh.DyhScreen
+import app.awavenue.c001apk.ui.event.EventScreen
 import app.awavenue.c001apk.ui.feed.detail.FeedDetailScreen
 import app.awavenue.c001apk.ui.feed.detail.Reply2ReplyScreen
 import app.awavenue.c001apk.ui.feed.detail.WebScreen
@@ -85,6 +88,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -97,9 +102,10 @@ import kotlin.math.roundToInt
  * it is revealed; releasing early puts the page back where it was.
  */
 @Composable
-fun AppNavHost() {
+fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     val navigator = rememberNavigator()
     val context = LocalContext.current
+    val openInBrowser = LocalApp.current.settings.openInBrowser
     val scope = rememberCoroutineScope()
     val imageOrigins = remember { ImageOrigins() }
 
@@ -117,6 +123,12 @@ fun AppNavHost() {
     val revealing by remember { derivedStateOf { gestureProgress < 1f } }
 
     CompositionLocalProvider(LocalNavigator provides navigator, LocalImageOrigins provides imageOrigins) {
+        // One collector for the host's lifetime: a link is opened against whichever page is on top
+        // when it arrives, and recomposition does not restart the collection and replay it.
+        LaunchedEffect(deepLinks, navigator, context, openInBrowser) {
+            deepLinks.collect { url -> openCoolapkLink(context, navigator, url, "", openInBrowser) }
+        }
+
         PredictiveBackHandler(enabled = true) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
@@ -454,6 +466,7 @@ private fun RouteHost(route: Route) {
         is Route.Apk -> ApkScreen(packageName = route.packageName)
         is Route.Topic -> TopicScreen(tag = route.tag)
         is Route.Product -> ProductScreen(id = route.id)
+        is Route.Event -> EventScreen(id = route.id)
         is Route.Search -> SearchScreen(title = route.title, pageType = route.pageType, pageParam = route.pageParam)
         is Route.SearchResult -> SearchResultScreen(
             keyword = route.keyword,
@@ -468,6 +481,11 @@ private fun RouteHost(route: Route) {
         is Route.CoolPic -> CoolPicScreen(title = route.title)
         is Route.ImageView -> ImageViewScreen(images = route.images, initialPage = route.initialPage)
         is Route.Notification -> NotificationScreen(type = route.type, systemCount = route.systemCount)
+        is Route.NotificationCenter -> NotificationScreen(
+            type = NotificationType.System,
+            title = "通知",
+            showShortcuts = true,
+        )
         is Route.FFFList -> FFFListScreen(type = route.type, uid = route.uid, id = route.id, title = route.title)
         is Route.History -> HistoryScreen(type = route.type)
         is Route.Blacklist -> BlacklistScreen(type = route.type)

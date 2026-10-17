@@ -10,11 +10,13 @@ import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.ui.feed.detail.CaptchaVerifierHost
 import app.awavenue.c001apk.ui.nav.AppNavHost
 import app.awavenue.c001apk.ui.theme.AppTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 val LocalApp = staticCompositionLocalOf<C001apkApp> { error("C001apkApp not provided") }
 
 @Composable
-fun App(app: C001apkApp) {
+fun App(app: C001apkApp, deepLinks: Flow<String> = emptyFlow()) {
     CompositionLocalProvider(LocalApp provides app) {
         AppTheme(
             darkMode = app.settings.darkMode,
@@ -23,7 +25,7 @@ fun App(app: C001apkApp) {
             fontScale = app.settings.fontScale,
         ) {
             Box(Modifier.fillMaxSize()) {
-                AppNavHost()
+                AppNavHost(deepLinks = deepLinks)
                 // The captcha page mounts as the last child so it draws over the whole app.
                 CaptchaVerifierHost()
             }

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.image.imageOrigin
@@ -115,7 +116,7 @@ fun ArticleBody(article: FeedArticle, images: List<String>, modifier: Modifier =
                     .fillMaxWidth()
                     .clip(ImageShape)
                     .background(COUITheme.colorScheme.surfaceContainer)
-                    .clickable { openLink(article.url, article.title) }
+                    .clickable(onClick = rememberHapticClick { openLink(article.url, article.title) })
                     .padding(10.dp),
             ) {
                 Text(article.title)
@@ -144,9 +145,11 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                     .size(imageWidth, imageHeight)
                     .imageOrigin(url, ImageCornerRadius)
                     .clip(ImageShape)
-                    .clickable {
-                        navigator.push(Route.ImageView(images, images.indexOf(url).coerceAtLeast(0)))
-                    },
+                    .clickable(
+                        onClick = rememberHapticClick {
+                            navigator.push(Route.ImageView(images, images.indexOf(url).coerceAtLeast(0)))
+                        },
+                    ),
             ) {
                 NetworkImage(thumbnail(url), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                 if (badge != null) {

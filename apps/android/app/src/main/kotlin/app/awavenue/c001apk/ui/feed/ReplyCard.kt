@@ -144,6 +144,7 @@ fun ReplyCard(
                     Modifier.padding(end = 15.dp),
                     style = HtmlTextDefaults.style(),
                     maxLines = 2,
+                    badgeTags = true,
                 )
                 if (reply.message.isNotEmpty()) {
                     HtmlText(reply.message, style = HtmlTextDefaults.style())
@@ -251,6 +252,7 @@ private fun NestedReplies(
                 HtmlText(
                     nestedReplyHtml(nested, reply),
                     style = HtmlTextDefaults.style().copy(fontSize = 14.sp),
+                    badgeTags = true,
                     onTextClick = { onShowReplies?.invoke(reply) },
                     onShowTotalReply = { onShowReplies?.invoke(reply) },
                     picArr = nested.picArr,
@@ -376,7 +378,10 @@ private fun usernameHtml(reply: Entity, isReply2Reply: Boolean, isTopReply: Bool
     if (!isReply2Reply) {
         val authorTag = if (reply.uid.isNotEmpty() && reply.uid == reply.string("feedUid")) " [楼主]" else ""
         val topTag = if (isTopReply) " [置顶]" else ""
-        return "$username$authorTag$topTag"
+        // The name is a link so it takes the primary colour, the same emphasis the reply-to-reply
+        // page gives it, and a tap opens the author without stealing the row's reply action.
+        val name = if (reply.uid.isNotEmpty()) "<a href=\"/u/${reply.uid}\">$username</a>" else username
+        return "$name$authorTag$topTag"
     }
     val replyTag = when {
         reply.uid.isNotEmpty() && reply.uid == reply.string("feedUid") -> " [楼主] "

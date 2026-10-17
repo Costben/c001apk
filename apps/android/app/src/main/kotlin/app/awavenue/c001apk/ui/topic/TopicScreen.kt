@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,7 +39,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.CoolapkRepository
+import app.awavenue.c001apk.data.ProductComparisonSelection
+import app.awavenue.c001apk.data.ProductComparisonStore
+import app.awavenue.c001apk.data.ProductConfigInfo
 import app.awavenue.c001apk.data.Protocol
+import app.awavenue.c001apk.data.ToggleResult
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
@@ -88,6 +93,8 @@ import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -111,26 +118,14 @@ private fun TopicPage(tag: String?, id: String?) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var detail by remember(tag, id) { mutableStateOf<Entity?>(null) }
-    var failure by remember(tag, id) { mutableStateOf<String?>(null) }
-    var attempts by remember(tag, id) { mutableStateOf(0) }
-
     val decodedTag = tag?.let { runCatching { Uri.decode(it) }.getOrDefault(it) }
-
-    LaunchedEffect(decodedTag, id, attempts) {
-        failure = null
-        try {
-            detail = if (!decodedTag.isNullOrEmpty()) {
-                app.repository.topicDetail(decodedTag)
-            } else {
-                app.repository.productDetail(id.orEmpty())
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            failure = ApiFailure.from(e).message
-        }
+    // The header lives on the entry's ViewModel store: a post opened on top of this page used to
+    // take the loaded header with it, so coming back flashed a spinner while it reloaded.
+    val viewModel = viewModel(key = "topic-$decodedTag-$id") {
+        TopicViewModel(app.repository, decodedTag, id)
     }
+    val detail = viewModel.detail
+    val failure = viewModel.failure
 
     val topic = detail
     if (topic == null) {
@@ -143,7 +138,7 @@ private fun TopicPage(tag: String?, id: String?) {
                         title = "加载失败",
                         subtitle = failure,
                         actionText = "重试",
-                        onActionClick = { attempts++ },
+                        onActionClick = { viewModel.retry() },
                     )
                 }
             }
@@ -169,6 +164,119 @@ private fun TopicPage(tag: String?, id: String?) {
 
     val sortable = entityType == "product" && tabList.getOrNull(pagerState.currentPage)?.title == "讨论"
     val shareUrl = Protocol.shareLink(if (isTopic) "t" else "product", if (isTopic) title else topic.string("id"))
+
+    val comparisons by app.productComparison.selections.collectAsState()
+    val selectedConfigIds: Set<String> = remember(comparisons) {
+        comparisons.mapNotNullTo(linkedSetOf()) { it.config.id }
+    }
+    val productConfigs: List<ProductConfigInfo> = remember(topic, entityType) {
+        if (entityType == "product") {
+            topic.list("configRows").mapNotNull { ProductConfigInfo.from(it) }
+        } else {
+            emptyList()
+        }
+    }
+    var productSheet by remember(topic) { mutableStateOf<ProductSheetState>(ProductSheetState.Hidden) }
+    var productRequest by remember(topic) { mutableStateOf(0) }
+    var productRetry by remember(topic) { mutableStateOf<(() -> Unit)?>(null) }
+
+    fun dismissProductSheet() {
+        productRequest++
+        productSheet = ProductSheetState.Hidden
+    }
+
+    fun toggleProductConfig(config: ProductConfigInfo) {
+        val result = app.productComparison.toggle(
+            ProductComparisonSelection(
+                productTitle = title,
+                productLogo = topic.logo.ifEmpty { topic.pic }.takeIf { it.isNotEmpty() },
+                config = config,
+            ),
+        )
+        context.toast(
+            when (result) {
+                ToggleResult.ADDED -> "已加入对比"
+                ToggleResult.REMOVED -> "已移出对比"
+                ToggleResult.LIMIT_REACHED -> "最多选择 ${ProductComparisonStore.MAX_SELECTIONS} 个配置"
+                ToggleResult.INVALID -> "该配置暂不支持对比"
+            },
+        )
+    }
+
+    fun loadProductConfigDetails(config: ProductConfigInfo) {
+        val request = ++productRequest
+        productSheet = ProductSheetState.Loading(config.title)
+        productRetry = { loadProductConfigDetails(config) }
+        scope.launch {
+            try {
+                val sections = productSpecSections(app.repository.productConfigInfo(config.id))
+                if (request == productRequest) {
+                    productSheet = ProductSheetState.Details(config.title, sections)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (request == productRequest) {
+                    productSheet = ProductSheetState.Error("参数加载失败", ApiFailure.from(e).message)
+                }
+            }
+        }
+    }
+
+    fun openProductComparison() {
+        val selections = app.productComparison.selections.value
+        if (selections.isEmpty()) {
+            context.toast("请先选择要对比的配置")
+            return
+        }
+        if (selections.size < 2) {
+            context.toast("再选择一个配置即可对比")
+            return
+        }
+        val request = ++productRequest
+        productSheet = ProductSheetState.Loading("配置对比")
+        productRetry = { openProductComparison() }
+        scope.launch {
+            try {
+                val columns = coroutineScope {
+                    selections.map { selection ->
+                        async {
+                            ProductComparisonColumn(
+                                selection = selection,
+                                sections = productSpecSections(
+                                    app.repository.productConfigInfo(selection.config.id),
+                                ),
+                            )
+                        }
+                    }.map { it.await() }
+                }
+                if (request == productRequest) {
+                    productSheet = ProductSheetState.Comparison(columns)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (request == productRequest) {
+                    productSheet = ProductSheetState.Error("对比加载失败", ApiFailure.from(e).message)
+                }
+            }
+        }
+    }
+
+    fun openProductConfigs() {
+        if (productConfigs.isEmpty()) return
+        productRequest++
+        productSheet = ProductSheetState.Configs(title, productConfigs)
+    }
+
+    val productConfigAction: (() -> Unit)? =
+        if (!isTopic && productConfigs.isNotEmpty()) ({ openProductConfigs() }) else null
+    val productCompareAction: (() -> Unit)? =
+        if (!isTopic && (productConfigs.isNotEmpty() || comparisons.isNotEmpty())) {
+            ({ openProductComparison() })
+        } else {
+            null
+        }
 
     fun onFollowClick() {
         if (!app.session.isLogin) return
@@ -337,6 +445,10 @@ private fun TopicPage(tag: String?, id: String?) {
                             }
                             isBlocked = !isBlocked
                         },
+                        productConfigCount = productConfigs.size,
+                        comparisonCount = comparisons.size,
+                        onProductConfigs = productConfigAction,
+                        onProductComparison = productCompareAction,
                     )
                 }
             } else {
@@ -356,6 +468,28 @@ private fun TopicPage(tag: String?, id: String?) {
             onPosted = { showCompose = false },
         )
     }
+
+    ProductConfigSheet(
+        state = productSheet,
+        selectedIds = selectedConfigIds,
+        onDismiss = { dismissProductSheet() },
+        onViewConfig = { loadProductConfigDetails(it) },
+        onToggleCompare = { toggleProductConfig(it) },
+        onOpenComparison = { openProductComparison() },
+        onRetry = { productRetry?.invoke() },
+        onRemoveComparison = { configId ->
+            app.productComparison.remove(configId)
+            val current = productSheet
+            if (current is ProductSheetState.Comparison) {
+                val remaining = current.columns.filterNot { it.selection.config.id == configId }
+                productSheet = if (remaining.isEmpty()) {
+                    ProductSheetState.Hidden
+                } else {
+                    ProductSheetState.Comparison(remaining)
+                }
+            }
+        },
+    )
 }
 
 private suspend fun postFollow(
@@ -400,6 +534,10 @@ private fun TopicHeader(
     isBlocked: Boolean,
     onFollow: () -> Unit,
     onBlock: () -> Unit,
+    productConfigCount: Int = 0,
+    comparisonCount: Int = 0,
+    onProductConfigs: (() -> Unit)? = null,
+    onProductComparison: (() -> Unit)? = null,
 ) {
     Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -432,6 +570,25 @@ private fun TopicHeader(
                 onClick = onBlock,
                 modifier = Modifier.weight(1f),
             )
+        }
+        if (onProductConfigs != null || onProductComparison != null) {
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                onProductConfigs?.let {
+                    TextButton(
+                        text = "参数（$productConfigCount）",
+                        onClick = it,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                onProductComparison?.let {
+                    TextButton(
+                        text = "对比（$comparisonCount）",
+                        onClick = it,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }

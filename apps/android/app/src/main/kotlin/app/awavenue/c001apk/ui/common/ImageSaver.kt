@@ -8,6 +8,9 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import app.awavenue.c001apk.C001apkApp
+import app.awavenue.c001apk.media.MotionPhotoExporter
+import app.awavenue.c001apk.media.MotionPhotoParser
+import app.awavenue.c001apk.media.hasJpegHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -38,6 +41,45 @@ suspend fun shareImage(context: Context, url: String): Boolean {
             withContext(Dispatchers.Main) { context.shareFile(file, mimeType(url), url) }
             true
         }.getOrDefault(false)
+    }
+}
+
+/**
+ * Rebuilds a live photo as a motion photo: the still JPEG with the MP4 appended and XMP describing
+ * it, so the gallery plays it the way the phone that took it would.
+ */
+suspend fun saveLivePhoto(context: Context, imageUrl: String): Boolean {
+    val app = context.applicationContext as? C001apkApp ?: return false
+    return withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "livephoto-save")
+        dir.deleteRecursively()
+        dir.mkdirs()
+        val image = File(dir, "source.jpg")
+        val video = File(dir, "motion.mp4")
+        val output = File(dir, "export.jpg")
+        try {
+            image.writeBytes(app.apiClient.getImageBytes(imageUrl))
+            if (!image.hasJpegHeader()) return@withContext false
+            val info = MotionPhotoParser.parse(image, expectMotionPhoto = true)
+            val motionVideo = if (info.embeddedVideoLength != null) {
+                null
+            } else {
+                val url = app.repository.livePhotoVideoUrl(imageUrl) ?: return@withContext false
+                video.writeBytes(app.apiClient.getImageBytes(url))
+                video
+            }
+            MotionPhotoExporter.export(image, motionVideo, output, info.presentationTimestampUs)
+            val bytes = output.readBytes()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                saveToMediaStore(context, imageUrl, bytes)
+            } else {
+                saveToPublicPictures(context, imageUrl, bytes)
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 }
 

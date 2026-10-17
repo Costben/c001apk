@@ -18,6 +18,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
@@ -96,7 +97,7 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
                     title = titleText,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },

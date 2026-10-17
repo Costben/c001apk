@@ -278,6 +278,27 @@ class CoolapkRepository(
 
     suspend fun productDetail(id: String): Entity = fromUrl("/v6/product/detail", mapOf("id" to id))
 
+    /**
+     * One variant's parameter table. The micro-page answers without the usual `data` envelope:
+     * `title` and `dataRows` sit at the top level, so the body is decoded as-is.
+     */
+    suspend fun productConfigInfo(id: String): JsonObject {
+        val response = api.get(Api.PRODUCT_CONFIG_INFO, mapOf("id" to id))
+        if (response.code !in 200..299) throw ApiFailure.http(response.code)
+        val root = runCatching { Json.parseToJsonElement(response.body) as? JsonObject }.getOrNull()
+            ?: throw ApiFailure(ApiFailureKind.InvalidResponse, "参数响应格式异常，请稍后重试")
+        if (root["dataRows"] == null && root["data"] == null) {
+            val message = (root["message"] as? JsonPrimitive)?.content.orEmpty()
+            throw ApiFailure(
+                ApiFailureKind.Business,
+                message.ifBlank { "参数数据为空，请稍后重试" },
+            )
+        }
+        return root
+    }
+
+    suspend fun eventDetail(id: String): JsonObject = api.getJson(Api.EVENT_DETAIL, mapOf("id" to id))
+
     suspend fun profile(uid: String): Entity = fromUrl("/v6/user/profile", mapOf("uid" to uid), skipCaptcha = true)
 
     suspend fun checkLoginInfo(): Entity = fromUrl("/v6/account/checkLoginInfo", skipCaptcha = true)
@@ -372,6 +393,16 @@ class CoolapkRepository(
 
     suspend fun messageImageUrl(id: String): String? = runCatching {
         api.get(Api.MESSAGE_SHOW_IMAGE, mapOf("id" to id, "type" to "s"), followRedirects = false).redirectTarget
+    }.getOrNull()
+
+    /** A live photo's MP4 is handed out as a short-lived redirect rather than stored in the JPEG. */
+    suspend fun livePhotoVideoUrl(imageUrl: String): String? = runCatching {
+        api.get(
+            Api.LIVE_PHOTO_VIDEO,
+            mapOf("picUrl" to imageUrl),
+            skipCaptcha = true,
+            followRedirects = false,
+        ).redirectTarget?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
     }.getOrNull()
 
     // ---- captcha and upload ------------------------------------------------------------------

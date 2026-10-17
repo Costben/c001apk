@@ -2,9 +2,13 @@ package app.awavenue.c001apk.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Remote image with a neutral placeholder; non-http URLs render the placeholder only. */
@@ -15,9 +19,14 @@ fun NetworkImage(
     contentDescription: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
 ) {
+    val context = LocalPlatformContext.current
     val placeholder = Modifier.background(COUITheme.colorScheme.secondaryContainer)
+    val request = remember(context, url) {
+        url.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            ?.let { ImageRequest.Builder(context).data(it).crossfade(true).build() }
+    }
     AsyncImage(
-        model = url.takeIf { it.startsWith("http://") || it.startsWith("https://") },
+        model = request,
         contentDescription = contentDescription,
         contentScale = contentScale,
         modifier = modifier.then(placeholder),

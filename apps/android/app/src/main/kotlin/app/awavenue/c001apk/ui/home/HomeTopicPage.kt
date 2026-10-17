@@ -89,8 +89,18 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
         else -> {
             val selectedIndex = if (selected in list.indices) selected else 0
             val current = list[selectedIndex]
-            Row(Modifier.fillMaxSize().padding(contentPadding)) {
-                LazyColumn(Modifier.fillMaxHeight().weight(0.22f)) {
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    // Only the top inset is padding here: the bottom one rides inside the two
+                    // scroll areas, so the panel reaches the screen edge behind the floating bar
+                    // instead of being cut off above it.
+                    .padding(top = contentPadding.calculateTopPadding()),
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxHeight().weight(0.22f),
+                    contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                ) {
                     itemsIndexed(list) { index, entry ->
                         CategoryRow(
                             title = entry.title,
@@ -104,7 +114,10 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                         url = current.url,
                         title = current.title,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 12.dp),
+                        contentPadding = PaddingValues(
+                            top = 12.dp,
+                            bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                        ),
                         scrollBehavior = scrollBehavior,
                     )
                 }

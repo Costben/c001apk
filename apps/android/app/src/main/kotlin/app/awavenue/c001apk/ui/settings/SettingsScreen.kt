@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.BuildConfig
 import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
+import app.awavenue.c001apk.data.HapticStrength
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
@@ -38,6 +39,7 @@ import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -69,6 +71,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Download
 import io.github.suqi8.coui.kmp.icon.extended.Hide
 import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.icon.extended.Link
+import io.github.suqi8.coui.kmp.icon.extended.ListView
 import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.icon.extended.Photos
 import io.github.suqi8.coui.kmp.icon.extended.Refresh
@@ -127,13 +130,13 @@ fun SettingsScreen() {
                     title = "设置",
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         Box {
-                            IconButton(onClick = { menu = true }) {
+                            IconButton(onClick = rememberHapticClick { menu = true }) {
                                 Icon(COUIIcons.More, contentDescription = "菜单")
                             }
                             OverlayListPopup(
@@ -184,7 +187,7 @@ fun SettingsScreen() {
                         title = "协议参数",
                         summary = "${settings.deviceParams.brand} ${settings.deviceParams.model}",
                         startAction = { PreferenceStartIcon(COUIIcons.Settings) },
-                        onClick = { navigator.push(Route.Params) },
+                        onClick = rememberHapticClick { navigator.push(Route.Params) },
                     )
                 }
             }
@@ -222,18 +225,18 @@ fun SettingsScreen() {
                     ArrowPreference(
                         title = "用户黑名单",
                         startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
-                        onClick = { navigator.push(Route.Blacklist(BlacklistType.User)) },
+                        onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.User)) },
                     )
                     ArrowPreference(
                         title = "话题黑名单",
                         startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
-                        onClick = { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
+                        onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
                     )
                     ArrowPreference(
                         title = "字体大小",
                         summary = "${scaleText(settings.fontScale)}x",
                         startAction = { PreferenceStartIcon(COUIIcons.Tune) },
-                        onClick = { showFontScale = true },
+                        onClick = rememberHapticClick { showFontScale = true },
                     )
                     SwitchPreference(
                         title = "在浏览器中打开",
@@ -263,6 +266,44 @@ fun SettingsScreen() {
                 }
             }
             item {
+                SmallTitle("交互")
+                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SwitchPreference(
+                        title = "点击触感",
+                        summary = "点击卡片、按钮时轻微振动",
+                        checked = settings.hapticFeedback,
+                        onCheckedChange = settings::updateHapticFeedback,
+                        startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                    )
+                    SwitchPreference(
+                        title = "自定义触感",
+                        summary = "用系统振动器代替界面自带的点击反馈",
+                        checked = settings.customHaptics,
+                        onCheckedChange = settings::updateCustomHaptics,
+                        startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                        enabled = settings.hapticFeedback,
+                    )
+                    SwitchPreference(
+                        title = "反转触感强度",
+                        summary = "把轻和强的振动效果对调",
+                        checked = settings.reverseHapticEffects,
+                        onCheckedChange = settings::updateReverseHapticEffects,
+                        startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                        enabled = settings.hapticFeedback && settings.customHaptics,
+                    )
+                    WindowDropdownPreference(
+                        title = "触感强度",
+                        items = HapticStrength.entries.map { it.label },
+                        selectedIndex = HapticStrength.entries.indexOf(settings.hapticStrength),
+                        onSelectedIndexChange = {
+                            settings.updateHapticStrength(HapticStrength.entries[it])
+                        },
+                        startAction = { PreferenceStartIcon(COUIIcons.ListView) },
+                        enabled = settings.hapticFeedback,
+                    )
+                }
+            }
+            item {
                 val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
                 SmallTitle("关注")
                 Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
@@ -285,7 +326,7 @@ fun SettingsScreen() {
                         title = "管理$label",
                         summary = "查看本机关注名单、进入用户主页或取消关注",
                         startAction = { PreferenceStartIcon(COUIIcons.ContactsBook) },
-                        onClick = { navigator.push(Route.LocalFollowList) },
+                        onClick = rememberHapticClick { navigator.push(Route.LocalFollowList) },
                     )
                 }
             }
@@ -304,7 +345,7 @@ fun SettingsScreen() {
                         summary = "查看 c001apk 的最新正式版本",
                         startAction = { PreferenceStartIcon(COUIIcons.Download) },
                         enabled = !checkingUpdate,
-                        onClick = {
+                        onClick = rememberHapticClick {
                             scope.launch {
                                 checkingUpdate = true
                                 when (val result = app.updates.check()) {
@@ -327,19 +368,19 @@ fun SettingsScreen() {
                         title = "账号管理",
                         summary = "已保存 ${app.accounts.accounts.size} 个账号 · 切换、添加或移除",
                         startAction = { PreferenceStartIcon(COUIIcons.ContactsCircle) },
-                        onClick = { navigator.push(Route.Accounts) },
+                        onClick = rememberHapticClick { navigator.push(Route.Accounts) },
                     )
                     ArrowPreference(
                         title = "关于",
                         summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
                         startAction = { PreferenceStartIcon(COUIIcons.Info) },
-                        onClick = { navigator.push(Route.About) },
+                        onClick = rememberHapticClick { navigator.push(Route.About) },
                     )
                     ArrowPreference(
                         title = "清理缓存",
                         summary = cacheSize?.let(::formatSize),
                         startAction = { PreferenceStartIcon(COUIIcons.Clear) },
-                        onClick = {
+                        onClick = rememberHapticClick {
                             scope.launch {
                                 cacheSize = runCatching { cacheBytes(context) }.getOrNull()
                                 askClearCache = true

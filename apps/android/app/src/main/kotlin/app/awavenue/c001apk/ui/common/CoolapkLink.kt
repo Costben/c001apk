@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -30,6 +31,11 @@ fun openCoolapkLink(
     return when {
         path.startsWith("/feed/") -> {
             navigator.push(Route.Feed(path.removePrefix("/feed/").substringBefore('?').replace('?', '&')))
+            true
+        }
+
+        path.startsWith("/event/") -> {
+            navigator.push(Route.Event(segment(path, "/event/").substringBefore('/')))
             true
         }
 
@@ -80,6 +86,21 @@ fun openCoolapkLink(
             true
         }
 
+        // The search screen is addressable both on the website and through the app's own scheme:
+        // `coolmarket://com.coolapk.market/search?searchValue=...` becomes
+        // `/com.coolapk.market/search?searchValue=...` here. It has to be matched before the generic
+        // http branch below, which would otherwise send it to the web view.
+        path.startsWith("/com.coolapk.market/search") -> {
+            val keyword = queryValue(path, "searchValue", "q", "keyword")
+            if (keyword == null) {
+                navigator.push(Route.Search(title = ""))
+            } else {
+                (context.applicationContext as C001apkApp).searchHistory.add(keyword)
+                navigator.push(Route.SearchResult(keyword = keyword, title = keyword))
+            }
+            true
+        }
+
         url.startsWith("http") -> {
             if (openInBrowser) context.openBrowser(url) else navigator.push(Route.Web(url))
             true
@@ -116,4 +137,22 @@ private fun segment(path: String, prefix: String): String {
     val raw = path.removePrefix(prefix).substringBefore('?')
     // Paths arrive percent-encoded; a literal '+' is a plus, not a space, in a path segment.
     return runCatching { URLDecoder.decode(raw.replace("+", "%2B"), "UTF-8") }.getOrDefault(raw)
+}
+
+/**
+ * The first non-empty value among [names] in the query of [path], form-decoded so a `+` is a space
+ * as it is in a query string. Returns null when the query carries none of them.
+ */
+private fun queryValue(path: String, vararg names: String): String? {
+    val query = path.substringAfter('?', "")
+    if (query.isEmpty()) return null
+    for (name in names) {
+        val raw = query.split('&')
+            .firstOrNull { it.substringBefore('=') == name }
+            ?.substringAfter('=', "")
+            ?: continue
+        val value = runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw).trim()
+        if (value.isNotEmpty()) return value
+    }
+    return null
 }

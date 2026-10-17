@@ -1,12 +1,18 @@
 package app.awavenue.c001apk.ui.feed
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -120,37 +126,46 @@ fun FeedList(
         }.distinctUntilChanged().filter { it }.collect { viewModel.loadMore() }
     }
 
-    when (val status = viewModel.status) {
-        ListStatus.Loading -> CenterBox(contentPadding) { InfiniteProgressIndicator() }
-        ListStatus.Empty -> CenterBox(contentPadding) {
-            EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
-        }
-        is ListStatus.Error -> CenterBox(contentPadding) {
-            EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
-        }
-        ListStatus.Content -> PullToRefresh(
-            isRefreshing = viewModel.isRefreshing,
-            onRefresh = viewModel::refresh,
-            pullToRefreshState = rememberPullToRefreshState(),
-            contentPadding = contentPadding,
-            topAppBarScrollBehavior = scrollBehavior,
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+    AnimatedContent(
+        targetState = viewModel.status,
+        modifier = Modifier.fillMaxSize(),
+        // A changed error message is still the same screen, so it must not re-run the whole fade.
+        contentKey = { it::class },
+        transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+        label = "feedListStatus",
+    ) { status ->
+        when (status) {
+            ListStatus.Loading -> CenterBox(contentPadding) { InfiniteProgressIndicator() }
+            ListStatus.Empty -> CenterBox(contentPadding) {
+                EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+            }
+            is ListStatus.Error -> CenterBox(contentPadding) {
+                EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
+            }
+            ListStatus.Content -> PullToRefresh(
+                isRefreshing = viewModel.isRefreshing,
+                onRefresh = viewModel::refresh,
+                pullToRefreshState = rememberPullToRefreshState(),
                 contentPadding = contentPadding,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                topAppBarScrollBehavior = scrollBehavior,
             ) {
-                itemsIndexed(
-                    viewModel.items.filterNot { FeedActions.isRemoved(it) },
-                    contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
-                ) { _, item ->
-                    EntityItem(item, onBlock = onBlock, onDelete = onDelete, onLike = onLike)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .overScrollVertical()
+                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    contentPadding = contentPadding,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    itemsIndexed(
+                        viewModel.items.filterNot { FeedActions.isRemoved(it) },
+                        contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
+                    ) { _, item ->
+                        EntityItem(item, onBlock = onBlock, onDelete = onDelete, onLike = onLike)
+                    }
+                    item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
                 }
-                item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
             }
         }
     }
@@ -164,14 +179,33 @@ private fun CenterBox(contentPadding: PaddingValues, content: @Composable () -> 
 @Composable
 private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        when (status) {
-            FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
-            FooterStatus.End -> Text(
-                "没有更多了",
-                style = COUITheme.textStyles.footnote1,
-                color = COUITheme.colorScheme.onSurfaceVariantSummary,
-            )
-            is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
+        // The retry button is the tallest state; reserving its height keeps the footer, and thus the
+        // list end, from moving when the state changes.
+        AnimatedContent(
+            targetState = status,
+            modifier = Modifier.heightIn(min = 44.dp),
+            // Idle and Loading both show the spinner, so they must share a key to keep it spinning
+            // when a page starts loading.
+            contentKey = {
+                when (it) {
+                    FooterStatus.Idle, FooterStatus.Loading -> "loading"
+                    FooterStatus.End -> "end"
+                    is FooterStatus.Error -> "error"
+                }
+            },
+            transitionSpec = { fadeIn(tween(350)) togetherWith fadeOut(tween(175)) },
+            contentAlignment = Alignment.Center,
+            label = "feedFooter",
+        ) { current ->
+            when (current) {
+                FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
+                FooterStatus.End -> Text(
+                    "没有更多了",
+                    style = COUITheme.textStyles.footnote1,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                )
+                is FooterStatus.Error -> TextButton(text = "${current.message}，点击重试", onClick = onRetry)
+            }
         }
     }
 }

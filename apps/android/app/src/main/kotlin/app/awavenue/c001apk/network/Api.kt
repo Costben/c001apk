@@ -55,6 +55,7 @@ object Api {
     const val PRODUCT_DETAIL = "$API/v6/product/detail"
     const val PRODUCT_CATEGORY_LIST = "$API/v6/product/categoryList"
     const val PRODUCT_CHANGE_FOLLOW = "$API/v6/product/changeFollowStatus"
+    const val PRODUCT_CONFIG_INFO = "https://m.coolapk.com/mp/product/configInfo"
 
     const val DYH_LIST = "$API/v6/dyhArticle/list"
     const val PICTURE_LIST = "$API/v6/picture/list"
@@ -72,6 +73,9 @@ object Api {
     const val MESSAGE_CHAT = "$API/v6/message/chat"
     const val MESSAGE_DELETE = "$API/v6/message/delete"
     const val MESSAGE_SHOW_IMAGE = "$API/v6/message/showImage"
+
+    const val LIVE_PHOTO_VIDEO = "$API/v6/livePhoto/showVideo"
+    const val EVENT_DETAIL = "$API2/v6/event/detail"
 
     const val ACCOUNT_CHECK_LOGIN = "$API/v6/account/checkLoginInfo"
     const val ACCOUNT_CAPTCHA_IMAGE = "$API/v6/account/captchaImage"

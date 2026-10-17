@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.awavenue.c001apk.ui.home.HomeTab
 
 enum class DarkMode(val label: String) { System("跟随系统"), Off("始终关闭"), On("始终开启") }
 
@@ -42,6 +43,19 @@ class AppSettings(context: Context) {
         private set
 
     /**
+     * The home tabs the user hides from the tab row, stored by name as a comma-separated list so
+     * enum order changes never remap the set. Unknown names are dropped on read.
+     */
+    var hiddenHomeTabs by mutableStateOf(
+        prefs.getString(KEY_HIDDEN_HOME_TABS, null)
+            ?.split(',')
+            ?.filter { it in HOME_TAB_NAMES }
+            ?.toSet()
+            .orEmpty(),
+    )
+        private set
+
+    /**
      * What the 关注 page shows: 1 user / 2 topic / 3 product / 4 app / 0 all / 5 the local list. An
      * explicit category from the old 关注内容 setting carries over; the old mixed default becomes 用户.
      */
@@ -57,6 +71,18 @@ class AppSettings(context: Context) {
         private set
 
     var showEmoji by mutableStateOf(prefs.getBoolean(KEY_SHOW_EMOJI, true))
+        private set
+
+    var hapticFeedback by mutableStateOf(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true))
+        private set
+
+    var customHaptics by mutableStateOf(prefs.getBoolean(KEY_CUSTOM_HAPTICS, false))
+        private set
+
+    var reverseHapticEffects by mutableStateOf(prefs.getBoolean(KEY_REVERSE_HAPTIC_EFFECTS, false))
+        private set
+
+    var hapticStrength by mutableStateOf(HapticStrength.fromName(prefs.getString(KEY_HAPTIC_STRENGTH, null)))
         private set
 
     /** Installed-app updates on the 应用 tab, not this client's own. */
@@ -96,6 +122,13 @@ class AppSettings(context: Context) {
 
     fun updateHomeTab(value: String) = put { putString(KEY_HOME_TAB_NAME, value) }.also { homeTab = value }
 
+    /** Stores [value] by name, dropping anything that is not a current [HomeTab]. */
+    fun updateHiddenHomeTabs(value: Set<String>) {
+        val normalized = value.filterTo(mutableSetOf()) { it in HOME_TAB_NAMES }
+        put { putString(KEY_HIDDEN_HOME_TABS, normalized.joinToString(",")) }
+        hiddenHomeTabs = normalized
+    }
+
     fun updateFollowSelection(value: Int) = put { putInt(KEY_FOLLOW_SELECTION, value) }.also { followSelection = value }
 
     fun updateOpenInBrowser(value: Boolean) = put { putBoolean(KEY_OPEN_IN_BROWSER, value) }.also { openInBrowser = value }
@@ -103,6 +136,18 @@ class AppSettings(context: Context) {
     fun updateRecordHistory(value: Boolean) = put { putBoolean(KEY_RECORD_HISTORY, value) }.also { recordHistory = value }
 
     fun updateShowEmoji(value: Boolean) = put { putBoolean(KEY_SHOW_EMOJI, value) }.also { showEmoji = value }
+
+    fun updateHapticFeedback(value: Boolean) =
+        put { putBoolean(KEY_HAPTIC_FEEDBACK, value) }.also { hapticFeedback = value }
+
+    fun updateCustomHaptics(value: Boolean) =
+        put { putBoolean(KEY_CUSTOM_HAPTICS, value) }.also { customHaptics = value }
+
+    fun updateReverseHapticEffects(value: Boolean) =
+        put { putBoolean(KEY_REVERSE_HAPTIC_EFFECTS, value) }.also { reverseHapticEffects = value }
+
+    fun updateHapticStrength(value: HapticStrength) =
+        put { putString(KEY_HAPTIC_STRENGTH, value.name) }.also { hapticStrength = value }
 
     fun updateCheckUpdate(value: Boolean) = put { putBoolean(KEY_CHECK_UPDATE, value) }.also { checkUpdate = value }
 
@@ -170,6 +215,9 @@ class AppSettings(context: Context) {
         const val KEY_FONT_SCALE = "fontScale"
         const val KEY_HOME_TAB = "homeTab"
         const val KEY_HOME_TAB_NAME = "homeTabName"
+        const val KEY_HIDDEN_HOME_TABS = "hiddenHomeTabs"
+        /** The tab names [KEY_HIDDEN_HOME_TABS] may contain; anything else is dropped on read. */
+        val HOME_TAB_NAMES = HomeTab.entries.mapTo(mutableSetOf()) { it.name }
         /** The tab order the index under [KEY_HOME_TAB] was saved against, 关注 still first. */
         val LEGACY_HOME_TABS = listOf("Follow", "App", "Feed", "Hot", "Topic", "Product", "CoolPic")
         const val KEY_FOLLOW_TYPE = "followType"
@@ -177,6 +225,10 @@ class AppSettings(context: Context) {
         const val KEY_OPEN_IN_BROWSER = "openInBrowser"
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_SHOW_EMOJI = "showEmoji"
+        const val KEY_HAPTIC_FEEDBACK = "hapticFeedback"
+        const val KEY_CUSTOM_HAPTICS = "customHaptics"
+        const val KEY_REVERSE_HAPTIC_EFFECTS = "reverseHapticEffects"
+        const val KEY_HAPTIC_STRENGTH = "hapticStrength"
         const val KEY_CHECK_UPDATE = "checkUpdate"
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
         const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"

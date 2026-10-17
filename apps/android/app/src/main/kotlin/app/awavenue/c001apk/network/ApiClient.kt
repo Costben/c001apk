@@ -315,6 +315,12 @@ class ApiClient(
                     }
                 }
 
+                // The micro-pages answer HTML unless the request looks like an in-app XHR.
+                "m.coolapk.com" -> {
+                    builder.header("User-Agent", settings.deviceParams.userAgent)
+                        .header("X-Requested-With", Protocol.REQUEST_WITH)
+                }
+
                 else -> return chain.proceed(request)
             }
             return chain.proceed(builder.build())

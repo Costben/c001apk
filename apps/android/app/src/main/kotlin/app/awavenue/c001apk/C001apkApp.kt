@@ -7,6 +7,7 @@ import app.awavenue.c001apk.data.BlacklistStore
 import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.HistoryStore
 import app.awavenue.c001apk.data.LocalFollowStore
+import app.awavenue.c001apk.data.ProductComparisonStore
 import app.awavenue.c001apk.data.SearchHistoryStore
 import app.awavenue.c001apk.data.SessionStore
 import app.awavenue.c001apk.data.UpdateService
@@ -35,6 +36,8 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var searchHistory: SearchHistoryStore
         private set
+    lateinit var productComparison: ProductComparisonStore
+        private set
     lateinit var apiClient: ApiClient
         private set
     lateinit var repository: CoolapkRepository
@@ -51,6 +54,7 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         blacklist = BlacklistStore(this)
         history = HistoryStore(this)
         searchHistory = SearchHistoryStore(this)
+        productComparison = ProductComparisonStore()
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
         repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)

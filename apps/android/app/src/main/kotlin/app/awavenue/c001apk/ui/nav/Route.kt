@@ -57,6 +57,7 @@ sealed interface Route {
     data class Apk(val packageName: String) : Route
     data class Topic(val tag: String) : Route
     data class Product(val id: String) : Route
+    data class Event(val id: String) : Route
     data class Search(val title: String, val pageType: String? = null, val pageParam: String? = null) : Route
     data class SearchResult(
         val keyword: String,
@@ -71,6 +72,8 @@ sealed interface Route {
     data class ImageView(val images: List<String>, val initialPage: Int = 0) : Route
     /** [systemCount] is the unread 酷安小秘书 count 私信与信息 shows on its leading row. */
     data class Notification(val type: NotificationType, val systemCount: Int = 0) : Route
+    /** 通知: the shortcuts for 点赞/@我/私信 over the combined interaction stream. */
+    data object NotificationCenter : Route
     data class FFFList(
         val type: FFFListType,
         val uid: String? = null,

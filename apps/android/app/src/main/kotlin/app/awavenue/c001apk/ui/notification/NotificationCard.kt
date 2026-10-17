@@ -30,6 +30,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ActionSheetItem
 import app.awavenue.c001apk.ui.feed.ImageGrid
@@ -122,7 +123,7 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
     Card(
         Modifier.fillMaxWidth(),
         insideMargin = PaddingValues(0.dp),
-        onClick = onOpen,
+        onClick = rememberHapticClick(onClick = onOpen),
         onLongPress = { navigator.push(Route.Copy(note)) },
     ) {
         Box(Modifier.fillMaxWidth()) {
@@ -135,7 +136,10 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                     Modifier
                         .size(30.dp)
                         .clip(CircleShape)
-                        .clickable(enabled = fromUid.isNotEmpty()) { navigator.push(Route.User(fromUid)) },
+                        .clickable(
+                            enabled = fromUid.isNotEmpty(),
+                            onClick = rememberHapticClick { navigator.push(Route.User(fromUid)) },
+                        ),
                     contentDescription = item.string("fromusername"),
                 )
                 Spacer(Modifier.width(10.dp))
@@ -160,14 +164,14 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                     Text(
                         fromToday(item.dateline),
                         style = COUITheme.textStyles.footnote1,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             IconButton(
-                onClick = { menuOpen = true },
+                onClick = rememberHapticClick { menuOpen = true },
                 modifier = Modifier.align(Alignment.TopEnd),
             ) {
                 Icon(

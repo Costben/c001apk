@@ -1,5 +1,7 @@
 package app.awavenue.c001apk.ui.feed.detail
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,8 +35,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,6 +112,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val openLink = rememberLinkOpener()
     val viewModel = viewModel(key = "feed-detail-$id") {
         FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist)
     }
@@ -336,6 +342,22 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         }
                     }
                 }
+            }
+
+            // The section this post came from, where the official client keeps it: a round badge at
+            // the bottom-left, opposite the reply button.
+            val topic = viewModel.feed ?: preview
+            val topicUrl = topic?.string("turl").orEmpty()
+            if (topicUrl.isNotEmpty()) {
+                TopicShortcut(
+                    icon = topic?.string("tpic").orEmpty(),
+                    title = topic?.string("ttitle").orEmpty(),
+                    visible = fabVisible,
+                    onClick = { openLink(topicUrl, topic?.string("ttitle").orEmpty()) },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp, bottom = innerPadding.calculateBottomPadding() + 12.dp),
+                )
             }
         }
     }
@@ -713,3 +735,45 @@ private val tagPattern = Regex("<[^>]*>")
 
 private fun stripHtml(html: String): String =
     tagPattern.replace(html, "").replace("&nbsp;", " ").replace("&amp;", "&").trim()
+
+/**
+ * The badge for the topic or product the post belongs to. It fades and scales with the reply
+ * button, so the two corners stay in step while the page is scrolled.
+ */
+@Composable
+private fun TopicShortcut(
+    icon: String,
+    title: String,
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 130f),
+        label = "topicShortcut",
+    )
+    if (progress <= 0f) return
+    val colors = COUITheme.colorScheme
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .graphicsLayer {
+                alpha = progress
+                val scale = 0.8f + 0.2f * progress
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(colors.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = title },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon.isNotEmpty()) {
+            NetworkImage(icon, Modifier.fillMaxSize().clip(CircleShape), contentDescription = title)
+        } else {
+            Text("#", style = COUITheme.textStyles.title2, color = colors.onSurfaceVariantSummary)
+        }
+    }
+}

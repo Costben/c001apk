@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.ui.common.thumbnail
@@ -68,6 +69,7 @@ fun ImageGrid(pictures: List<String>, onClick: (Int) -> Unit, modifier: Modifier
 private fun GridImage(url: String, width: Dp, height: Dp, onClick: () -> Unit) {
     val (w, h) = imageSize(url)
     val badge = when {
+        url.isLivePhotoUrl() -> "实况"
         url.endsWith(".gif") -> "GIF"
         h / w >= LONG_IMAGE_RATIO -> "长图"
         else -> null
@@ -79,7 +81,8 @@ private fun GridImage(url: String, width: Dp, height: Dp, onClick: () -> Unit) {
             .clip(ImageShape)
             .clickable(onClick = onClick),
     ) {
-        NetworkImage(thumbnail(url), Modifier.size(width, height))
+        // A live photo's thumbnail suffix is not served; the still image doubles as its preview.
+        NetworkImage(if (url.isLivePhotoUrl()) url else thumbnail(url), Modifier.size(width, height))
         if (badge != null) {
             Text(
                 badge,
