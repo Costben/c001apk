@@ -61,9 +61,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * The answers to one reply. [id] is the reply being listed and [replyId] the feed it belongs to.
  *
  * The Flutter page injects the origin reply as its first row and reads the title from that
- * entity's reply count. A caller that holds the [origin] entity does the same here; a route
- * argument cannot carry an entity, so a page opened through its route lists the answers alone and
- * its title counts what has been loaded so far.
+ * entity's reply count. A caller that holds the [origin] entity does the same here; one that does
+ * not lists the answers alone and the title counts what has been loaded so far.
  */
 @Composable
 fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origin: Entity? = null) {

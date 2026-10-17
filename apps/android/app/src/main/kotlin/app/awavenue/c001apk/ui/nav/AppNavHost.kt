@@ -396,6 +396,7 @@ private fun RouteHost(route: Route) {
             id = route.id,
             replyId = route.replyId,
             originUid = route.originUid,
+            origin = route.origin,
         )
         is Route.User -> UserScreen(uid = route.uid)
         is Route.Apk -> ApkScreen(packageName = route.packageName)

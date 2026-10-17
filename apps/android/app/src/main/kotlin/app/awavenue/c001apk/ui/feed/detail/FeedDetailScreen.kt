@@ -1,6 +1,5 @@
 package app.awavenue.c001apk.ui.feed.detail
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -123,7 +122,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     var menuOpen by remember { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
-    var repliesOf by remember { mutableStateOf<Entity?>(null) }
     var fabVisible by remember { mutableStateOf(true) }
 
     LaunchedEffect(viewModel.notice) {
@@ -320,7 +318,16 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                                 onLike = { replyId, liked ->
                                                     viewModel.onLike(replyId, liked, isFeed = false)
                                                 },
-                                                onShowReplies = { repliesOf = it },
+                                                onShowReplies = {
+                                                    navigator.push(
+                                                        Route.Reply2Reply(
+                                                            id = it.id,
+                                                            replyId = viewModel.id,
+                                                            originUid = it.uid,
+                                                            origin = it,
+                                                        ),
+                                                    )
+                                                },
                                             )
                                         }
                                     }
@@ -373,13 +380,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                     viewModel.loadFeed(verify = true)
                 },
             )
-        }
-    }
-
-    repliesOf?.let { origin ->
-        BackHandler(enabled = true) { repliesOf = null }
-        Box(Modifier.fillMaxSize()) {
-            Reply2ReplyScreen(id = origin.id, replyId = viewModel.id, originUid = origin.uid, origin = origin)
         }
     }
 
