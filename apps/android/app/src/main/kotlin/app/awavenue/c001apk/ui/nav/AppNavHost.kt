@@ -233,12 +233,10 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         label = "expand",
                     ) { target(it) }
                     val fade = transition.animateFloat(
-                        // Opening, the card lingers while the frame races outward; closing, the page
-                        // has to be gone before the frame is card-sized, so it follows the frame.
-                        transitionSpec = {
-                            val easing = if (targetState == EnterExitState.PostExit) ExpandEasing else LinearEasing
-                            tween(ExpandDurationMillis, easing = easing)
-                        },
+                        // Linear both ways: the page rides the shrinking frame instead of vanishing
+                        // early. A fast exit curve left a blank card-coloured rectangle shrinking
+                        // over the list, which read as the list failing to draw after the pop.
+                        transitionSpec = { tween(ExpandDurationMillis, easing = LinearEasing) },
                         label = "expand-fade",
                     ) { target(it) }
                     // While a gesture is pulling this page away it drives both curves, so the page
@@ -282,7 +280,14 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                                 alpha = 1f - p
                             },
                         ) {
-                            ExpandFrame(entry.origin, progress = pageProgress, fade = pageFade) {
+                            ExpandFrame(
+                                origin = entry.origin,
+                                progress = pageProgress,
+                                fade = pageFade,
+                                // A gesture pulling the page away is an exit too: the frame has to
+                                // hand back to the card under the finger, not wait for the pop.
+                                exiting = { entry.popped || entryGesture() < 1f },
+                            ) {
                                 LeavingPage(entry) {
                                     // Overlay sheets and dialogs draw in the outermost COUI Scaffold
                                     // above them. Several screens place theirs beside, not inside,

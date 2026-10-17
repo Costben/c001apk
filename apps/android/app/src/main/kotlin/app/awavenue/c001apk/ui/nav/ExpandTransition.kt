@@ -117,6 +117,12 @@ private const val ScrimAlpha = 0.3f
 private const val CardFadeEnd = 0.25f
 private const val PageFadeLength = 0.3f
 
+// On the way out the page stays on screen until the frame is all but at the card's bounds, then
+// hands back in the last couple of percent of the travel. Fading it any earlier leaves the frame's
+// own fill as a blank card-coloured rectangle shrinking over the list — during a back gesture that
+// is most of the drag, and it reads as the list failing to draw.
+private const val ExitHandoverProgress = 0.02f
+
 /**
  * Hosts a page that grows out of [origin]. [progress] drives the frame from the element's bounds
  * (0) to the full screen (1); [fade] runs linearly over the same time and cross-fades the element's
@@ -128,6 +134,7 @@ internal fun ExpandFrame(
     origin: ExpandOrigin?,
     progress: () -> Float,
     fade: () -> Float,
+    exiting: () -> Boolean = { false },
     content: @Composable () -> Unit,
 ) {
     val pageColor = COUITheme.colorScheme.surface
@@ -181,16 +188,25 @@ internal fun ExpandFrame(
                     return@drawWithContent
                 }
                 val f = fade()
-                // The frame stays solid all the way. A dark card is a translucent white, and fading
-                // it into the page let the list — the card itself included — show through the frame
-                // as a bright ghost.
-                drawRect(lerp(source.color.compositeOver(pageColor), pageColor, f))
+                val exit = exiting()
+                // The frame stays solid while the page is on it. A dark card is a translucent white,
+                // and fading it into the page let the list — the card itself included — show through
+                // the frame as a bright ghost. On the way out the fill hands back to the card
+                // underneath only once the frame has arrived there: by then the real card sits
+                // exactly under it, so the handover is a dissolve in place, not a blank rectangle.
+                val handover = if (exit) (progress() / ExitHandoverProgress).coerceIn(0f, 1f) else 1f
+                val fillAlpha = if (exit) handover else 1f
+                drawRect(
+                    color = lerp(source.color.compositeOver(pageColor), pageColor, f),
+                    alpha = fillAlpha,
+                )
                 drawContent()
                 // The tapped element rides on top at the frame's width and fades out early, so the
                 // page appears to grow out of it rather than replace it. It is drawn over the page
                 // colour it sits on in the list, so once the frame is back at its bounds it looks
-                // exactly like the card it hands over to.
-                val alpha = 1f - (f / CardFadeEnd).coerceIn(0f, 1f)
+                // exactly like the card it hands over to. On the way out it comes back in the same
+                // last moment the page hands over.
+                val alpha = if (exit) 1f - handover else 1f - (f / CardFadeEnd).coerceIn(0f, 1f)
                 // A frozen origin has no live layer left; the page shrinks into its bounds and the
                 // revealed page already draws the element there.
                 if (alpha > 0f && source.isAvailable) {
@@ -214,7 +230,13 @@ internal fun ExpandFrame(
                         alpha = 1f
                         translationY = 0f
                     } else {
-                        alpha = ((fade() - CardFadeEnd) / PageFadeLength).coerceIn(0f, 1f)
+                        // On the way out the page keeps drawing until the frame reaches the card,
+                        // so the shrink is the page moving into the card and never a bare fill.
+                        alpha = if (exiting()) {
+                            (progress() / ExitHandoverProgress).coerceIn(0f, 1f)
+                        } else {
+                            ((fade() - CardFadeEnd) / PageFadeLength).coerceIn(0f, 1f)
+                        }
                         // A full-screen page starts below the status bar; inside a card-sized frame
                         // that gap is just an empty band, so the page rides up into it.
                         translationY = -statusBars.getTop(this) * (1f - progress())
