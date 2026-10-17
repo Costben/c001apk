@@ -1,10 +1,5 @@
 package app.awavenue.c001apk.ui.feed.detail
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +44,7 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
@@ -74,7 +70,6 @@ import io.github.suqi8.coui.kmp.basic.ChipTabGroup
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
-import io.github.suqi8.coui.kmp.basic.FloatingActionButton
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
@@ -198,12 +193,10 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
             }
         },
         floatingActionButton = {
-            AnimatedVisibility(
+            AppFloatingActionButton(
                 visible = app.session.isLogin && viewModel.feed != null && fabVisible,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
-            ) {
-                FloatingActionButton(onClick = {
+                backdrop = backdrop,
+                onClick = {
                     replyTarget = ReplyTarget(
                         id = viewModel.id,
                         type = "feed",
@@ -212,10 +205,10 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         title = viewModel.feedUsername,
                         feedType = "feed",
                     )
-                }) {
-                    Icon(COUIIcons.Reply, contentDescription = "回复")
-                }
-            }
+                },
+                icon = COUIIcons.Reply,
+                contentDescription = "回复",
+            )
         },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().glassSource(backdrop)) {

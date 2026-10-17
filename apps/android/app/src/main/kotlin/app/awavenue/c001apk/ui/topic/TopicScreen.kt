@@ -42,6 +42,7 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
@@ -64,7 +65,6 @@ import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.EmptyState
-import io.github.suqi8.coui.kmp.basic.FloatingActionButton
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -282,11 +282,13 @@ private fun TopicPage(tag: String?, id: String?) {
             }
         },
         floatingActionButton = {
-            if (app.session.isLogin && !isBlocked) {
-                FloatingActionButton(onClick = { showCompose = true }) {
-                    Icon(COUIIcons.Add, contentDescription = "发布动态")
-                }
-            }
+            AppFloatingActionButton(
+                visible = app.session.isLogin && !isBlocked,
+                backdrop = backdrop,
+                onClick = { showCompose = true },
+                icon = COUIIcons.Add,
+                contentDescription = "发布动态",
+            )
         },
     ) { innerPadding ->
         if (isBlocked) {

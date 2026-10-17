@@ -28,6 +28,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
@@ -38,6 +39,7 @@ import app.awavenue.c001apk.ui.home.HomeTab
 import app.awavenue.c001apk.ui.follow.FollowScreen
 import app.awavenue.c001apk.ui.message.MessageScreen
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.settings.AutomaticUpdateCheck
 import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBar
 import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarItem
@@ -47,16 +49,20 @@ import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
-import io.github.suqi8.coui.kmp.icon.extended.Home
-import io.github.suqi8.coui.kmp.icon.extended.Contacts
-import io.github.suqi8.coui.kmp.icon.extended.ListView
+import io.github.suqi8.coui.kmp.icon.extended.Notes
+import io.github.suqi8.coui.kmp.icon.extended.NotesFill
+import io.github.suqi8.coui.kmp.icon.extended.Update
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
-private enum class MainTab(val label: String, val icon: ImageVector) {
-    Home("主页", COUIIcons.Home),
-    Follow("关注", COUIIcons.ListView),
-    Mine("我的", COUIIcons.Contacts),
+private enum class MainTab(
+    val label: String,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
+) {
+    Home("主页", AppIcons.HomeOutlined, AppIcons.HomeFilled),
+    Follow("关注", COUIIcons.Notes, COUIIcons.NotesFill),
+    Mine("我的", AppIcons.PersonOutlined, AppIcons.PersonFilled),
 }
 
 /**
@@ -108,7 +114,8 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val navigator = LocalNavigator.current
     val onHome = pagerState.currentPage == MainTab.Home.ordinal
     val session = LocalApp.current.session
-    val homeTab = LocalApp.current.settings.homeTab
+    val settings = LocalApp.current.settings
+    val homeTab = settings.homeTab
     val homePagerState = rememberPagerState(
         initialPage = HomeTab.entries.indexOfFirst { it.name == homeTab }.takeIf { it >= 0 } ?: HomeTab.Feed.ordinal,
     ) { HomeTab.entries.size }
@@ -133,26 +140,41 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             // The floating capsule paints its own glass; the Scaffold only reserves its height.
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
+                    // One ball melts out of the capsule's trailing end at a time: 发布动态 on 动态
+                    // (signed in) and 更新 on 应用 (when the update check is on).
+                    val onFeed = onHome && homePagerState.currentPage == HomeTab.Feed.ordinal
+                    val onApp = onHome && homePagerState.currentPage == HomeTab.App.ordinal
+                    val composeBall = onFeed && session.isLogin
+                    val updateBall = onApp && settings.checkUpdate
                     BottomFloatingNavigationBar(
-                        // The publish button melts out of the capsule. Publishing is only offered on
-                        // 动态, and only to a signed-in account, as upstream does.
-                        expanded = onHome && session.isLogin && homePagerState.currentPage == HomeTab.Feed.ordinal,
+                        expanded = composeBall || updateBall,
                         expansion = {
                             // The bar already gives the ball its round press feedback; a ripple here
                             // would paint a square over it.
+                            val action: () -> Unit = if (updateBall) {
+                                { navigator.push(Route.AppUpdate) }
+                            } else {
+                                { compose = true }
+                            }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clickable(interactionSource = null, indication = null, role = Role.Button) {
-                                        compose = true
-                                    },
+                                    .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = action),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    imageVector = COUIIcons.Add,
-                                    contentDescription = "发布动态",
-                                    tint = COUITheme.colorScheme.onSurface,
-                                )
+                                if (updateBall) {
+                                    Icon(
+                                        imageVector = COUIIcons.Update,
+                                        contentDescription = "更新",
+                                        tint = COUITheme.colorScheme.onSurface,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = COUIIcons.Add,
+                                        contentDescription = "发布动态",
+                                        tint = COUITheme.colorScheme.onSurface,
+                                    )
+                                }
                             }
                         },
                     ) {
@@ -172,6 +194,7 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                                     }
                                 },
                                 icon = tab.icon,
+                                selectedIcon = tab.selectedIcon,
                                 label = tab.label,
                             )
                         }

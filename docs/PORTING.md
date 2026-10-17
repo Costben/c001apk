@@ -201,13 +201,14 @@
 | 自身更新只认 `c001apk-coui-<版本>[+构建号][-<ABI>].apk` 资源，tag 为 `x.y.z` 或 `x.y.z-release` | Flutter 版的 `c001apk-<版本>-android-<ABI>.apk` 是另一个应用；找不到匹配资源时打开发布页面。当前版本带 `-dev` 等后缀时视为低于同号正式版 |
 | 设置页尚未分类，「关注」「更新」「账号管理」按现有分组插入 | 分类改版是第五节单独一项 |
 | 设置页「关于」进独立页面 | Flutter 溢出菜单里的「关于」弹 `MAboutDialog`，「其他」分组里的「关于」进 `/about`；Compose 两处都进关于页，内容相同 |
-| 「发布动态」悬浮按钮不做滚动方向的进出动画 | Flutter 用 `SlideTransition` 随滚动方向收起；Compose 侧常驻，功能一致 |
+| 「发布动态」悬浮按钮随滚动方向收起，进出场用底栏「加号」同款融合球 | Flutter 用 `SlideTransition` 直接滑走；Compose 侧从屏幕右缘鼓出、掐断后落位，返回时反向融回边缘，滚动收起的方向与 Flutter 一致 |
+| 应用列表的「更新」球并入底栏，占与「加号」相同的展开位 | Flutter 把它作为 Scaffold 悬浮按钮浮在列表右下角；Compose 侧由 `BottomFloatingNavigationBar` 的 expansion 承载，与底栏同一条水平线，滚动时常显 |
 | 点赞与删除只在登录后可用 | 与 Flutter 的 `GlobalData().isLogin` 判断一致，非差异，列此以免被当作缺失 |
 | 长文正文的 `title` 段与 `text` 段同样走 `HtmlText` | 两端的解析与渲染口径一致 |
 | 匿名读 `/v6/feed/detail` 会弹酷安人机验证 | 服务端对匿名客户端的行为，Flutter 版请求形状完全相同（`skipCaptcha=!verify`） |
 | `www.coolapk.com/feed/<id>` 的公开兜底在部分网络不可达 | 该域名走 EdgeOne，会对 OkHttp/Conscrypt 的 TLS 指纹做拦截（同机 `curl` 同一 URL 返回 200）；Flutter 侧同一兜底拿回的也是 HTML，同样解析失败 |
 | 从列表（「我的回复」、通知等）经路由打开的楼中楼，首行不是原回复，标题按已加载条数计 | `Route.Reply2Reply` 只带 id，带上原回复或回复数要改 `ui/nav/`（禁改，待确认）；帖子详情内打开的楼中楼已与 Flutter 一致 |
-| 底栏用 coui17 的 `BottomFloatingNavigationBar`，标签常显，选中态只变色 | Flutter 用 Material `NavigationBar`（只显示选中项标签、选中换实心图标）；外观换成 ColorOS 规格，coui17 没有实心图标 |
+| 底栏用 coui17 的 `BottomFloatingNavigationBar`，标签常显，未选中线性图标、选中换实心 | Flutter 用 Material `NavigationBar`（只显示选中项标签、选中换实心图标）；外观换成 ColorOS 规格，主页与我的用 Material 成对图标，关注用 coui17 的 `Notes` / `NotesFill` |
 | 底栏毛玻璃按 ColorOS 系统底栏材质绘制 | 系统 `TYPE_FRAMEWORK_BOTTOM_BAR` 配方（25px 模糊 + ColorDodge / Overlay + Luminosity 着色层、`TYPE_FRAMEWORK_CAPSULE_3` 边缘光、焦散光），由 coui17 复刻；未接系统的 `OplusViewBackgroundRenderEffect` 后端 |
 | 切换底栏分页没有横向滑动动画 | Flutter 用 `animateToPage`（300ms，`Curves.ease`）；改动落在 `ui/main/MainScreen.kt`（禁改，待确认） |
 | 横屏不切换为侧边导航栏 | Flutter 横屏用 `NavigationRail`；改动落在 `ui/main/MainScreen.kt`（禁改，待确认） |
