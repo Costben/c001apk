@@ -69,6 +69,22 @@ class ApiClient(
 
     private val verifying = AtomicBoolean(false)
 
+    /**
+     * Read verification earned through the cookie protocol, shared by both API hosts. It lives only
+     * in memory and only for the session and device that earned it.
+     */
+    private class CaptchaCookie(val value: String, val session: Session, val device: String)
+
+    @Volatile
+    private var captchaCookie: CaptchaCookie? = null
+
+    private fun captchaCookieFor(session: Session, device: String): String? {
+        val cookie = captchaCookie ?: return null
+        if (cookie.session == session && cookie.device == device) return cookie.value
+        captchaCookie = null
+        return null
+    }
+
     suspend fun get(
         url: String,
         query: Map<String, Any?> = emptyMap(),
@@ -134,8 +150,9 @@ class ApiClient(
             query.forEach { (key, value) -> if (value != null) addQueryParameter(key, value.toString()) }
         }.build()
         val before = session()
+        val device = settings.deviceParams.xAppDevice
         val response = execute(if (followRedirects) http else noRedirectHttp, httpUrl, method, body, accept)
-        return verifyAndRetry(response, httpUrl, method, query, body, accept, before, skipCaptcha, followRedirects)
+        return verifyAndRetry(response, httpUrl, method, body, accept, before, device, skipCaptcha, followRedirects)
     }
 
     private suspend fun execute(
@@ -161,10 +178,10 @@ class ApiClient(
         response: HttpResponse,
         url: HttpUrl,
         method: String,
-        query: Map<String, Any?>,
         body: Body,
         accept: String?,
         before: Session,
+        device: String,
         skip: Boolean,
         followRedirects: Boolean,
     ): HttpResponse {
@@ -173,6 +190,7 @@ class ApiClient(
         if (session() != before) return response
         val challenge = CaptchaChallenge.fromBody(response.body) ?: return response
         val verifier = captchaVerifier ?: return response
+        if (challenge.usesCookie) captchaCookie = null
 
         val proof = if (verifying.compareAndSet(false, true)) {
             try {
@@ -184,7 +202,12 @@ class ApiClient(
             null
         }
 
-        if (proof == null || !challenge.acceptsProof(proof) || session() != before) {
+        if (
+            proof == null ||
+            !challenge.acceptsProof(proof) ||
+            session() != before ||
+            settings.deviceParams.xAppDevice != device
+        ) {
             return HttpResponse(
                 response.code,
                 response.body,
@@ -195,12 +218,18 @@ class ApiClient(
         }
 
         // Replayed exactly once, straight through execute: no verification loop. `url` already
-        // carries the original query, so only the proof is added on top of it.
-        val verified = if (method == "GET") {
-            request("GET", url.toString(), mapOf(challenge.field to proof), Body.None, true, followRedirects, accept)
-        } else {
-            request("POST", url.toString(), emptyMap(), body.withField(challenge.field, proof), true, followRedirects, accept)
+        // carries the original query, so only the proof is added on top of it, unless it rides in
+        // the cookie instead.
+        if (challenge.usesCookie) captchaCookie = CaptchaCookie(encodeQueryComponent(proof), before, device)
+        val verified = when {
+            challenge.usesCookie -> request(method, url.toString(), emptyMap(), body, true, followRedirects, accept)
+            method == "GET" ->
+                request("GET", url.toString(), mapOf(challenge.field to proof), Body.None, true, followRedirects, accept)
+            else ->
+                request("POST", url.toString(), emptyMap(), body.withField(challenge.field, proof), true, followRedirects, accept)
         }
+        // A cookie the server still challenges is spent; keeping it would only fail every request.
+        if (challenge.usesCookie && CaptchaChallenge.fromBody(verified.body) != null) captchaCookie = null
         return HttpResponse(verified.code, verified.body, "submitted", verified.setCookies, verified.location)
     }
 
@@ -280,7 +309,9 @@ class ApiClient(
                         // The public feed JSON wants signed headers but never a session cookie.
                         builder.removeHeader("Cookie")
                     } else {
-                        builder.header("Cookie", if (current.isLogin) current.apiCookie else current.sessid)
+                        val cookie = if (current.isLogin) current.apiCookie else current.sessid
+                        val validation = captchaCookieFor(current, params.xAppDevice)
+                        builder.header("Cookie", withValidation(cookie, validation))
                     }
                 }
 
@@ -300,6 +331,12 @@ class ApiClient(
 }
 
 private val Session.apiCookie: String get() = "uid=$uid; username=$username; token=$token"
+
+internal fun withValidation(cookie: String, validation: String?): String = when {
+    validation == null -> cookie
+    cookie.isEmpty() -> "validate=$validation"
+    else -> "$cookie; validate=$validation"
+}
 
 private class RawResponse(code: Int, val bytes: ByteArray, val headers: okhttp3.Headers) {
     val code = code

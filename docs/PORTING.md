@@ -69,6 +69,7 @@
 | 已完成 | 搜索历史 | `pages/search/` | `data/SearchHistoryStore.kt` |
 | 已完成 | 列表预处理（listCard 展开、黑名单过滤、白名单） | `network_repo.dart:548-604` | `data/CoolapkRepository.kt` |
 | 已完成 | 验证码挑战（NEC v2）与重放 | `logic/network/captcha_challenge.dart` | `network/CaptchaChallenge.kt` |
+| 已完成 | 验证码 Cookie 协议：`captchaField` 为空时验证结果以 `validate` Cookie 随两个 API 主机发送，只存内存、换会话或设备即失效，重放仍被挑战即丢弃；验证期间设备标识变更不重放（上游 1.2.6） | `logic/network/interceptor.dart`、`request.dart`、`captcha_challenge.dart` | `network/ApiClient.kt`、`network/CaptchaChallenge.kt` |
 | 已完成 | 路由图与返回栈 | `router/app_pages.dart` | `ui/nav/` |
 
 ## 二、页面
@@ -159,12 +160,31 @@
 | 已完成 | 返回键语义（先回首页再退到桌面） | `main_page.dart` | `ui/nav/AppNavHost.kt` |
 | 已完成 | OSS 图片上传 | `utils/oss/` | `ui/feed/detail/OssUpload.kt` |
 
-## 五、接口对照
+## 五、上游 1.2.x 新增
+
+上游 1.2.0–1.2.6 的 Flutter 改动，已随合并进入 `apps/flutter`，Compose 端逐项补齐。
+
+| 状态 | 项 | Flutter 来源 | Compose 落点 |
+| :--- | :--- | :--- | :--- |
+| 已完成 | 验证码 Cookie 协议 | 见第一节 | `network/ApiClient.kt` |
+| 未开始 | 主导航改为「主页 / 关注 / 我的」，首页去掉「关注」分段，设置从「我的」右上角进入 | `pages/main/main_page.dart`、`pages/home/home_page.dart` | |
+| 未开始 | 关注页：用户 / 话题 / 数码 / 应用 / 全部 / 悄悄关注 切换并记住选择，游客只显示本地关注 | `pages/local_follow/local_follow_page.dart` | |
+| 未开始 | 本地关注与悄悄关注：本机名单、多用户时间线合并（并发 4、失败可重试）、用户页关注按钮短按 / 长按、名单管理页 | `logic/local_follow/`、`pages/local_follow/`、`components/cards/user_info_card.dart` | |
+| 未开始 | 多账号：本机保存、切换、添加、移除、游客模式，切换后重建页面并丢弃旧请求 | `logic/accounts/account_store.dart`、`pages/accounts/accounts_page.dart` | |
+| 未开始 | 「我的」页：账号管理与设置入口、「私信与信息」、酷安小秘书会话 | `pages/message/`、`pages/noitfication/` | |
+| 未开始 | 设置页分类：外观与字号 / 关注与内容 / 浏览与隐私 / 存储与更新 / 协议与设备 | `pages/settings/settings_page.dart` | |
+| 未开始 | 私信：发送动态、逐条发送状态与重试、动态链接卡片、会话置顶与删除 | `pages/chat/`、`components/cards/chat_card.dart`、`message_card.dart` | |
+| 未开始 | 活动页 `/event/:id` 与站内活动链接 | `pages/event/event_page.dart`、`utils/utils.dart` | |
+| 未开始 | 32 个牛牛表情 | `assets/emojis/niuniu_*`、`utils/emoji_util.dart`、`pages/feed/reply/emoji_panel.dart` | |
+| 未开始 | 自身更新检查：每次冷启动查一次最新正式版、按 ABI 选包、跳过版本 | `logic/app_update/`、`components/update_check_tile.dart` | 待定：需改为检查本仓库发布的 Compose 版 |
+| 未开始 | 零碎修复：分享链接去掉查询串再取动态 id、用户动态 `includeTop`、登录遇人机验证提示网页登录、字号与系统缩放叠加 | `utils/utils.dart`、`logic/network/network_repo.dart`、`pages/login/login_page.dart`、`utils/app_theme.dart` | |
+
+## 六、接口对照
 
 主机：`api.coolapk.com`、`api2.coolapk.com`、`account.coolapk.com`、`www.coolapk.com`。
 端点常量见 `network/Api.kt`，调用封装见 `data/CoolapkRepository.kt`。
 
-## 六、已知差异
+## 七、已知差异
 
 记录移植中与 Flutter 版不一致的地方，避免被当成遗漏。
 
@@ -192,7 +212,7 @@
 | 帖子从所点卡片圆角展开成详情页，返回时缩回卡片；正文加载期间先显示卡片里的内容 | Flutter 用 GetX 默认的整页转场，加载时只有转圈；按用户要求改为卡片展开。实现在 `ui/nav/ExpandTransition.kt`（`ui/nav/` 为禁改目录，本次按用户要求改动并已报告）。只有返回时仍在屏上的卡片能缩回，其余情形仍横向滑出 |
 | 信息流的「接近底部即加载下一页」仍是旧触发方式 | 帖子详情回复区因同样的触发方式卡在转圈，已改为照 Flutter「页脚出现即加载」；`ui/feed/FeedList.kt` 同一写法在单页条目很少、页脚一直可见时也可能停在转圈，改动落在禁改文件（待确认） |
 
-## 七、真机验证记录
+## 八、真机验证记录
 
 设备：OnePlus 8 Pro（IN2020 / Android 16，`192.168.31.216`），安装方式 `install -r --no-incremental`。
 

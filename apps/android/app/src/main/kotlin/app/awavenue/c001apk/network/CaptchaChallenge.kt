@@ -11,6 +11,9 @@ import kotlinx.serialization.json.contentOrNull
  * name are protocol configuration; a proof is short lived and never stored or printed.
  */
 class CaptchaChallenge(val captchaId: String, val field: String) {
+    /** A blank field means the proof travels as the `validate` cookie, not as a parameter. */
+    val usesCookie: Boolean get() = this.field.isEmpty()
+
     fun proof(validate: String?): String? {
         if (validate.isNullOrEmpty() || validate.length > 8192) return null
         if (validate.any { it.isWhitespace() || it.code < 0x20 }) return null
@@ -41,11 +44,31 @@ class CaptchaChallenge(val captchaId: String, val field: String) {
                 else -> null
             } ?: root
             val id = extra.text("captchaId").takeIf { ID_PATTERN.matches(it) } ?: DEFAULT_ID
-            val field = extra.text("captchaField").takeIf { FIELD_PATTERN.matches(it) } ?: DEFAULT_FIELD
+            // Only an explicitly blank field selects the cookie protocol; an absent or invalid one
+            // keeps the legacy form field.
+            val field = (extra["captchaField"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+                ?.let { if (it.isBlank()) "" else it.takeIf(FIELD_PATTERN::matches) }
+                ?: DEFAULT_FIELD
             return CaptchaChallenge(id, field)
         }
 
         private fun JsonObject.text(key: String): String =
             (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull.orEmpty()
+    }
+}
+
+/**
+ * Dart's `Uri.encodeQueryComponent`, so the `validate` cookie is byte-identical to the Flutter
+ * client's: RFC 3986 unreserved characters stay, a space becomes `+`, the rest is percent-encoded.
+ */
+internal fun encodeQueryComponent(value: String): String = buildString {
+    for (byte in value.encodeToByteArray()) {
+        val c = byte.toInt() and 0xff
+        when {
+            c in 'a'.code..'z'.code || c in 'A'.code..'Z'.code || c in '0'.code..'9'.code || c.toChar() in "-._~" ->
+                append(c.toChar())
+            c == ' '.code -> append('+')
+            else -> append('%').append("0123456789ABCDEF"[c shr 4]).append("0123456789ABCDEF"[c and 0xf])
+        }
     }
 }
