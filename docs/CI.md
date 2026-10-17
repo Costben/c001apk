@@ -1,6 +1,6 @@
 # GitHub Actions 云端构建
 
-[返回开发指南](DEVELOPMENT.md) · [查看 Actions](https://github.com/TG-Twilight/c001apk/actions/workflows/build.yml)
+[返回开发指南](DEVELOPMENT.md) · [查看 Actions](https://github.com/Costben/c001apk/actions/workflows/build.yml)
 
 配置入口为 [Build workflow](../.github/workflows/build.yml)。固定 Flutter 3.24.5 / Dart 3.5.4，
 Android 使用 Temurin JDK 17，所有 Flutter 命令从 `apps/flutter/` 执行。

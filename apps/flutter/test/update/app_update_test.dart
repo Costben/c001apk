@@ -12,7 +12,7 @@ import 'package:hive/hive.dart';
 
 Map<String, dynamic> releaseJson({String tag = '1.2.0-release'}) => {
       'tag_name': tag,
-      'html_url': 'https://github.com/TG-Twilight/c001apk/releases/tag/$tag',
+      'html_url': 'https://github.com/Costben/c001apk/releases/tag/$tag',
       'draft': false,
       'prerelease': false,
       'body': '修复问题\n新增功能',
@@ -30,7 +30,7 @@ Map<String, dynamic> releaseJson({String tag = '1.2.0-release'}) => {
             'state': 'uploaded',
             'size': 1024,
             'browser_download_url':
-                'https://github.com/TG-Twilight/c001apk/releases/download/$tag/c001apk-1.2.0%2B20261015-$name',
+                'https://github.com/Costben/c001apk/releases/download/$tag/c001apk-1.2.0%2B20261015-$name',
           }
       ],
     };
@@ -218,7 +218,7 @@ void main() {
     await service.check();
     final request = adapter.requests.single;
     expect(request.uri.toString(),
-        'https://api.github.com/repos/TG-Twilight/c001apk/releases/latest');
+        'https://api.github.com/repos/Costben/c001apk/releases/latest');
     expect(request.method, 'GET');
     expect(
         request.headers.keys.map((key) => key.toLowerCase()),

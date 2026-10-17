@@ -36,7 +36,7 @@ c001apk/
 “检查已安装应用更新”独立。存储与更新、关于页均可手动检查，手动操作不受
 自动开关、跳过版本或稍后提醒影响。自动检查失败不打扰，手动失败显示中文原因。
 
-更新来源为 `TG-Twilight/c001apk` 的 GitHub Latest 正式 Release；
+更新来源为 `Costben/c001apk` 的 GitHub Latest 正式 Release；
 不检测 Actions artifacts、草稿或预发布版本。按语义版本比较，兼容
 `1.1.0-release` / `v1.2.0` 标签，不比较 Release 时间或 Android ABI 版本码。
 同一语义版本重新构建不触发更新提示，发布修订版时应提升语义版本。
@@ -71,7 +71,7 @@ powershell -NoProfile -File tool/windows_close_smoke.ps1 `
 此脚本会实际启动及关闭桌面窗口，检查退出码和系统错误弹窗事件。运行前关闭已有实例；还需手动复核打开网页登录、取消后关闭，以及直接在网页登录页关闭窗口。
 
 ```powershell
-git clone https://github.com/TG-Twilight/c001apk.git
+git clone https://github.com/Costben/c001apk.git
 cd c001apk/apps/flutter
 
 flutter doctor -v
@@ -229,7 +229,7 @@ AGP（9.3.1）与 Kotlin（2.4.10）版本必须与 `third_party/coui17/gradle/l
 保持一致，升级子模块时一并核对。
 
 ```bash
-git clone --recurse-submodules https://github.com/TG-Twilight/c001apk.git
+git clone --recurse-submodules https://github.com/Costben/c001apk.git
 # 已有仓库：git submodule update --init
 
 cd c001apk/apps/android
@@ -243,6 +243,6 @@ cd c001apk/apps/android
 
 ## 参与维护
 
-欢迎提交 [Issue](https://github.com/TG-Twilight/c001apk/issues) 或 Pull Request。反馈问题时请提供平台、应用版本、复现步骤与脱敏错误信息，避免附带密码、Cookie、用户 Token 或私信内容。
+欢迎提交 [Issue](https://github.com/Costben/c001apk/issues) 或 Pull Request。反馈问题时请提供平台、应用版本、复现步骤与脱敏错误信息，避免附带密码、Cookie、用户 Token 或私信内容。
 
 API 修改请区分网络错误、HTTP 状态、业务拒绝、验证码和模型解析错误，并保留离线回归。修改存储时保留用户历史、收藏与设置；修改模型时使用生成器更新 `*.g.dart`。

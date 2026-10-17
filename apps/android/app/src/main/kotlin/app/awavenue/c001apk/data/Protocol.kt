@@ -28,7 +28,7 @@ object Protocol {
         }
         return "https://m.coolapk.com/mp/do?c=$target&m=report$type&id=$id"
     }
-    const val URL_SOURCE_CODE = "https://github.com/TG-Twilight/c001apk"
+    const val URL_SOURCE_CODE = "https://github.com/Costben/c001apk"
     const val URL_UPSTREAM = "https://github.com/bggRGjQaUbCoE/c001apk-flutter"
     const val URL_COUI = "https://github.com/Costben/coui17"
 }

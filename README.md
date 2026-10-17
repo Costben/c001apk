@@ -8,11 +8,11 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-607D8B?style=flat-square)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.24.5-02569B?style=flat-square&logo=flutter&logoColor=white)](docs/DEVELOPMENT.md)
-[![Build](https://github.com/TG-Twilight/c001apk/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/TG-Twilight/c001apk/actions/workflows/build.yml)
+[![Build](https://github.com/Costben/c001apk/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Costben/c001apk/actions/workflows/build.yml)
 ![Platforms](https://img.shields.io/badge/平台-Android%20%7C%20Windows-486B78?style=flat-square)
 ![Status](https://img.shields.io/badge/状态-持续维护中-6E8B74?style=flat-square)
 
-[下载](https://github.com/TG-Twilight/c001apk/releases) · [反馈问题](https://github.com/TG-Twilight/c001apk/issues) · [参与开发](docs/DEVELOPMENT.md)
+[下载](https://github.com/Costben/c001apk/releases) · [反馈问题](https://github.com/Costben/c001apk/issues) · [参与开发](docs/DEVELOPMENT.md)
 
 </div>
 
@@ -63,9 +63,9 @@
 
 ## 下载安装
 
-正式安装包可从 [Releases](https://github.com/TG-Twilight/c001apk/releases) 获取，也可以参照 [开发指南](docs/DEVELOPMENT.md) 自行构建。
+正式安装包可从 [Releases](https://github.com/Costben/c001apk/releases) 获取，也可以参照 [开发指南](docs/DEVELOPMENT.md) 自行构建。
 
-云端构建包可从 [Actions](https://github.com/TG-Twilight/c001apk/actions/workflows/build.yml) 的 Artifacts 下载，平台、签名与手动构建方式见 [云端构建指南](docs/CI.md)。
+云端构建包可从 [Actions](https://github.com/Costben/c001apk/actions/workflows/build.yml) 的 Artifacts 下载，平台、签名与手动构建方式见 [云端构建指南](docs/CI.md)。
 
 ## 开发进度
 
@@ -87,7 +87,7 @@
 
 ## 参与与致谢
 
-欢迎提交 [Issue](https://github.com/TG-Twilight/c001apk/issues) 或 Pull Request。反馈请附平台、版本、复现步骤与脱敏错误信息；开发环境、工程目录及检查命令见 [开发指南](docs/DEVELOPMENT.md)。
+欢迎提交 [Issue](https://github.com/Costben/c001apk/issues) 或 Pull Request。反馈请附平台、版本、复现步骤与脱敏错误信息；开发环境、工程目录及检查命令见 [开发指南](docs/DEVELOPMENT.md)。
 
 感谢 [bggRGjQaUbCoE/c001apk-flutter](https://github.com/bggRGjQaUbCoE/c001apk-flutter) 的开源，以及 [daimiaopeng/coolapk-desktop](https://github.com/daimiaopeng/coolapk-desktop) 的协议调研参考。
 

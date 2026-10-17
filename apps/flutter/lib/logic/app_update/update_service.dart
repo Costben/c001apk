@@ -43,7 +43,7 @@ class UpdateService {
     try {
       final current = await _currentVersion();
       final response = await _dio.get<dynamic>(
-          'https://api.github.com/repos/TG-Twilight/c001apk/releases/latest',
+          'https://api.github.com/repos/Costben/c001apk/releases/latest',
           options: Options(headers: {
             'Accept': 'application/vnd.github+json',
             'User-Agent': 'c001apk-update',

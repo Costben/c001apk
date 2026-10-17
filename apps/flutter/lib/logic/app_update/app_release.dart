@@ -38,7 +38,7 @@ class AppRelease {
   final String notes;
   final DateTime? publishedAt;
   final Map<String, Uri> _assets;
-  static const _repository = '/TG-Twilight/c001apk/releases/';
+  static const _repository = '/Costben/c001apk/releases/';
 
   static bool _trusted(Uri uri, String prefix) =>
       uri.scheme == 'https' &&

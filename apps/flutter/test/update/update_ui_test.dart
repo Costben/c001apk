@@ -184,7 +184,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(opened, hasLength(2));
       expect(opened.last,
-          'https://github.com/TG-Twilight/c001apk/releases/tag/1.2.0-release');
+          'https://github.com/Costben/c001apk/releases/tag/1.2.0-release');
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
