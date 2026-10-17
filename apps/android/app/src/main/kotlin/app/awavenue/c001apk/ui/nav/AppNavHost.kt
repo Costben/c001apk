@@ -38,6 +38,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import app.awavenue.c001apk.ui.account.AccountsScreen
@@ -80,6 +82,7 @@ import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -306,12 +309,28 @@ private const val GestureSettleMillis = 200
 private const val GestureCommitMillis = 150
 
 /**
- * The page under the top one, drawn while a back gesture is pulling the top one away. It is not
- * composed the rest of the time, so it restores its own saved state on the way in and hands it back
- * on the way out, exactly as it does when a pop animates it back in.
+ * The page under the top one, drawn while a back gesture is pulling the top one away. It is drawn
+ * from the picture taken when it was covered, so it is exactly as the user left it, lists and all.
+ * A page without one is composed instead: it is not composed the rest of the time, so it restores
+ * its own saved state on the way in and hands it back on the way out, as it does when a pop
+ * animates it back in.
  */
 @Composable
 private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
+    val snapshot = entry.snapshot
+    if (snapshot != null) {
+        Box(
+            Modifier.fillMaxSize().drawBehind {
+                drawImage(snapshot, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
+            },
+        )
+    } else {
+        ComposedRevealedRoute(entry)
+    }
+}
+
+@Composable
+private fun ComposedRevealedRoute(entry: BackStackEntry) {
     val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
     val settled = remember { RouteTransition(progress = SettledGesture, exiting = { false }) }
     CompositionLocalProvider(
@@ -332,18 +351,29 @@ private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
 }
 
 /**
- * Draws [content] live while its page is on the stack. Once the page is on its way out it is drawn
- * from a picture of itself instead of being interactive: the page underneath is the one the user is
- * on now, and they have to be able to scroll it while this one finishes shrinking back into where
- * it came from — which also lets that shrink follow the list as it moves. The content stays composed
- * (that is what the picture is taken from) but is clipped out of both sight and hit testing, so
- * nothing of it can swallow a touch.
+ * Draws [content] live while its page is on the stack, recording a picture of it as it goes.
+ * Once the page is on its way out it is drawn from that picture instead of being interactive: the
+ * page underneath is the one the user is on now, and they have to be able to scroll it while this
+ * one finishes shrinking back into where it came from — which also lets that shrink follow the list
+ * as it moves. The content stays composed (that is what the picture is taken from) but is clipped
+ * out of both sight and hit testing, so nothing of it can swallow a touch.
  */
 @Composable
 private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) {
     val navigator = LocalNavigator.current
     val leaving = !navigator.stack.contains(entry)
+    val covered = !leaving && navigator.stack.lastOrNull() !== entry
     val picture = rememberGraphicsLayer()
+    // A covered page stays composed while the page over it enters, and leaves composition after, so
+    // this is the moment to take its picture; it is let go again once the page is on top.
+    LaunchedEffect(covered) {
+        if (covered) {
+            withFrameNanos { }
+            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+        } else {
+            entry.snapshot = null
+        }
+    }
     Box(
         Modifier.fillMaxSize().then(
             if (leaving) {
@@ -354,20 +384,24 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
         ),
     ) {
         Box(
-            Modifier.fillMaxSize().then(
-                if (leaving) {
-                    Modifier
-                        .graphicsLayer {
+            Modifier
+                .fillMaxSize()
+                .then(
+                    if (leaving) {
+                        Modifier.graphicsLayer {
                             clip = true
                             shape = OutOfReach
                         }
-                        .drawWithContent {
-                            picture.record { this@drawWithContent.drawContent() }
-                        }
-                } else {
-                    Modifier
+                    } else {
+                        Modifier
+                    },
+                )
+                // Recorded for as long as the page is shown, not only once it leaves: the picture
+                // is also what is taken when another page is stacked over this one.
+                .drawWithContent {
+                    picture.record { this@drawWithContent.drawContent() }
+                    if (!leaving) drawLayer(picture)
                 },
-            ),
         ) { content() }
     }
 }

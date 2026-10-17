@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 
@@ -26,6 +27,14 @@ class BackStackEntry internal constructor(
 
     /** Set when a back gesture had already pulled the screen away before it was popped. */
     internal var previewed = false
+
+    /**
+     * What the screen looked like when another one was stacked over it, kept while it is covered. A
+     * back gesture reveals the screen under the one it pulls away from this picture: composing the
+     * screen again would show every list at the top, and it would jump to where the user left it
+     * once the gesture is let go.
+     */
+    internal var snapshot: ImageBitmap? = null
 
     /**
      * What the screen's `rememberSaveable` state (list positions, selected tabs) held when it left
