@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 /// Protocol configuration only. Verification proofs are short lived and never
-/// stored or printed. Source: coolapk-desktop 3ef2ad4, neteaseCaptcha.ts (MIT).
+/// persisted or printed. Source: coolapk-desktop 3ef2ad4, neteaseCaptcha.ts (MIT).
 class CaptchaChallenge {
   const CaptchaChallenge(this.captchaId, this.field);
   final String captchaId;
@@ -34,8 +34,12 @@ class CaptchaChallenge {
       id is String && RegExp(r'^[a-zA-Z0-9]{16,64}$').hasMatch(id)
           ? id
           : defaultId,
-      field is String && RegExp(r'^_[a-zA-Z0-9_]{1,63}$').hasMatch(field)
-          ? field
+      // An explicitly blank field selects the validate Cookie protocol.
+      // Keep the legacy form-field default for absent or invalid fields.
+      field is String &&
+              (field.trim().isEmpty ||
+                  RegExp(r'^_[a-zA-Z0-9_]{1,63}$').hasMatch(field))
+          ? field.trim()
           : '_v2_post_token',
     );
   }

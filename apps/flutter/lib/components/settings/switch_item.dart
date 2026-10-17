@@ -10,11 +10,13 @@ class SwitchItem extends StatefulWidget {
     required this.title,
     required this.boxKey,
     required this.defaultValue,
+    this.subtitle,
     this.forceAppUpdate = false,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final String boxKey;
   final bool defaultValue;
   final bool forceAppUpdate;
@@ -38,7 +40,7 @@ class _SwitchItemState extends State<SwitchItem> {
     if (widget.forceAppUpdate) {
       Get.forceAppUpdate();
     }
-    setState(() => this.value = value);
+    if (mounted) setState(() => this.value = value);
   }
 
   @override
@@ -46,6 +48,7 @@ class _SwitchItemState extends State<SwitchItem> {
     return ListTile(
       leading: Icon(widget.icon),
       title: Text(widget.title),
+      subtitle: widget.subtitle == null ? null : Text(widget.subtitle!),
       trailing: Switch(
         value: value,
         onChanged: onChanged,

@@ -8,6 +8,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../constants/constants.dart';
+import '../logic/accounts/account_store.dart';
 import '../logic/model/fav_history/fav_history.dart';
 import '../utils/device_util.dart';
 import '../utils/global_data.dart';
@@ -140,6 +141,7 @@ class GStorage {
     GlobalData().uid = uid;
     GlobalData().username = username;
     GlobalData().token = token;
+    await AccountStore().initialize();
   }
 
   static void regAdapter() {

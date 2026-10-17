@@ -14,6 +14,36 @@ import '../../utils/storage_util.dart';
 import '../../utils/token_util.dart';
 
 class NetworkRepo {
+  static void requireMessageMutation(Response response) {
+    final data = readApiObject(response)['data'];
+    final count = data is Map ? data['count'] : data;
+    if (count == null || count == false || count.toString().trim().isEmpty) {
+      throw const ApiFailure(
+          ApiFailureKind.invalidResponse, '服务端未确认操作结果，请刷新后查看');
+    }
+  }
+
+  static Future<LoadingState<Map<String, dynamic>>> getEventDetail(
+      String id) async {
+    if (!RegExp(r'^[0-9]+$').hasMatch(id)) {
+      return LoadingState.error('活动编号无效');
+    }
+    try {
+      final response = await Request().get(
+        Api.getDataFromUrl('/v6/event/detail'),
+        queryParameters: {'id': id},
+      );
+      final data = readApiObject(response)['data'];
+      if (data == null) return LoadingState.empty();
+      if (data is! Map<String, dynamic> || data['title'] is! String) {
+        throw const ApiFailure(ApiFailureKind.parsing, '活动数据格式异常，请稍后重试');
+      }
+      return LoadingState.success(data);
+    } catch (error) {
+      return LoadingState.error(ApiFailure.fromError(error).message);
+    }
+  }
+
   static Future<Response> postOSSUploadPrepare({
     required FormData data,
   }) async {
@@ -32,6 +62,9 @@ class NetworkRepo {
         'uid': uid,
       },
       data: data,
+      options: Options(
+          contentType: Headers.multipartFormDataContentType,
+          extra: {'silentError': true}),
     );
   }
 
@@ -352,6 +385,7 @@ class NetworkRepo {
     required int page,
     required String? firstItem,
     required String? lastItem,
+    bool includeTop = true,
   }) async {
     return getListData(
       () => Request().get(Api.getUserFeed, queryParameters: {
@@ -360,7 +394,7 @@ class NetworkRepo {
         if (!firstItem.isNullOrEmpty) 'firstItem': firstItem,
         if (!lastItem.isNullOrEmpty) 'lastItem': lastItem,
         'showAnonymous': 0,
-        'isIncludeTop': 1,
+        'isIncludeTop': includeTop ? 1 : 0,
         'showDoing': 0,
       }),
     );

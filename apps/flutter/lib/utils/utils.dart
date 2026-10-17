@@ -34,7 +34,7 @@ class Utils {
 
   static String getFollowTitle(int index) {
     return switch (index) {
-      1 => '好友关注',
+      1 => '用户关注',
       2 => '话题关注',
       3 => '数码关注',
       4 => '应用关注',
@@ -73,7 +73,10 @@ class Utils {
   }
 
   static bool isSupportWebview() {
-    return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+    return Platform.isAndroid ||
+        Platform.isIOS ||
+        Platform.isMacOS ||
+        Platform.isWindows;
   }
 
   static Future<void> onShareImg(String url) async {
@@ -179,8 +182,12 @@ class Utils {
       }
     }
     if (path.startsWith(Constants.PREFIX_FEED)) {
-      Get.toNamed(
-          '/feed/${path.replaceFirst(Constants.PREFIX_FEED, '').replaceAll('?', '&')}');
+      // Share queries and fragments are not part of the feed identifier.
+      final id = Uri.parse(path).path.replaceFirst(Constants.PREFIX_FEED, '');
+      Get.toNamed('/feed/$id');
+    } else if (RegExp(r'^/event/[0-9]+(?:[?#]|$)').hasMatch(path)) {
+      final id = Uri.parse(path).path.substring('/event/'.length);
+      Get.toNamed('/event/$id');
     } else if (path.startsWith(Constants.PREFIX_USER)) {
       String uid = path.replaceFirst(Constants.PREFIX_USER, '');
       try {

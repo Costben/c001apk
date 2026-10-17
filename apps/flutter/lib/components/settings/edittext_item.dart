@@ -9,6 +9,7 @@ class EdittextItem extends StatefulWidget {
     this.icon,
     required this.title,
     required this.boxKey,
+    this.subtitle,
     this.needUpdateUserAgent = false,
     this.needUpdateXAppDevice = false,
     this.onChanged,
@@ -16,6 +17,7 @@ class EdittextItem extends StatefulWidget {
 
   final IconData? icon;
   final String title;
+  final String? subtitle;
   final String boxKey;
   final bool needUpdateUserAgent;
   final bool needUpdateXAppDevice;
@@ -61,7 +63,9 @@ class EdittextItemState extends State<EdittextItem> {
     return ListTile(
       leading: widget.icon != null ? Icon(widget.icon) : null,
       title: Text(widget.title),
-      subtitle: value.isNotEmpty ? Text(value) : null,
+      subtitle: widget.subtitle != null
+          ? Text(widget.subtitle!)
+          : (value.isNotEmpty ? Text(value) : null),
       onTap: () => showDialog<void>(
         context: context,
         builder: (context) {

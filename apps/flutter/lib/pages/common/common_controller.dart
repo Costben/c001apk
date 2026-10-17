@@ -11,6 +11,7 @@ import '../../logic/network/api_failure.dart';
 import '../../logic/state/loading_state.dart';
 import '../../pages/home/return_top_controller.dart';
 import '../../utils/extensions.dart';
+import '../../utils/global_data.dart';
 
 abstract class CommonController extends GetxController {
   int page = 1;
@@ -41,8 +42,13 @@ abstract class CommonController extends GetxController {
 
   Future<void> onGetData([bool isRefresh = true]) async {
     if (!isLoading) {
+      final generation = GlobalData().sessionGeneration;
       isLoading = true;
       LoadingState response = await customGetData();
+      if (isClosed || generation != GlobalData().sessionGeneration) {
+        isLoading = false;
+        return;
+      }
       if (response is Success) {
         List<Datum> dataList = response.response;
         firstItem ??= dataList.firstOrNull?.id.toString();

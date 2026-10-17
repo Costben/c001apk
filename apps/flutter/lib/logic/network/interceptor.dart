@@ -8,6 +8,34 @@ import '../../utils/token_util.dart';
 import 'api_failure.dart';
 
 class ApiInterceptor extends Interceptor {
+  static String? _captchaCookie;
+  static (int, bool, String, String, String)? _captchaSession;
+
+  static (int, bool, String, String, String) get _session => (
+        GlobalData().sessionGeneration,
+        GlobalData().isLogin,
+        GlobalData().uid,
+        GlobalData().token,
+        GStorage.xAppDevice,
+      );
+
+  // Read verification is a process-local Cookie, shared by the two API hosts.
+  // It must never survive an account/device change or enter persistent storage.
+  static void setCaptchaCookie(String proof) {
+    _captchaCookie = Uri.encodeQueryComponent(proof);
+    _captchaSession = _session;
+  }
+
+  static void clearCaptchaCookie() {
+    _captchaCookie = null;
+    _captchaSession = null;
+  }
+
+  static String? get _currentCaptchaCookie {
+    if (_captchaSession != _session) clearCaptchaCookie();
+    return _captchaCookie;
+  }
+
   String get apiVersion => GStorage.apiVersion;
   String get versionCode => GStorage.versionCode;
   String get versionName => GStorage.versionName;
@@ -19,6 +47,14 @@ class ApiInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (options.extra['sessionGeneration'] != null &&
+        options.extra['sessionGeneration'] != GlobalData().sessionGeneration) {
+      handler.reject(DioException(
+          requestOptions: options,
+          type: DioExceptionType.cancel,
+          error: '账号已切换'));
+      return;
+    }
     try {
       final uri = options.uri;
       final publicFeed = uri.scheme == 'https' &&
@@ -35,9 +71,9 @@ class ApiInterceptor extends Interceptor {
         options.headers['Accept'] =
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7';
         options.headers['X-Requested-With'] = Constants.APP_ID;
-        if (GlobalData().SESSID.isNotEmpty) {
+        if (GlobalData().loginSession.isNotEmpty) {
           options.headers['Cookie'] =
-              '${GlobalData().SESSID}; forward=https://www.coolapk.com';
+              '${GlobalData().loginSession}; forward=https://www.coolapk.com';
         }
         if (options.method == 'POST') {
           options.headers['X-Requested-With'] = Constants.REQUEST_WITH;
@@ -75,6 +111,12 @@ class ApiInterceptor extends Interceptor {
           options.headers['Cookie'] = GlobalData().isLogin
               ? 'uid=${GlobalData().uid}; username=${GlobalData().username}; token=${GlobalData().token}'
               : GlobalData().SESSID;
+          final validation = _currentCaptchaCookie;
+          if (uri.scheme == 'https' && validation != null) {
+            final cookie = options.headers['Cookie'] as String;
+            options.headers['Cookie'] =
+                '${cookie.isEmpty ? '' : '$cookie; '}validate=$validation';
+          }
         }
       }
 
@@ -92,7 +134,8 @@ class ApiInterceptor extends Interceptor {
   @override
   void onError(err, handler) async {
     String url = err.requestOptions.uri.toString();
-    if (!url.contains('/v6/apk/download') &&
+    if (err.requestOptions.extra['silentError'] != true &&
+        !url.contains('/v6/apk/download') &&
         !url.contains('/v6/message/showImage')) {
       SmartDialog.showToast(
         await dioError(err),

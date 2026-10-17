@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart' hide Response;
-import "package:flutter/foundation.dart";
 
 import '../../logic/model/feed/datum.dart';
 import '../../logic/model/login/login_response.dart';
@@ -10,6 +9,9 @@ import '../../logic/state/loading_state.dart';
 import '../../pages/common/common_controller.dart';
 import '../../utils/extensions.dart';
 import '../../utils/storage_util.dart';
+import '../../utils/global_data.dart';
+import '../../logic/local_follow/local_follow_store.dart';
+import '../../logic/network/api_failure.dart';
 
 class UserController extends CommonController {
   UserController({
@@ -81,11 +83,39 @@ class UserController extends CommonController {
     onGetUserData();
   }
 
+  bool _followBusy = false;
+
+  Future<void> onLocalFollow() async {
+    if (_followBusy || userState.value is! Success) return;
+    if (GlobalData().isLogin && !LocalFollowStore().secretEnabled) return;
+    _followBusy = true;
+    try {
+      final store = LocalFollowStore();
+      final data = (userState.value as Success).response as Datum;
+      final following = store.contains(uid);
+      if (following) {
+        await store.unfollow(uid);
+      } else {
+        await store.follow(uid, data.username ?? '', data.userAvatar ?? '');
+      }
+      final label = GlobalData().isLogin ? '悄悄关注' : '本地关注';
+      SmartDialog.showToast(
+          following ? '已取消$label，仅修改本机名单' : '已$label，仅保存在本机，不会同步到账号');
+    } catch (_) {
+      SmartDialog.showToast('本地关注保存失败，请重试');
+    } finally {
+      _followBusy = false;
+    }
+  }
+
   Future<void> onFollow(dynamic uid, dynamic isFollow) async {
+    if (!GlobalData().isLogin) return onLocalFollow();
+    if (_followBusy) return;
+    _followBusy = true;
     try {
       String url = isFollow == 1 ? '/v6/user/unfollow' : '/v6/user/follow';
       Response response = await NetworkRepo.postLikeDeleteFollow(url, uid: uid);
-      LoginResponse datum = LoginResponse.fromJson(response.data);
+      LoginResponse datum = LoginResponse.fromJson(readApiObject(response));
       if (!datum.message.isNullOrEmpty) {
         SmartDialog.showToast(datum.message!);
       } else if (datum.data != null) {
@@ -94,7 +124,9 @@ class UserController extends CommonController {
         SmartDialog.showToast(isFollow == 1 ? '取消关注成功' : '关注成功');
       }
     } catch (e) {
-      debugPrint(e.toString());
+      SmartDialog.showToast(ApiFailure.fromError(e).message);
+    } finally {
+      _followBusy = false;
     }
   }
 }

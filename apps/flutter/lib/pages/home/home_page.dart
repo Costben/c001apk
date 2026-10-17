@@ -1,6 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -41,15 +42,22 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription<int>? _returnTopSubscription;
   final ReturnTopController _pageScrollController =
       Get.find<ReturnTopController>(tag: 'home');
   // late final _config = Provider.of<AppConfigProvider>(context, listen: false);
   // late bool _showFab = true; //_config.isLogin;
 
-  final _tabList = TabType.values.map((type) => Tab(text: type.label)).toList();
+  final _tabTypes = [
+    if (Platform.isAndroid) TabType.APP,
+    TabType.FEED,
+    TabType.HOT,
+    TabType.TOPIC,
+    TabType.PRODUCT,
+    TabType.COOLPIC,
+  ];
 
   final _pages = [
-    const HomeFeedPage(tabType: TabType.FOLLOW),
     if (Platform.isAndroid) const AppListPage(),
     const HomeFeedPage(tabType: TabType.FEED),
     const HomeFeedPage(tabType: TabType.HOT),
@@ -59,29 +67,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   ];
 
   void scrollToTop(int index) {
-    _pageScrollController.setIndex(Platform.isAndroid
-        ? index
-        : index == 0
-            ? 0
-            : index + 1);
+    _pageScrollController.setIndex(_tabTypes[index].index);
   }
 
   @override
   void initState() {
     super.initState();
 
-    _tabList.removeLast();
-    if (!Platform.isAndroid) {
-      _tabList.removeAt(1);
-    }
-
     _tabController = TabController(
       vsync: this,
-      initialIndex: Platform.isAndroid ? 2 : 1,
-      length: _tabList.length,
+      initialIndex: _tabTypes.indexOf(TabType.FEED),
+      length: _tabTypes.length,
     );
 
-    _pageScrollController.index.listen((index) {
+    _returnTopSubscription = _pageScrollController.index.listen((index) {
       if (index == 998) {
         scrollToTop(_tabController.index);
       }
@@ -90,6 +89,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _returnTopSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         automaticallyImplyLeading: false,
         title: TabBar(
           controller: _tabController,
-          tabs: _tabList,
+          tabs: _tabTypes.map((type) => Tab(text: type.label)).toList(),
           isScrollable: true,
           onTap: (index) {
             if (!_tabController.indexIsChanging) {

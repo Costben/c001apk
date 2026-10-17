@@ -11,12 +11,10 @@ class MessageHeaderCard extends StatelessWidget {
     super.key,
     this.userInfo,
     required this.onLogin,
-    required this.onLogout,
   });
 
   final Datum? userInfo;
   final Function() onLogin;
-  final Function() onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -100,11 +98,7 @@ class MessageHeaderCard extends StatelessWidget {
                   ),
                 ),
                 const Expanded(flex: 25, child: SizedBox()),
-                IconButton(
-                  onPressed: onLogout,
-                  icon: const Icon(Icons.logout),
-                ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 20),
               ],
             ),
           ),

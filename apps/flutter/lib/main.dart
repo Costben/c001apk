@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dynamic_color/dynamic_color.dart';
@@ -10,11 +11,13 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'components/custom_toast.dart';
+import 'components/update_check_tile.dart';
 import 'constants/constants.dart';
 import 'logic/network/request.dart';
 import 'pages/webview/captcha_page.dart';
 import 'router/app_pages.dart';
 import 'utils/storage_util.dart';
+import 'utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +61,10 @@ void main() async {
 
   Request().captchaVerifier = verifyCaptcha;
   runApp(const C001APKAPP());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final context = Get.context;
+    if (context != null) unawaited(AppUpdates.check(context, automatic: true));
+  });
 }
 
 class C001APKAPP extends StatelessWidget {
@@ -103,7 +110,7 @@ class C001APKAPP extends StatelessWidget {
       );
     }
 
-    final lightTheme = ThemeData(
+    final lightTheme = applyAppTypography(ThemeData(
       colorScheme: lightColorScheme,
       useMaterial3: true,
       navigationBarTheme: NavigationBarThemeData(
@@ -140,8 +147,8 @@ class C001APKAPP extends StatelessWidget {
       progressIndicatorTheme: ProgressIndicatorThemeData(
         refreshBackgroundColor: lightColorScheme.onSecondary,
       ),
-    );
-    final darkTheme = ThemeData(
+    ));
+    final darkTheme = applyAppTypography(ThemeData(
       colorScheme: darkColorScheme,
       useMaterial3: true,
       navigationBarTheme: NavigationBarThemeData(
@@ -171,7 +178,7 @@ class C001APKAPP extends StatelessWidget {
       progressIndicatorTheme: ProgressIndicatorThemeData(
         refreshBackgroundColor: darkColorScheme.onSecondary,
       ),
-    );
+    ));
     return GetMaterialApp(
       title: Constants.APP_NAME,
       locale: const Locale('zh', 'CN'),
@@ -196,8 +203,9 @@ class C001APKAPP extends StatelessWidget {
           child: FlutterSmartDialog(
             toastBuilder: (String msg) => CustomToast(msg: msg),
             child: MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.linear(fontScale)),
+              data: MediaQuery.of(context).copyWith(
+                  textScaler: AppTextScaler(
+                      MediaQuery.textScalerOf(context), fontScale)),
               child: child!,
             ),
           ),

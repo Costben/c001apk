@@ -1,514 +1,403 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:chat_bottom_container/chat_bottom_container.dart';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart' hide FormData;
+import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mime/mime.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../components/cards/chat_card.dart';
 import '../../components/cards/chat_time_card.dart';
 import '../../components/common_body.dart';
-import '../../logic/model/feed/datum.dart';
-import '../../logic/model/oss_upload/datum.dart';
-import '../../logic/model/oss_upload/oss_upload_model.dart';
 import '../../logic/state/loading_state.dart';
-import '../../pages/chat/chat_controller.dart';
 import '../../pages/feed/reply/emoji_panel.dart';
 import '../../utils/device_util.dart';
 import '../../utils/extensions.dart';
 import '../../utils/global_data.dart';
-import '../../utils/oss/aliyunoss_client.dart';
-import '../../utils/oss/aliyunoss_config.dart';
-import '../../utils/oss_util.dart';
 import '../../utils/storage_util.dart';
 import '../../utils/utils.dart';
+import 'chat_controller.dart';
+import 'chat_feed_picker.dart';
 
 enum PanelType { none, keyboard, emoji }
 
-// ignore: constant_identifier_names
-enum ChatMenuType {
-  // ignore: constant_identifier_names
-  Check,
-  // ignore: constant_identifier_names
-  Block,
-  // ignore: constant_identifier_names
-  Report;
-
-  String get label => switch (this) {
-        ChatMenuType.Check => '查看用户',
-        ChatMenuType.Block => '屏蔽',
-        ChatMenuType.Report => '举报',
-      };
-}
+enum ChatMenuType { profile, block, report }
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
-
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> {
-  late final String _ukey;
-  late final String _uid;
-  late final String _username;
-
-  late final String _random = DeviceUtil.randHexString(8);
-  late final _chatController = Get.put(
-    ChatController(ukey: _ukey),
-    tag: _ukey + _random,
-  );
-  late final _focusNode = FocusNode();
-  late final _controller = ChatBottomPanelContainerController<PanelType>();
+  late final String _ukey = Get.parameters['ukey'] ?? '';
+  late final String _uid = Get.parameters['uid'] ?? '';
+  late final String _username = Get.parameters['username'] ?? '';
+  late final String _tag = _ukey + DeviceUtil.randHexString(8);
+  late final _chatController = Get.put(ChatController(ukey: _ukey), tag: _tag);
+  final _focusNode = FocusNode();
+  final _panel = ChatBottomPanelContainerController<PanelType>();
+  final _readOnlyStream = StreamController<bool>();
   PanelType _currentPanelType = PanelType.none;
   bool _readOnly = false;
-  final _readOnlyStream = StreamController<bool>();
-  late final _enableSend = StreamController<bool>();
-  late bool _visibleSend = false;
-  late final _imagePicker = ImagePicker();
+  bool _pickingImage = false;
 
   @override
   void initState() {
     super.initState();
-    _ukey = Get.parameters['ukey'] ?? '';
-    _uid = Get.parameters['uid'] ?? '';
-    _username = Get.parameters['username'] ?? '';
     _chatController.scrollController = ScrollController();
-
-    _enableSend.add(false);
   }
 
   @override
   void dispose() {
+    Get.delete<ChatController>(tag: _tag);
     _readOnlyStream.close();
-    _enableSend.close();
     _focusNode.dispose();
     _chatController.editingController.dispose();
     _chatController.scrollController?.dispose();
-    Get.delete<ChatController>(
-      tag: _ukey + _random,
-    );
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: Text(_username),
-        actions: [
-          PopupMenuButton(
-              onOpened: _focusNode.unfocus,
-              onSelected: (value) {
-                switch (value) {
-                  case ChatMenuType.Check:
-                    Get.toNamed('/u/$_uid');
-                    break;
-                  case ChatMenuType.Block:
-                    GStorage.onBlock(_uid);
-                    break;
-                  case ChatMenuType.Report:
-                    if (Utils.isSupportWebview()) {
-                      Utils.report(_uid, ReportType.User);
-                    } else {
-                      SmartDialog.showToast('当前平台暂不支持此功能');
-                    }
-                    break;
-                }
-              },
-              itemBuilder: (context) => ChatMenuType.values
-                  .map((item) =>
-                      PopupMenuItem(value: item, child: Text(item.label)))
-                  .toList())
-        ],
-      ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(child: _buildList()),
-          _buildInputView(),
-          _buildPanelContainer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    Widget resultWidget = Obx(
-      () {
-        if (_chatController.loadingState.value is Success) {
-          List<Datum> dataList =
-              (_chatController.loadingState.value as Success).response;
-          return ListView.builder(
-            padding: EdgeInsets.zero,
-            controller: _chatController.scrollController,
-            reverse: true,
-            itemCount: dataList.length,
-            itemBuilder: (context, index) {
-              if (index == dataList.length - 1 &&
-                  !_chatController.isEnd &&
-                  !_chatController.isLoading) {
-                _chatController.onGetData(false);
+  Widget build(BuildContext context) => Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(title: Text(_username), actions: [
+          PopupMenuButton<ChatMenuType>(
+            onOpened: _focusNode.unfocus,
+            onSelected: (value) {
+              switch (value) {
+                case ChatMenuType.profile:
+                  Get.toNamed('/u/$_uid');
+                case ChatMenuType.block:
+                  GStorage.onBlock(_uid);
+                case ChatMenuType.report:
+                  if (Utils.isSupportWebview()) {
+                    Utils.report(_uid, ReportType.User);
+                  } else {
+                    SmartDialog.showToast('当前平台暂不支持此功能');
+                  }
               }
-              switch (dataList[index].entityType) {
-                case 'message':
-                  return ChatCard(
-                    data: dataList[index],
-                    isLeft:
-                        dataList[index].fromuid.toString() != GlobalData().uid,
-                    onGetImageUrl: () {
-                      _chatController.onGetImageUrl(dataList[index].id);
-                    },
-                    onViewImage: () async {
-                      if (_focusNode.hasFocus) {
-                        await Future.delayed(const Duration(milliseconds: 500));
-                      }
-                      Get.toNamed('imageview', arguments: {
-                        "imgList": [dataList[index].messagePic!],
-                      });
-                    },
-                    onLongPress: () {
-                      showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              clipBehavior: Clip.hardEdge,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 8),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ListTile(
-                                    title: const Text(
-                                      '删除',
-                                      style: TextStyle(fontSize: 14),
-                                    ),
-                                    onTap: () {
-                                      _chatController
-                                          .onDeleteMsg(dataList[index].id);
-                                      Get.back();
-                                    },
-                                  ),
-                                  if (!dataList[index].message.isNullOrEmpty)
-                                    ListTile(
-                                      title: const Text(
-                                        '复制',
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                      onTap: () {
-                                        Utils.copyText(
-                                            dataList[index].message!);
-                                        Get.back();
-                                      },
-                                    ),
-                                ],
-                              ),
-                            );
-                          });
-                    },
-                  );
-                case 'messageExtra':
-                  return ChatTimeCard(text: dataList[index].title ?? '');
-              }
-              return const ListTile(
-                title: Text('暂不支持此消息类型'),
-              );
             },
-          );
-        } else {
-          return Center(child: buildBody(_chatController));
-        }
-      },
-    );
-    resultWidget = Listener(
-      child: resultWidget,
-      onPointerDown: (event) {
-        // Hide panel when touch ListView.
-        hidePanel();
-      },
-    );
-    return resultWidget;
-  }
-
-  Widget _buildPanelContainer() {
-    return ChatBottomPanelContainer<PanelType>(
-      controller: _controller,
-      inputFocusNode: _focusNode,
-      otherPanelWidget: (type) {
-        if (type == null) return const SizedBox.shrink();
-        switch (type) {
-          case PanelType.emoji:
-            return _buildEmojiPickerPanel();
-          default:
-            return const SizedBox.shrink();
-        }
-      },
-      onPanelTypeChange: (panelType, data) {
-        debugPrint('panelType: $panelType');
-        switch (panelType) {
-          case ChatBottomPanelType.none:
-            _currentPanelType = PanelType.none;
-            break;
-          case ChatBottomPanelType.keyboard:
-            _currentPanelType = PanelType.keyboard;
-            break;
-          case ChatBottomPanelType.other:
-            if (data == null) return;
-            switch (data) {
-              case PanelType.emoji:
-                _currentPanelType = PanelType.emoji;
-                break;
-              default:
-                _currentPanelType = PanelType.none;
-                break;
-            }
-            break;
-        }
-      },
-      panelBgColor: Theme.of(context).colorScheme.onInverseSurface,
-    );
-  }
-
-  Widget _buildEmojiPickerPanel() {
-    double height = 300;
-    final keyboardHeight = _controller.keyboardHeight;
-    if (keyboardHeight != 0) {
-      height = max(200, keyboardHeight);
-    }
-
-    return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      height: height,
-      child: EmotePanel(
-        index: 1,
-        onClick: (emoji) {
-          if (!_visibleSend) {
-            _visibleSend = true;
-            _enableSend.add(true);
-          }
-          _onChooseEmote(emoji);
-        },
-      ),
-    );
-  }
-
-  Widget _buildInputView() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      color: Theme.of(context).colorScheme.onInverseSurface,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          IconButton(
-            onPressed: () async {
-              updatePanelType(
-                PanelType.emoji == _currentPanelType
-                    ? PanelType.keyboard
-                    : PanelType.emoji,
-              );
-            },
-            icon: const Icon(Icons.emoji_emotions_outlined),
-            tooltip: '表情',
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: ChatMenuType.profile, child: Text('查看用户')),
+              PopupMenuItem(value: ChatMenuType.block, child: Text('屏蔽')),
+              PopupMenuItem(value: ChatMenuType.report, child: Text('举报')),
+            ],
           ),
-          Expanded(
-            child: Listener(
-              onPointerUp: (event) {
-                // Currently it may be emojiPanel.
-                if (_readOnly) {
-                  updatePanelType(PanelType.keyboard);
+        ]),
+        body: SafeArea(
+            top: false,
+            child: Column(children: [
+              Expanded(
+                  child: Listener(
+                      onPointerDown: (_) => hidePanel(), child: _buildList())),
+              _buildInputView(),
+              _buildPanelContainer(),
+            ])),
+      );
+
+  Widget _buildList() => Obx(() {
+        final rows = _chatController.messages;
+        if (rows.isEmpty) return Center(child: buildBody(_chatController));
+        final historyError = _chatController.loadingState.value is Error;
+        return ListView.builder(
+          controller: _chatController.scrollController,
+          reverse: true,
+          padding: EdgeInsets.zero,
+          itemCount: rows.length + (historyError ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == rows.length) {
+              return ListTile(
+                title:
+                    Text((_chatController.loadingState.value as Error).errMsg),
+                trailing: TextButton(
+                    onPressed: () {
+                      _chatController.onReset();
+                      _chatController.setLoadingState(LoadingState.loading());
+                      _chatController.onGetData();
+                    },
+                    child: const Text('重新加载聊天记录')),
+              );
+            }
+            if (index == rows.length - 1 &&
+                !_chatController.isEnd &&
+                !_chatController.isLoading &&
+                _chatController.loadingState.value is Success) {
+              _chatController.onGetData(false);
+            }
+            final data = rows[index];
+            if (data.entityType == 'messageExtra') {
+              return ChatTimeCard(text: data.title ?? '');
+            }
+            if (data.entityType != 'message') {
+              return const ListTile(title: Text('暂不支持此消息类型'));
+            }
+            final delivery = _chatController.deliveryFor(data);
+            return ChatCard(
+              key: ValueKey(data.id),
+              data: data,
+              isLeft: data.fromuid.toString() != GlobalData().uid,
+              localImage: delivery?.state == DeliveryState.sent
+                  ? null
+                  : delivery?.image,
+              sending: delivery?.state == DeliveryState.sending,
+              failed: delivery?.state == DeliveryState.failed,
+              onRetry: delivery == null ? null : () => _showFailure(delivery),
+              onGetImageUrl: () => _chatController.onGetImageUrl(data.id),
+              onViewImage: () {
+                if (delivery?.image != null &&
+                    delivery?.state != DeliveryState.sent) {
+                  showDialog<void>(
+                      context: context,
+                      builder: (context) => Dialog(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                Flexible(
+                                    child: InteractiveViewer(
+                                        child: Image.file(
+                                            File(delivery!.image!.path)))),
+                                TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('关闭')),
+                              ])));
+                  return;
+                }
+                if (data.messagePic?.startsWith('http') == true) {
+                  Get.toNamed('/imageview', arguments: {
+                    'imgList': [data.messagePic!]
+                  });
+                } else {
+                  _chatController.retryImage(data.id);
                 }
               },
-              child: StreamBuilder(
+              onLongPress: () {
+                if (delivery?.state == DeliveryState.sending) return;
+                if (delivery?.state == DeliveryState.failed) {
+                  _showFailure(delivery!);
+                  return;
+                }
+                showDialog<void>(
+                    context: context,
+                    builder: (context) => SimpleDialog(
+                          children: [
+                            if (!data.message.isNullOrEmpty)
+                              SimpleDialogOption(
+                                  child: const Text('复制'),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    Utils.copyText(
+                                        Utils.parseHtmlString(data.message!));
+                                  }),
+                            SimpleDialogOption(
+                                child: const Text('删除'),
+                                onPressed: () async {
+                                  Navigator.pop(context);
+                                  final confirmed = await showDialog<bool>(
+                                      context: this.context,
+                                      builder: (context) => AlertDialog(
+                                              title: const Text('删除消息？'),
+                                              content: const Text('删除后无法恢复。'),
+                                              actions: [
+                                                TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                    child: const Text('取消')),
+                                                TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    child: const Text('删除')),
+                                              ]));
+                                  if (confirmed == true && mounted) {
+                                    _chatController.onDeleteMsg(data.id);
+                                  }
+                                }),
+                          ],
+                        ));
+              },
+            );
+          },
+        );
+      });
+
+  Future<void> _showFailure(ChatDelivery delivery) async {
+    final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text(delivery.unconfirmed ? '发送结果未确认' : '消息发送失败'),
+              content: Text(
+                  '${delivery.error ?? '请稍后重试'}${delivery.unconfirmed ? '\n请先检查聊天记录，再次发送可能产生重复消息。' : ''}'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, 'discard'),
+                    child: const Text('移除此条')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, 'retry'),
+                    child: const Text('重新发送')),
+              ],
+            ));
+    if (!mounted) return;
+    if (result == 'retry') _chatController.retry(_uid, delivery);
+    if (result == 'discard') _chatController.discard(delivery);
+  }
+
+  Widget _buildInputView() => Container(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+        color: Theme.of(context).colorScheme.onInverseSurface,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Listener(
+              onPointerUp: (_) {
+                if (_readOnly) updatePanelType(PanelType.keyboard);
+              },
+              child: StreamBuilder<bool>(
                 initialData: false,
                 stream: _readOnlyStream.stream,
-                builder: (context, snapshot) => TextField(
+                builder: (_, snapshot) => TextField(
                   readOnly: snapshot.data ?? false,
                   focusNode: _focusNode,
                   controller: _chatController.editingController,
                   minLines: 1,
                   maxLines: 4,
-                  onChanged: (value) {
-                    bool isNotEmpty = value.replaceAll('\n', '').isNotEmpty;
-                    if (isNotEmpty && !_visibleSend) {
-                      _visibleSend = true;
-                      _enableSend.add(true);
-                    } else if (!isNotEmpty && _visibleSend) {
-                      _visibleSend = false;
-                      _enableSend.add(false);
-                    }
-                  },
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
-                    filled: true,
-                    hintText: '写私信...',
-                    fillColor: Theme.of(context).colorScheme.surface,
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide.none,
-                      borderRadius: BorderRadius.circular(4),
-                      gapPadding: 0,
-                    ),
-                    contentPadding: const EdgeInsets.all(10),
-                  ),
+                      filled: true,
+                      hintText: '写私信...',
+                      fillColor: Theme.of(context).colorScheme.surface,
+                      border: OutlineInputBorder(
+                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.all(10)),
                 ),
-              ),
-            ),
-          ),
-          StreamBuilder(
-              stream: _enableSend.stream,
-              builder: (context, snapshot) {
-                return IconButton(
-                  onPressed: () async {
-                    if (snapshot.data == true) {
-                      _chatController.onSendMessage(_uid);
-                    } else {
-                      XFile? pickedFile = await _imagePicker.pickImage(
-                        source: ImageSource.gallery,
-                        imageQuality: 100,
-                      );
-                      if (pickedFile != null) {
-                        SmartDialog.showLoading(msg: '正在加载');
-                        Uint8List imageBytes = await pickedFile.readAsBytes();
-                        ui.Image image = await decodeImageFromList(imageBytes);
-                        int width = image.width;
-                        int height = image.height;
-                        Digest md5Hash = md5.convert(imageBytes);
-                        String mimeType =
-                            lookupMimeType(pickedFile.path) ?? 'image/png';
-                        String name =
-                            '${const Uuid().v1().replaceAll('-', '')}.${mimeType.replaceFirst('image/', '')}';
-                        OssUploadModel uploadModel = OssUploadModel(
-                          name: name,
-                          resolution: '${width}x$height',
-                          md5: md5Hash.toString(),
-                        );
-                        OssDatum? data = await OssUtil.onPostOSSUploadPrepare(
-                          'message',
-                          'message',
-                          [uploadModel],
-                          uid: _uid,
-                        );
-                        if (data != null) {
-                          SmartDialog.showLoading(msg: '正在上传图片');
-                          AliyunOssClient client = AliyunOssClient(
-                            accessKeyId: data.uploadPrepareInfo!.accessKeyId!,
-                            accessKeySecret:
-                                data.uploadPrepareInfo!.accessKeySecret!,
-                            securityToken:
-                                data.uploadPrepareInfo!.securityToken!,
-                          );
-                          AliyunOssConfig config = AliyunOssConfig(
-                            endpoint: data.uploadPrepareInfo!.endPoint!,
-                            bucket: data.uploadPrepareInfo!.bucket!,
-                            directory: "message",
-                          );
-                          AliyunOssResult result = await client.upload(
-                            id: '1',
-                            config: config,
-                            ossFileName: data.fileInfo![0].uploadFileName!
-                                .replaceFirst('message', ''),
-                            filePath: pickedFile.path,
-                          );
-                          if (result.state == AliyunOssResultState.success) {
-                            _chatController.onSendMessage(
-                              _uid,
-                              pic: '/${data.fileInfo![0].uploadFileName}',
-                            );
-                          } else if (result.state ==
-                              AliyunOssResultState.fail) {
-                            SmartDialog.dismiss();
-                            SmartDialog.showToast('图片上传失败，请检查网络后重试');
-                          }
-                        }
-                      }
-                    }
-                  },
-                  icon: Icon(snapshot.data == true
-                      ? Icons.send
-                      : Icons.add_photo_alternate_outlined),
-                  tooltip: snapshot.data == true ? '发送' : '图片',
-                );
-              }),
-        ],
-      ),
-    );
-  }
-
-  updatePanelType(PanelType type) async {
-    final isSwitchToKeyboard = PanelType.keyboard == type;
-    final isSwitchToEmojiPanel = PanelType.emoji == type;
-    bool isUpdated = false;
-    switch (type) {
-      case PanelType.keyboard:
-        updateInputView(isReadOnly: false);
-        break;
-      case PanelType.emoji:
-        isUpdated = updateInputView(isReadOnly: true);
-        break;
-      default:
-        break;
-    }
-
-    updatePanelTypeFunc() {
-      _controller.updatePanelType(
-        isSwitchToKeyboard
-            ? ChatBottomPanelType.keyboard
-            : ChatBottomPanelType.other,
-        data: type,
-        forceHandleFocus: isSwitchToEmojiPanel
-            ? ChatBottomHandleFocus.requestFocus
-            : ChatBottomHandleFocus.none,
+              )),
+          Row(children: [
+            IconButton(
+                tooltip: '表情',
+                icon: const Icon(Icons.emoji_emotions_outlined),
+                onPressed: () => updatePanelType(
+                    _currentPanelType == PanelType.emoji
+                        ? PanelType.keyboard
+                        : PanelType.emoji)),
+            IconButton(
+                tooltip: '图片',
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                onPressed: _pickingImage ? null : _pickImage),
+            IconButton(
+                tooltip: '动态',
+                icon: const Icon(Icons.feed_outlined),
+                onPressed: _pickFeed),
+            const Spacer(),
+            ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _chatController.editingController,
+                builder: (_, value, __) => IconButton(
+                    tooltip: '发送',
+                    icon: const Icon(Icons.send),
+                    onPressed: value.text.trim().isEmpty
+                        ? null
+                        : () => _chatController.onSendMessage(_uid))),
+          ]),
+        ]),
       );
+
+  Future<void> _pickImage() async {
+    if (_pickingImage) return;
+    _pickingImage = true;
+    final generation = GlobalData().sessionGeneration;
+    try {
+      await hidePanel();
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null ||
+          !mounted ||
+          generation != GlobalData().sessionGeneration) return;
+      _chatController.onSendMessage(_uid, image: file);
+    } catch (_) {
+      if (mounted) SmartDialog.showToast('无法打开图片，请检查相册权限或稍后重试');
+    } finally {
+      _pickingImage = false;
+    }
+  }
+
+  Future<void> _pickFeed() async {
+    await hidePanel();
+    if (!mounted) return;
+    final generation = GlobalData().sessionGeneration;
+    final url = await showDialog<String>(
+        context: context, builder: (_) => const ChatFeedPicker());
+    if (url != null &&
+        mounted &&
+        generation == GlobalData().sessionGeneration) {
+      _chatController.onSendMessage(_uid, message: url);
+    }
+  }
+
+  Widget _buildPanelContainer() => ChatBottomPanelContainer<PanelType>(
+        controller: _panel,
+        inputFocusNode: _focusNode,
+        panelBgColor: Theme.of(context).colorScheme.onInverseSurface,
+        otherPanelWidget: (type) => type == PanelType.emoji
+            ? SizedBox(
+                height: max(240,
+                    _panel.keyboardHeight == 0 ? 300 : _panel.keyboardHeight),
+                child: EmotePanel(index: 1, onClick: _onChooseEmote),
+              )
+            : const SizedBox.shrink(),
+        onPanelTypeChange: (type, data) {
+          _currentPanelType = type == ChatBottomPanelType.keyboard
+              ? PanelType.keyboard
+              : type == ChatBottomPanelType.other
+                  ? data ?? PanelType.none
+                  : PanelType.none;
+        },
+      );
+
+  void updatePanelType(PanelType type) {
+    final keyboard = type == PanelType.keyboard;
+    final updated = updateInputView(isReadOnly: !keyboard);
+    void update() {
+      if (!mounted) return;
+      _panel.updatePanelType(
+          keyboard ? ChatBottomPanelType.keyboard : ChatBottomPanelType.other,
+          data: type,
+          forceHandleFocus: keyboard
+              ? ChatBottomHandleFocus.none
+              : ChatBottomHandleFocus.requestFocus);
     }
 
-    if (isUpdated) {
-      // Waiting for the input view to update.
-      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-        updatePanelTypeFunc();
-      });
+    if (updated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => update());
     } else {
-      updatePanelTypeFunc();
+      update();
     }
   }
 
-  hidePanel() async {
-    if (_focusNode.hasFocus) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      _focusNode.unfocus();
-    }
+  Future<void> hidePanel() async {
+    _focusNode.unfocus();
     updateInputView(isReadOnly: false);
-    if (ChatBottomPanelType.none == _controller.currentPanelType) return;
-    _controller.updatePanelType(ChatBottomPanelType.none);
+    if (_panel.currentPanelType != ChatBottomPanelType.none) {
+      _panel.updatePanelType(ChatBottomPanelType.none);
+    }
   }
 
-  bool updateInputView({
-    required bool isReadOnly,
-  }) {
-    if (_readOnly != isReadOnly) {
-      _readOnly = isReadOnly;
-      _readOnlyStream.add(_readOnly);
-      return true;
-    }
-    return false;
+  bool updateInputView({required bool isReadOnly}) {
+    if (_readOnly == isReadOnly) return false;
+    _readOnly = isReadOnly;
+    _readOnlyStream.add(isReadOnly);
+    return true;
   }
 
   void _onChooseEmote(String emoji) {
-    final int cursorPosition =
-        _chatController.editingController.selection.baseOffset;
-    final String currentText = _chatController.editingController.text;
-    final String newText = currentText.substring(0, cursorPosition) +
-        emoji +
-        currentText.substring(cursorPosition);
-    _chatController.editingController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: cursorPosition + emoji.length),
-    );
+    final editor = _chatController.editingController;
+    final selection = editor.selection;
+    final start = selection.isValid ? selection.start : editor.text.length;
+    final end = selection.isValid ? selection.end : start;
+    editor.value = TextEditingValue(
+        text: editor.text.replaceRange(start, end, emoji),
+        selection: TextSelection.collapsed(offset: start + emoji.length));
   }
 }

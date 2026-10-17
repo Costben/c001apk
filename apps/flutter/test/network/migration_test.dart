@@ -30,6 +30,9 @@ void main() {
       SettingsBoxKey.userAgent: 'old +CoolMarket/13.4.1-2312121-universal',
       SettingsBoxKey.selectedTheme: 2,
       SettingsBoxKey.token: 'synthetic-account-value',
+      SettingsBoxKey.uid: '123',
+      SettingsBoxKey.username: 'synthetic-user',
+      SettingsBoxKey.isLogin: true,
     });
     for (final name in [
       'favFeed',

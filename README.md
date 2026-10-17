@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/banner.png" alt="c001apk — 让酷安，轻一点。" width="100%">
+<img src="docs/media/banner.svg" alt="c001apk — 让酷安，轻一点。" width="100%">
 
 # c001apk
 
@@ -42,37 +42,45 @@
   </tbody>
 </table>
 
-## 界面预览
+## 界面预览（2026-10-16，1.2.5-release）
 
 <p align="center">
-  <img src="docs/media/screenshots/android-home.avif" width="31%" alt="Android 首页：动态列表与底部导航">
-  <img src="docs/media/screenshots/android-article.avif" width="31%" alt="Android 图文详情：文章封面与正文">
-  <img src="docs/media/screenshots/android-settings.avif" width="31%" alt="Android 中文设置：字体、历史记录与缓存管理">
+  <img src="docs/media/screenshots/android-home-1.2.5.avif" width="31%" alt="Android 首页：动态列表与主页、关注、我的导航">
+  <img src="docs/media/screenshots/android-article-1.2.5.avif" width="31%" alt="Android 图文详情：文章封面与正文">
+  <img src="docs/media/screenshots/android-settings-1.2.5.avif" width="31%" alt="Android 分类设置：外观、关注、隐私、存储与账号管理">
 </p>
-<p align="center"><sub>Android · 首页 / 图文详情 / 中文设置</sub></p>
+<p align="center"><sub>Android · 首页 / 图文详情 / 分类设置</sub></p>
 
 <p align="center">
-  <img src="docs/media/screenshots/windows-home.avif" width="96%" alt="Windows 桌面端首页：侧边导航与宽屏内容区域">
+  <img src="docs/media/screenshots/windows-home-1.2.5.avif" width="96%" alt="Windows 桌面端首页：侧边导航与宽屏内容区域">
 </p>
 <p align="center"><sub>Windows · 桌面端首页</sub></p>
 
-以上为当前 Flutter 调试版的真实截图，界面随主题设置变化。
+<p align="center">
+  <img src="docs/media/screenshots/windows-settings-1.2.5.avif" width="96%" alt="Windows 分类设置：宽窗口下并排显示分类与外观选项">
+</p>
+<p align="center"><sub>Windows · 分类设置与宽窗口布局</sub></p>
 
-## 下载与进度
+## 下载安装
 
 正式安装包可从 [Releases](https://github.com/TG-Twilight/c001apk/releases) 获取，也可以参照 [开发指南](docs/DEVELOPMENT.md) 自行构建。
 
 云端构建包可从 [Actions](https://github.com/TG-Twilight/c001apk/actions/workflows/build.yml) 的 Artifacts 下载，平台、签名与手动构建方式见 [云端构建指南](docs/CI.md)。
 
+## 开发进度
+
 - [x] 更新公共 API 请求协议、签名与错误处理。
 - [x] 完成现有 Flutter 界面的一轮简体中文汉化。
 - [x] 恢复主要游客浏览流程，为部分受限动态、文章提供公开详情回退。
 - [x] 基本修复账号登录与状态管理，补齐验证码交互。
+- [x] 本地关注与悄悄关注、多账号管理及游客模式切换。
+- [x] 主导航与分类设置调整，新增 c001apk 自身更新检测。
+- [x] 修复评论完成验证后仍无法加载，更新检测改为每次冷启动检查一次。
 - [ ] 继续完善验证码放行与部分账号操作。
 - [ ] Android 迁移到 Kotlin / Jetpack Compose，采用 [coui17](https://github.com/Costben/coui17) ColorOS 风格组件库：已完成主导航与首页列表，见 [开发指南](docs/DEVELOPMENT.md#android-compose-应用)。
 - [ ] 完善 Flutter 桌面端随窗口尺寸变化的自适应布局与图片保存。
 
-当前重点维护 **Android 与 Windows**，代码仍为 Flutter。Android 包名为 `app.awavenue.c001apk`；Linux 已通过云端 release 构建，iOS 已通过无签名编译检查，运行体验仍待验收。新包与旧包独立安装，登录及本地数据不会自动迁移。
+当前重点维护 **Android 与 Windows**，代码仍为 Flutter。Android 包名为 `app.awavenue.c001apk`；Linux 已通过云端 release 构建，iOS `arm64` 未签名 IPA 已随 [1.2.6-release](https://github.com/TG-Twilight/c001apk/releases/tag/1.2.6-release) 提供，安装前需自行签名。Linux / iOS 运行体验仍待验收。新包与旧包独立安装，登录及本地数据不会自动迁移。
 
 > [!NOTE]
 > 部分内容仍受登录、验证码和服务端接口限制，验证码放行与部分账号操作仍需继续完善。Windows 暂不支持应用内直接保存图片，可在浏览器中打开后保存。

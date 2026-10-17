@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../constants/constants.dart';
 import '../../components/app_logo.dart';
+import '../../components/update_check_tile.dart';
 import '../../utils/utils.dart';
 
 class AboutPage extends StatelessWidget {
@@ -29,7 +30,7 @@ class AboutPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.all_inclusive),
             title: const Text(Constants.APP_NAME),
-            subtitle: const Text('仅供测试'),
+            subtitle: const Text('一个轻量的非官方酷安客户端'),
             onTap: () {},
           ),
           ListTile(
@@ -44,6 +45,7 @@ class AboutPage extends StatelessWidget {
             subtitle: const Text(Constants.URL_SOURCE_CODE),
             onTap: () => Utils.launchURL(Constants.URL_SOURCE_CODE),
           ),
+          const UpdateCheckTile(),
           ListTile(
             leading: const Icon(Icons.source_outlined),
             title: const Text('开源许可证'),

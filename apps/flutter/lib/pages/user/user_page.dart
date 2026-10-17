@@ -92,6 +92,7 @@ class _UserPageState extends State<UserPage> {
         return UserInfoCard(
           data: userState.response!,
           onFollow: _userController.onFollow,
+          onLocalFollow: _userController.onLocalFollow,
         );
     }
     return const CircularProgressIndicator();

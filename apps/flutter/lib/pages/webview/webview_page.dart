@@ -8,11 +8,13 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 import '../../constants/constants.dart';
+import '../../logic/accounts/account_store.dart';
 import '../../utils/cache_util.dart';
 import '../../utils/extensions.dart';
 import '../../utils/storage_util.dart';
 import '../../utils/utils.dart';
 import '../../utils/web_session.dart';
+import '../../utils/web_runtime.dart';
 
 enum WebviewMenuItem {
   Refresh,
@@ -44,33 +46,91 @@ class _WebviewPageState extends State<WebviewPage> {
   final _progressStream = StreamController<double>();
 
   InAppWebViewController? _webViewController;
-  late final Future<void> _cookiesReady;
+  late Future<void> _cookiesReady;
+  bool _savingLogin = false;
+  String? _pageError;
 
   @override
   void initState() {
     super.initState();
-    _cookiesReady = prepareWebSession((origin, domain, name, value) async {
-      await CookieManager().setCookie(
-          url: WebUri.uri(origin),
-          domain: domain,
-          name: name,
-          value: value,
-          isSecure: true);
-    }, removeCookie: (name) async {
-      await CookieManager().deleteCookie(
-          url: WebUri('https://www.coolapk.com/'),
-          domain: '.coolapk.com',
-          name: name);
-      for (final host in [
-        'www.coolapk.com',
-        'account.coolapk.com',
-        'coolapk.com'
-      ]) {
-        await CookieManager().deleteCookie(
-            url: WebUri('https://$host/'), domain: host, name: name);
-      }
-    });
+    _cookiesReady = _prepareSession();
   }
+
+  Future<void> _prepareSession() async {
+    await WebRuntime.ensureReady();
+    await prepareWebSession(
+        (origin, domain, name, value) async {
+          await WebRuntime.cookies.setCookie(
+              url: WebUri.uri(origin),
+              domain: domain,
+              name: name,
+              value: value,
+              isSecure: true);
+        },
+        includeAccount: !_isLogin,
+        removeCookie: (name) async {
+          await WebRuntime.cookies.deleteCookie(
+              url: WebUri('https://www.coolapk.com/'),
+              domain: '.coolapk.com',
+              name: name);
+          for (final host in [
+            'www.coolapk.com',
+            'account.coolapk.com',
+            'coolapk.com'
+          ]) {
+            await WebRuntime.cookies.deleteCookie(
+                url: WebUri('https://$host/'), domain: host, name: name);
+          }
+        });
+  }
+
+  Future<void> _completeLogin(WebUri? url) async {
+    // Only the official top-level landing page can complete a login. Read
+    // cookies after navigation as WebView2 commits redirect cookies then.
+    if (!_isLogin ||
+        _savingLogin ||
+        !mounted ||
+        url == null ||
+        url.scheme != 'https' ||
+        url.host != 'www.coolapk.com' ||
+        (url.path.isNotEmpty && url.path != '/')) return;
+    _savingLogin = true;
+    try {
+      final cookies = await WebRuntime.cookies
+          .getCookies(url: WebUri(Constants.URL_COOLAPK));
+      final values = {
+        for (final cookie in cookies) cookie.name: cookie.value.toString()
+      };
+      if (!mounted ||
+          ['uid', 'username', 'token'].any((key) => values[key].isNullOrEmpty)) {
+        return;
+      }
+      await AccountStore().saveLogin(
+          uid: values['uid']!,
+          username: values['username']!,
+          token: values['token']!);
+      if (mounted) Get.back(result: true);
+    } catch (_) {
+      if (mounted) SmartDialog.showToast('无法保存网页登录状态，请重试');
+    } finally {
+      _savingLogin = false;
+    }
+  }
+
+  Widget _error(String message) => Center(
+          child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(message),
+          const SizedBox(height: 16),
+          FilledButton(
+              onPressed: () => setState(() {
+                    _pageError = null;
+                    _cookiesReady = _prepareSession();
+                  }),
+              child: const Text('重新加载')),
+        ]),
+      ));
 
   @override
   void dispose() {
@@ -164,9 +224,11 @@ class _WebviewPageState extends State<WebviewPage> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return const Center(child: Text('网页登录状态准备失败，请返回后重试'));
+              return _error(WebRuntime.errorMessage(snapshot.error));
             }
+            if (_pageError != null) return _error(_pageError!);
             return InAppWebView(
+              webViewEnvironment: WebRuntime.environment,
               initialSettings: InAppWebViewSettings(
                 useHybridComposition: false,
                 mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
@@ -182,6 +244,18 @@ class _WebviewPageState extends State<WebviewPage> {
               }),
               onWebViewCreated: (InAppWebViewController controller) {
                 _webViewController = controller;
+              },
+              onLoadStop: (_, url) => _completeLogin(url),
+              onReceivedError: (_, request, error) {
+                if (request.isForMainFrame == true && mounted) {
+                  setState(() => _pageError = '网页加载失败，请检查网络后重新加载');
+                }
+              },
+              onReceivedHttpError: (_, request, response) {
+                if (request.isForMainFrame == true && mounted) {
+                  setState(() => _pageError =
+                      '网页暂时无法访问（HTTP ${response.statusCode}），请稍后重试');
+                }
               },
               onProgressChanged: (controller, progress) {
                 if (!_progressStream.isClosed) {
@@ -205,39 +279,6 @@ class _WebviewPageState extends State<WebviewPage> {
                     ),
                   );
                   ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                  return NavigationActionPolicy.CANCEL;
-                }
-
-                if (_isLogin && url == Constants.URL_COOLAPK) {
-                  String? uid = (await CookieManager().getCookie(
-                    url: WebUri.uri(Uri.parse(Constants.URL_COOLAPK)),
-                    name: 'uid',
-                  ))
-                      ?.value
-                      ?.toString();
-                  String? username = (await CookieManager().getCookie(
-                    url: WebUri.uri(Uri.parse(Constants.URL_COOLAPK)),
-                    name: 'username',
-                  ))
-                      ?.value
-                      ?.toString();
-                  String? token = (await CookieManager().getCookie(
-                    url: WebUri.uri(Uri.parse(Constants.URL_COOLAPK)),
-                    name: 'token',
-                  ))
-                      ?.value
-                      ?.toString();
-                  if (!uid.isNullOrEmpty &&
-                      !username.isNullOrEmpty &&
-                      !token.isNullOrEmpty) {
-                    GStorage.setUid(uid!);
-                    GStorage.setUsername(username!);
-                    GStorage.setToken(token!);
-                    GStorage.setIsLogin(true);
-                    Get.back(result: true);
-                  } else {
-                    Get.back(result: false);
-                  }
                   return NavigationActionPolicy.CANCEL;
                 }
 

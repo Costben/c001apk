@@ -14,9 +14,11 @@ class AppListController extends GetxController with StateMixin<List<AppInfo>> {
   }
 
   Future<void> _getInstalledApps() async {
+    if (isClosed) return;
     try {
       List<dynamic> installedApps =
           await platform.invokeMethod('getInstalledApps');
+      if (isClosed) return;
       List<AppInfo> parseList = AppInfo.parseList(installedApps);
       if (parseList.isNotEmpty) {
         change(parseList, status: RxStatus.success());
@@ -24,6 +26,7 @@ class AppListController extends GetxController with StateMixin<List<AppInfo>> {
         change(null, status: RxStatus.empty());
       }
     } on PlatformException catch (e) {
+      if (isClosed) return;
       change(null, status: RxStatus.error(e.message));
       return;
     }

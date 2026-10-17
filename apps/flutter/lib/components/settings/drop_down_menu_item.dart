@@ -10,12 +10,14 @@ class DropDownMenuItem extends StatefulWidget {
     required this.title,
     required this.boxKey,
     required this.items,
+    this.subtitle,
     this.enabled = true,
     this.forceAppUpdate = false,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final String boxKey;
   final List<DropdownMenuItem<int>> items;
   final bool enabled;
@@ -40,7 +42,12 @@ class _DropDownMenuItemState extends State<DropDownMenuItem> {
       enabled: widget.enabled,
       leading: Icon(widget.icon),
       title: Text(widget.title),
+      subtitle: widget.subtitle == null ? null : Text(widget.subtitle!),
       trailing: DropdownButton<int>(
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: widget.enabled
+                ? Theme.of(context).colorScheme.onSurface
+                : Theme.of(context).disabledColor),
         value: value,
         onChanged: !widget.enabled
             ? null

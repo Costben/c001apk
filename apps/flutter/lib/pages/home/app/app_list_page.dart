@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
@@ -23,6 +25,7 @@ class _AppListPageState extends State<AppListPage>
   final _appListController = Get.put(AppListController());
   final _returnTopController = Get.find<ReturnTopController>(tag: 'home');
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  StreamSubscription<int>? _returnTopSubscription;
 
   late final bool _checkUpdate = GStorage.checkUpdate;
   AnimationController? _fabAnimationCtr;
@@ -32,7 +35,7 @@ class _AppListPageState extends State<AppListPage>
   void initState() {
     super.initState();
 
-    _returnTopController.index.listen((index) {
+    _returnTopSubscription = _returnTopController.index.listen((index) {
       if (index == 1 && _scrollController.hasClients) {
         _animateToTop();
       }
@@ -76,8 +79,8 @@ class _AppListPageState extends State<AppListPage>
 
   @override
   void dispose() {
-    _scrollController.removeListener(() {});
-    _scrollController.dispose;
+    _returnTopSubscription?.cancel();
+    _scrollController.dispose();
     _fabAnimationCtr?.dispose();
     Get.delete<AppListController>();
     super.dispose();

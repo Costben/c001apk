@@ -53,6 +53,20 @@ void main() {
     }, removeCookie: (_) async {});
     expect(writes, isEmpty);
   });
+  test('adding an account clears web auth without seeding the current login',
+      () async {
+    GlobalData().isLogin = true;
+    GlobalData().uid = '123';
+    GlobalData().token = 'synthetic-token';
+    final writes = <String>[];
+    final removed = <String>[];
+    await prepareWebSession((_, __, name, value) async => writes.add(name),
+        includeAccount: false, removeCookie: (name) async => removed.add(name));
+    expect(writes, isEmpty);
+    expect(removed, containsAll(['uid', 'token', 'SESSID']));
+    expect(GlobalData().uid, '123');
+    expect(GlobalData().isLogin, isTrue);
+  });
   test(
       'guest web navigation clears retained authentication but preserves other cookies',
       () async {

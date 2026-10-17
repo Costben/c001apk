@@ -10,12 +10,12 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart';
 
 import '../../constants/constants.dart';
+import '../../logic/accounts/account_store.dart';
 import '../../logic/model/login/login_response.dart';
 import '../../logic/network/network_repo.dart';
 import '../../logic/network/api_failure.dart';
 import '../../utils/extensions.dart';
 import '../../utils/global_data.dart';
-import '../../utils/storage_util.dart';
 import '../../utils/utils.dart';
 
 class LoginPage extends StatefulWidget {
@@ -27,6 +27,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _showPassword = false;
+  bool _submitting = false;
+  bool _webLoginOpen = false;
   final _showPasswordStream = StreamController<bool>();
   final _showClearAccount = StreamController<bool>();
   final _showClearCaptcha = StreamController<bool>();
@@ -46,6 +48,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    GlobalData().loginSession = '';
     _onGetLoginParam(urlPreGetParam);
   }
 
@@ -65,7 +68,9 @@ class _LoginPageState extends State<LoginPage> {
       Response response = await NetworkRepo.getLoginParam(
           '/auth/showCaptchaImage?${DateTime.now().microsecondsSinceEpoch ~/ 1000}',
           Options(responseType: ResponseType.bytes));
-      _showCaptcha = true;
+      if (!mounted) return;
+      setState(() => _showCaptcha = true);
+      _captchaController.clear();
       _captchaImg.add(response.data);
     } catch (e) {
       SmartDialog.showToast('无法获取验证码：${ApiFailure.fromError(e).message}');
@@ -73,6 +78,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _beforeLogin() {
+    if (_submitting || _webLoginOpen || _requestHash.isNullOrEmpty) return;
     if (_accountController.text.isEmpty || _pwdController.text.isEmpty) {
       SmartDialog.showToast('账号或密码为空');
     } else {
@@ -81,12 +87,15 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _onLogin() async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
     try {
       Response response = await NetworkRepo.onLogin(
           _requestHash!,
           _accountController.text,
           _pwdController.text,
           _captchaController.text);
+      if (!mounted) return;
       LoginResponse loginResponse =
           LoginResponse.fromJson(jsonDecode(response.data));
       if (loginResponse.status == 1) {
@@ -97,30 +106,54 @@ class _LoginPageState extends State<LoginPage> {
         if (!uid.isNullOrEmpty &&
             !username.isNullOrEmpty &&
             !token.isNullOrEmpty) {
-          GStorage.setUid(uid!);
-          GStorage.setUsername(username!);
-          GStorage.setToken(token!);
-          GStorage.setIsLogin(true);
+          if (!mounted) return;
+          await AccountStore()
+              .saveLogin(uid: uid!, username: username!, token: token!);
           SmartDialog.showToast('登录成功');
-          Get.back(result: true);
+          if (mounted) Get.back(result: true);
         }
       } else {
         if (!loginResponse.message.isNullOrEmpty) {
           SmartDialog.showToast(loginResponse.message!);
         }
-        if (loginResponse.message == '图形验证码不能为空", "图形验证码错误' ||
+        if (['图形验证码不能为空', '图形验证码错误'].contains(loginResponse.message) ||
             (_showCaptcha && loginResponse.message == '密码错误')) {
-          _onGetCaptcha();
+          await _onGetCaptcha();
+        } else if (Utils.isSupportWebview() &&
+            (loginResponse.message?.contains('人机') == true ||
+                loginResponse.messageStatus == 'err_request_captcha_v2')) {
+          await _openWebLogin();
         }
       }
     } catch (e) {
       SmartDialog.showToast('登录失败：${ApiFailure.fromError(e).message}');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _openWebLogin() async {
+    if (_webLoginOpen) return;
+    _webLoginOpen = true;
+    try {
+      final result = await Get.toNamed('/webview', parameters: {
+        'url': Constants.URL_LOGIN,
+        'isLogin': '1',
+      });
+      if (!mounted) return;
+      if (result == true) {
+        SmartDialog.showToast('登录成功');
+        Get.back(result: true);
+      }
+    } finally {
+      _webLoginOpen = false;
     }
   }
 
   Future<void> _onGetLoginParam(String url) async {
     try {
       Response response = await NetworkRepo.getLoginParam(url);
+      if (!mounted) return;
       if (url == urlGetParam) {
         try {
           dom.Document document = parse(response.data);
@@ -133,9 +166,11 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
       try {
-        String? SESSID = response.headers['Set-Cookie']?[0];
-        if (SESSID != null) {
-          GlobalData().SESSID = SESSID.substring(0, SESSID.indexOf(';'));
+        String? sessionCookie = response.headers['Set-Cookie']
+            ?.where((c) => c.startsWith('SESSID='))
+            .firstOrNull;
+        if (sessionCookie != null) {
+          GlobalData().loginSession = sessionCookie.split(';').first;
         }
       } catch (e) {
         SmartDialog.showToast('无法获取登录会话，请稍后重试');
@@ -150,6 +185,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    GlobalData().loginSession = '';
+    _enableLogin.close();
     _showPasswordStream.close();
     _showClearAccount.close();
     _showClearCaptcha.close();
@@ -174,27 +211,21 @@ class _LoginPageState extends State<LoginPage> {
         actions: [
           if (Utils.isSupportWebview())
             TextButton(
-              onPressed: () async {
-                dynamic result = await Get.toNamed('/webview', parameters: {
-                  'url': Constants.URL_LOGIN,
-                  'isLogin': '1',
-                });
-                if (result == true) {
-                  SmartDialog.showToast('登录成功');
-                  Get.back(result: true);
-                } else if (result == false) {
-                  SmartDialog.showToast('网页登录失败');
-                }
-              },
+              onPressed: _submitting ? null : _openWebLogin,
               child: const Text('网页登录'),
             ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (Utils.isSupportWebview())
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text('遇到人机验证或无法直接登录时，请使用右上角的“网页登录”，在酷安网页中完成验证与登录。'),
+              ),
             TextField(
               controller: _accountController,
               autofocus: true,

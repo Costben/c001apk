@@ -50,6 +50,7 @@ app.*.map.json
 .local/
 AGENTS.md
 MEMORY.md
+/更新日志-2026-10-16.md
 
 # Local credentials and signing material
 .env
