@@ -1,7 +1,5 @@
 package app.awavenue.c001apk.ui.feed.detail
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,11 +33,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,8 +65,6 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
-import io.github.suqi8.coui.kmp.basic.ChipTabData
-import io.github.suqi8.coui.kmp.basic.ChipTabGroup
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
@@ -82,6 +75,8 @@ import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.TabRowDefaults
+import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
@@ -112,7 +107,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val openLink = rememberLinkOpener()
     val viewModel = viewModel(key = "feed-detail-$id") {
         FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist)
     }
@@ -343,22 +337,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                     }
                 }
             }
-
-            // The section this post came from, where the official client keeps it: a round badge at
-            // the bottom-left, opposite the reply button.
-            val topic = viewModel.feed ?: preview
-            val topicUrl = topic?.string("turl").orEmpty()
-            if (topicUrl.isNotEmpty()) {
-                TopicShortcut(
-                    icon = topic?.string("tpic").orEmpty(),
-                    title = topic?.string("ttitle").orEmpty(),
-                    visible = fabVisible,
-                    onClick = { openLink(topicUrl, topic?.string("ttitle").orEmpty()) },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 12.dp, bottom = innerPadding.calculateBottomPadding() + 12.dp),
-                )
-            }
         }
     }
 
@@ -426,11 +404,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(feed: Entity
         ArticleBody(article, viewModel.articleImages, Modifier.padding(top = 12.dp))
     }
     item(contentType = "feed-footer") {
-        FeedCounters(
-            feed,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            onLike = { viewModel.onLike(feed.id, feed.isLiked, isFeed = true) },
-        )
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            FeedCounters(
+                feed,
+                onLike = { viewModel.onLike(feed.id, feed.isLiked, isFeed = true) },
+            )
+            SectionBadgeRow(feed, Modifier.padding(top = 8.dp))
+        }
     }
 }
 
@@ -444,22 +424,27 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickyReplyHeader(vie
         ) {
             HorizontalDivider()
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Spacer(Modifier.width(16.dp))
                 Text(
                     "共 ${viewModel.replyCount} 回复",
-                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                ChipTabGroup(
-                    tabs = ReplySortType.entries.map { ChipTabData(it.label) },
-                    selectedIndex = viewModel.replySort.ordinal,
-                    onSelectedChange = { viewModel.selectReplySort(ReplySortType.entries[it]) },
+                Spacer(Modifier.width(10.dp))
+                // The same segmented capsule as the home bar, in the tiny style: four labels plus
+                // the reply count have to share one line, so the count is measured first and the
+                // capsule takes what is left.
+                TabRowWithContour(
+                    tabs = ReplySortType.entries.map { it.label },
+                    selectedTabIndex = viewModel.replySort.ordinal,
+                    onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
+                    height = TabRowDefaults.TabRowWithContourTinyHeight,
+                    cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
+                    contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(16.dp))
             }
             HorizontalDivider()
         }
@@ -527,7 +512,8 @@ fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(10.dp))
         FeedCounters(feed, onLike = null)
-        Spacer(Modifier.height(4.dp))
+        SectionBadgeRow(feed, Modifier.padding(top = 6.dp))
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -737,43 +723,41 @@ private fun stripHtml(html: String): String =
     tagPattern.replace(html, "").replace("&nbsp;", " ").replace("&amp;", "&").trim()
 
 /**
- * The badge for the topic or product the post belongs to. It fades and scales with the reply
- * button, so the two corners stay in step while the page is scrolled.
+ * The topic or product this post belongs to, right under the publish location the way the official
+ * client shows it. Tapping it opens the section.
  */
 @Composable
-private fun TopicShortcut(
-    icon: String,
-    title: String,
-    visible: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 130f),
-        label = "topicShortcut",
-    )
-    if (progress <= 0f) return
-    val colors = COUITheme.colorScheme
-    Box(
+private fun SectionBadgeRow(feed: Entity, modifier: Modifier = Modifier) {
+    val url = feed.string("turl")
+    if (url.isEmpty()) return
+    val title = feed.string("ttitle")
+    val icon = feed.string("tpic")
+    val openLink = rememberLinkOpener()
+    Row(
         modifier = modifier
-            .size(48.dp)
-            .graphicsLayer {
-                alpha = progress
-                val scale = 0.8f + 0.2f * progress
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(colors.surfaceContainerHigh)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = title },
-        contentAlignment = Alignment.Center,
+            .clip(RoundedCornerShape(50))
+            .background(COUITheme.colorScheme.surfaceContainerHigh)
+            .clickable { openLink(url, title) }
+            .padding(start = 5.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon.isNotEmpty()) {
-            NetworkImage(icon, Modifier.fillMaxSize().clip(CircleShape), contentDescription = title)
+            NetworkImage(icon, Modifier.size(22.dp).clip(CircleShape), contentDescription = title)
         } else {
-            Text("#", style = COUITheme.textStyles.title2, color = colors.onSurfaceVariantSummary)
+            Text(
+                "#",
+                modifier = Modifier.size(22.dp),
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
         }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            title,
+            style = COUITheme.textStyles.footnote1,
+            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
