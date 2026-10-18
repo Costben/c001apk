@@ -302,7 +302,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                                 onReply = { replyId, username, _ ->
                                                     replyTarget = ReplyTarget(
                                                         id = replyId,
-                                                        type = "feed_reply",
+                                                        type = "reply",
                                                         title = username,
                                                         feedType = "feed",
                                                     )

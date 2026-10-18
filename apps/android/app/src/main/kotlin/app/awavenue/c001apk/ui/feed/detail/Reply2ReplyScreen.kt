@@ -151,7 +151,7 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                                 onReply = { rid, username, _ ->
                                     replyTarget = ReplyTarget(
                                         id = rid,
-                                        type = "feed_reply",
+                                        type = "reply",
                                         title = username,
                                         feedType = "feed",
                                     )
