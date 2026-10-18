@@ -190,6 +190,9 @@ fun ReplyCard(
                     COUIIcons.More,
                     contentDescription = "更多",
                     tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    // The 48dp button keeps the touch target; the glyph stays at the username's
+                    // height instead of towering over the first line.
+                    modifier = Modifier.size(16.dp),
                 )
             }
             MoreMenu(
