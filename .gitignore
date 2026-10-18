@@ -46,6 +46,9 @@ app.*.map.json
 /last.Update/
 /.reference/
 
+# Build outputs kept at the repository root for local installs
+/*.apk
+
 # Local maintenance notes, plans, reports and generated snapshots
 .local/
 AGENTS.md
