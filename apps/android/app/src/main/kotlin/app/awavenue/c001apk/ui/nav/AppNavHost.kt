@@ -330,7 +330,7 @@ private const val GestureCommitMillis = 150
  * How long the press state layer takes to fade out. COUI animates it with a critically damped spring
  * (stiffness 438.65, response 0.3 s), which is under 1% of its strength after ~0.22 s.
  */
-private const val SnapshotSettleMillis = 220L
+internal const val SnapshotSettleMillis = 220L
 
 /**
  * The page under the top one, drawn while a back gesture is pulling the top one away. It is drawn

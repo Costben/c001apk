@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -18,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.RectangleShape
@@ -37,12 +40,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import io.github.suqi8.coui.kmp.squircle.SquircleShape
 import io.github.suqi8.coui.kmp.squircle.isSquircleEnabled
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * The element a pushed route grows out of, and shrinks back into when it is popped. It follows the
@@ -69,6 +75,13 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
     /** Whether a page can still grow out of, or shrink back into, this element. */
     internal val hasBounds: Boolean
         get() = isAvailable || lastBounds != null
+
+    /**
+     * A still of the element, taken once its press tint has faded. The page it was on is disposed
+     * when another is stacked over it, and with it the live layer; this is what the page shrinks
+     * back into then.
+     */
+    internal var picture: ImageBitmap? = null
 }
 
 /** [cornerRadius] and [color] describe the element's own surface, which the frame starts from. */
@@ -117,10 +130,16 @@ private const val ScrimAlpha = 0.3f
 private const val CardFadeEnd = 0.25f
 private const val PageFadeLength = 0.3f
 
-// On the way out the page stays on screen until the frame is all but at the card's bounds, then
-// hands back in the last couple of percent of the travel. Fading it any earlier leaves the frame's
-// own fill as a blank card-coloured rectangle shrinking over the list — during a back gesture that
-// is most of the drag, and it reads as the list failing to draw.
+// On the way out the card comes back over the page as the frame closes in on it, between these two
+// points of the frame's travel. Unlike the way in, the two cross-fade instead of taking turns: a
+// back gesture can hold the frame anywhere, and a gap between them would leave the frame's bare
+// fill on screen for as long as the finger stays there.
+private const val ExitCardStart = 0.4f
+private const val ExitCardEnd = 0.08f
+
+// Without any drawing of the card to come back to, the page stays on screen until the frame is all
+// but at the card's bounds and hands over to the real card in the last couple of percent. Fading it
+// earlier leaves the frame's own fill as a blank card-coloured rectangle shrinking over the list.
 private const val ExitHandoverProgress = 0.02f
 
 /**
@@ -144,6 +163,26 @@ internal fun ExpandFrame(
     val screenCornerRadius = rememberScreenCornerRadius()
 
     fun active(): ExpandOrigin? = origin?.takeIf { progress() < 1f && it.hasBounds }
+
+    // How much of the card shows over the page on the way out, or null when nothing of it is left
+    // to show and the page has to hand over to the real one in place.
+    fun exitCardAlpha(source: ExpandOrigin): Float? =
+        if (source.isAvailable || source.picture != null) {
+            ((ExitCardStart - progress()) / (ExitCardStart - ExitCardEnd)).coerceIn(0f, 1f)
+        } else {
+            null
+        }
+
+    // Taken while the page underneath is still composed: it is disposed once this one is fully in.
+    if (origin != null) {
+        LaunchedEffect(origin) {
+            withFrameNanos { }
+            delay(SnapshotSettleMillis)
+            if (origin.isAvailable && origin.layer.size != IntSize.Zero) {
+                origin.picture = origin.layer.toImageBitmap()
+            }
+        }
+    }
 
     Box(
         Modifier
@@ -188,34 +227,49 @@ internal fun ExpandFrame(
                     return@drawWithContent
                 }
                 val f = fade()
-                val exit = exiting()
+                val exitCard = if (exiting()) exitCardAlpha(source) else null
+                // Only a page leaving with no drawing of the card left hands over without one: the
+                // fill goes once the frame has arrived, and the real card underneath shows through.
+                val handover = if (exiting() && exitCard == null) {
+                    (progress() / ExitHandoverProgress).coerceIn(0f, 1f)
+                } else {
+                    1f
+                }
                 // The frame stays solid while the page is on it. A dark card is a translucent white,
                 // and fading it into the page let the list — the card itself included — show through
-                // the frame as a bright ghost. On the way out the fill hands back to the card
-                // underneath only once the frame has arrived there: by then the real card sits
-                // exactly under it, so the handover is a dissolve in place, not a blank rectangle.
-                val handover = if (exit) (progress() / ExitHandoverProgress).coerceIn(0f, 1f) else 1f
-                val fillAlpha = if (exit) handover else 1f
+                // the frame as a bright ghost.
                 drawRect(
                     color = lerp(source.color.compositeOver(pageColor), pageColor, f),
-                    alpha = fillAlpha,
+                    alpha = handover,
                 )
                 drawContent()
                 // The tapped element rides on top at the frame's width and fades out early, so the
                 // page appears to grow out of it rather than replace it. It is drawn over the page
                 // colour it sits on in the list, so once the frame is back at its bounds it looks
-                // exactly like the card it hands over to. On the way out it comes back in the same
-                // last moment the page hands over.
-                val alpha = if (exit) 1f - handover else 1f - (f / CardFadeEnd).coerceIn(0f, 1f)
-                // A frozen origin has no live layer left; the page shrinks into its bounds and the
-                // revealed page already draws the element there.
-                if (alpha > 0f && source.isAvailable) {
+                // exactly like the card it hands over to. On the way out it fades back in over the
+                // page as the frame closes in.
+                val alpha = when {
+                    exitCard != null -> exitCard
+                    exiting() -> 1f - handover
+                    else -> 1f - (f / CardFadeEnd).coerceIn(0f, 1f)
+                }
+                // Live while the element is still on screen, so it follows what changed on it;
+                // otherwise the still taken on the way in.
+                val picture = source.picture
+                if (alpha > 0f && (source.isAvailable || picture != null)) {
                     val k = size.width / bounds.width
                     withTransform({ scale(k, k, pivot = Offset.Zero) }) {
                         drawIntoCanvas { canvas ->
                             canvas.saveLayer(Rect(Offset.Zero, bounds.size), Paint().apply { this.alpha = alpha })
                             drawRect(pageColor, size = bounds.size)
-                            drawLayer(source.layer)
+                            if (source.isAvailable) {
+                                drawLayer(source.layer)
+                            } else if (picture != null) {
+                                drawImage(
+                                    picture,
+                                    dstSize = IntSize(bounds.width.roundToInt(), bounds.height.roundToInt()),
+                                )
+                            }
                             canvas.restore()
                         }
                     }
@@ -230,12 +284,15 @@ internal fun ExpandFrame(
                         alpha = 1f
                         translationY = 0f
                     } else {
-                        // On the way out the page keeps drawing until the frame reaches the card,
-                        // so the shrink is the page moving into the card and never a bare fill.
-                        alpha = if (exiting()) {
-                            (progress() / ExitHandoverProgress).coerceIn(0f, 1f)
-                        } else {
-                            ((fade() - CardFadeEnd) / PageFadeLength).coerceIn(0f, 1f)
+                        // On the way out the page gives way to the card as it fades back in, so there
+                        // is always one of the two on the frame and never a bare fill. With no card
+                        // to fade to it keeps drawing until the frame reaches the real one.
+                        val source = active()
+                        val exitCard = source?.takeIf { exiting() }?.let { exitCardAlpha(it) }
+                        alpha = when {
+                            exitCard != null -> 1f - exitCard
+                            exiting() -> (progress() / ExitHandoverProgress).coerceIn(0f, 1f)
+                            else -> ((fade() - CardFadeEnd) / PageFadeLength).coerceIn(0f, 1f)
                         }
                         // A full-screen page starts below the status bar; inside a card-sized frame
                         // that gap is just an empty band, so the page rides up into it.
