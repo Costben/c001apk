@@ -41,7 +41,9 @@ private val SearchShadowOffsetY = 1.dp
 @Composable
 fun Modifier.couiSearchMaterial(shape: Shape, dropShadow: Boolean = true): Modifier {
     val isDark = COUITheme.colorScheme.background.luminance() < 0.5f
-    val fill = SearchBarDefaults.searchBarColors().backgroundColor
+    // ColorOS soft dark sets the search field below the #303030 page; COUI's own constant is a
+    // white veil that assumes a black page, which would read lighter than the new background.
+    val fill = if (isDark) Color(0xFF282828) else SearchBarDefaults.searchBarColors().backgroundColor
     return this
         .then(if (dropShadow) couiCapsuleDropShadow(shape) else Modifier)
         .clip(shape)
