@@ -33,19 +33,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
@@ -54,7 +51,9 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.SelectedImage
 import app.awavenue.c001apk.ui.feed.detail.rememberImagePicker
+import app.awavenue.c001apk.ui.text.EmojiEditText
 import app.awavenue.c001apk.ui.text.EmojiFiles
+import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
 import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -104,10 +103,9 @@ fun ReplyComposerSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val focusRequester = remember { FocusRequester() }
 
     val initialText = if (target.targetType == "tag") "#${target.title}# " else ""
-    var value by remember { mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length))) }
+    val input = rememberEmojiInputState(initialText)
     var onlySelf by remember { mutableStateOf(false) }
     var emojiPanel by remember { mutableStateOf(false) }
     var images by remember { mutableStateOf<List<SelectedImage>>(emptyList()) }
@@ -121,13 +119,13 @@ fun ReplyComposerSheet(
         target.title.isNotEmpty() -> "发布于: ${target.title}"
         else -> "发布动态"
     }
-    val canPublish = value.text.replace("\n", "").isNotEmpty() && !publishing
+    val canPublish = input.text.replace("\n", "").isNotEmpty() && !publishing
 
     // The sheet animates in before the field exists; the delay and the guard mirror the
     // Flutter client's deferred requestFocus.
     LaunchedEffect(Unit) {
         delay(300)
-        runCatching { focusRequester.requestFocus() }
+        input.focus()
     }
 
     val pickImages = rememberImagePicker(
@@ -153,13 +151,13 @@ fun ReplyComposerSheet(
                 ).joinToString(",")
             }
             progress = "正在发布"
-            val fields = mutableListOf("message" to value.text)
+            val fields = mutableListOf("message" to input.text)
             if (target.id.isEmpty()) {
                 val type = if (target.targetType == "apk") "comment" else target.feedType.ifEmpty { "feed" }
                 val feedFields = mutableListOf("type" to type)
                 if (target.targetType.isNotEmpty()) feedFields += "targetType" to target.targetType
                 if (target.targetId.isNotEmpty()) feedFields += "targetId" to target.targetId
-                feedFields += "message" to value.text
+                feedFields += "message" to input.text
                 feedFields += "status" to if (onlySelf) "-1" else "1"
                 feedFields += "pic" to pic
                 val result = app.repository.createFeed(feedFields, emptyList())
@@ -204,17 +202,27 @@ fun ReplyComposerSheet(
         allowDismiss = !publishing,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            TextField(
-                value = value,
-                onValueChange = { value = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp).focusRequester(focusRequester),
-                label = hint,
-                minLines = 4,
-                maxLines = 8,
-                maxCount = 500,
-                textStyle = COUITheme.textStyles.body1,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                EmojiEditText(
+                    state = input,
+                    modifier = Modifier.weight(1f),
+                    hint = hint,
+                    maxCount = 500,
+                    minLines = 4,
+                    maxLines = 8,
+                    textStyle = COUITheme.textStyles.body1,
+                    onFocused = { emojiPanel = false },
+                )
+                Text(
+                    "${input.text.length}/500",
+                    fontSize = 10.sp,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
             HorizontalDivider(color = COUITheme.colorScheme.dividerLine.copy(alpha = 0.1f))
             Row(
                 Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
@@ -222,18 +230,20 @@ fun ReplyComposerSheet(
             ) {
                 ToolbarIcon(AppIcons.Keyboard, selected = !emojiPanel) {
                     emojiPanel = false
-                    runCatching { focusRequester.requestFocus() }
+                    input.focus()
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(6.dp))
                 ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
                     emojiPanel = true
+                    input.clearFocus()
                     focusManager.clearFocus()
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(6.dp))
                 ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
-                Spacer(Modifier.weight(1f))
                 Row(
-                    Modifier.combinedClickable(onClick = { onlySelf = !onlySelf }),
+                    Modifier
+                        .weight(1f)
+                        .combinedClickable(onClick = { onlySelf = !onlySelf }),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(
@@ -248,9 +258,10 @@ fun ReplyComposerSheet(
                             COUITheme.colorScheme.onSurfaceVariantSummary
                         },
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
-                Spacer(Modifier.weight(1f))
                 LoadingButton(
                     text = "发布",
                     onClick = { scope.launch { publish() } },
@@ -288,13 +299,7 @@ fun ReplyComposerSheet(
             if (emojiPanel) {
                 EmojiPanel(
                     modifier = Modifier.height(200.dp).background(COUITheme.colorScheme.surface),
-                    onPick = { emoji ->
-                        val start = value.selection.start.coerceIn(0, value.text.length)
-                        val end = value.selection.end.coerceIn(start, value.text.length)
-                        val text = value.text.replaceRange(start, end, emoji)
-                        val caret = start + emoji.length
-                        value = TextFieldValue(text, TextRange(caret))
-                    },
+                    onPick = { emoji -> input.insert(emoji) },
                 )
             }
         }
