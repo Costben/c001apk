@@ -67,25 +67,27 @@ fun DyhScreen(id: String, title: String) {
             }
         },
     ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            val type = DyhTabs[page].second
-            val viewModel = viewModel(key = "dyh-$id-$type") {
-                FeedListViewModel(
-                    PageLoader { p, first, last -> app.repository.dyhDetail(id, type, p, first, last) },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val type = DyhTabs[page].second
+                val viewModel = viewModel(key = "dyh-$id-$type") {
+                    FeedListViewModel(
+                        PageLoader { p, first, last -> app.repository.dyhDetail(id, type, p, first, last) },
+                    )
+                }
+                FeedList(
+                    viewModel = viewModel,
+                    scrollBehavior = scrollBehavior,
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 12.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                    ),
                 )
             }
-            FeedList(
-                viewModel = viewModel,
-                scrollBehavior = scrollBehavior,
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding() + 12.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                ),
-            )
         }
     }
 }

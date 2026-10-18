@@ -66,58 +66,60 @@ fun LocalFollowListScreen() {
             }
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .glassSource(backdrop)
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + 12.dp,
-            ),
-        ) {
-            item {
-                Text(
-                    "名单仅保存在本机，登录、退出或关闭悄悄关注开关后仍会保留。不会自动同步到账号。",
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                    style = COUITheme.textStyles.footnote1,
-                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
-            if (users.isEmpty()) {
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                ),
+            ) {
                 item {
                     Text(
-                        "还没有关注的用户",
-                        modifier = Modifier.fillMaxWidth().padding(48.dp),
-                        textAlign = TextAlign.Center,
+                        "名单仅保存在本机，登录、退出或关闭悄悄关注开关后仍会保留。不会自动同步到账号。",
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                        style = COUITheme.textStyles.footnote1,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
-            } else {
-                item {
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                        users.forEach { user ->
-                            BasicComponent(
-                                title = user.name.ifEmpty { "用户 ${user.uid}" },
-                                summary = "UID：${user.uid}",
-                                startAction = {
-                                    Box(Modifier.padding(end = 12.dp)) {
-                                        NetworkImage(user.avatar, Modifier.size(40.dp).clip(CircleShape))
-                                    }
-                                },
-                                endActions = {
-                                    IconButton(
-                                        onClick = {
-                                            runCatching { app.localFollow.unfollow(user.uid) }
-                                                .onSuccess { context.toast("已取消$label，仅修改本机名单") }
-                                                .onFailure { context.toast("本地关注保存失败，请重试") }
-                                        },
-                                    ) {
-                                        Icon(COUIIcons.RemoveContact, contentDescription = "取消$label")
-                                    }
-                                },
-                                onClick = { navigator.push(Route.User(user.uid)) },
-                            )
+                if (users.isEmpty()) {
+                    item {
+                        Text(
+                            "还没有关注的用户",
+                            modifier = Modifier.fillMaxWidth().padding(48.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    item {
+                        Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                            users.forEach { user ->
+                                BasicComponent(
+                                    title = user.name.ifEmpty { "用户 ${user.uid}" },
+                                    summary = "UID：${user.uid}",
+                                    startAction = {
+                                        Box(Modifier.padding(end = 12.dp)) {
+                                            NetworkImage(user.avatar, Modifier.size(40.dp).clip(CircleShape))
+                                        }
+                                    },
+                                    endActions = {
+                                        IconButton(
+                                            onClick = {
+                                                runCatching { app.localFollow.unfollow(user.uid) }
+                                                    .onSuccess { context.toast("已取消$label，仅修改本机名单") }
+                                                    .onFailure { context.toast("本地关注保存失败，请重试") }
+                                            },
+                                        ) {
+                                            Icon(COUIIcons.RemoveContact, contentDescription = "取消$label")
+                                        }
+                                    },
+                                    onClick = { navigator.push(Route.User(user.uid)) },
+                                )
+                            }
                         }
                     }
                 }

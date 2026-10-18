@@ -165,41 +165,43 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
             }
         },
     ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            val contentType = tabs[page]
-            val feedType = searchType.feedType
-            val sort = sortType.sort
-            val isStrict = sortType.isStrict
-            val viewModel = viewModel(key = "search-$keyword-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
-                FeedListViewModel(
-                    PageLoader { p, first, last ->
-                        app.repository.search(
-                            type = contentType.type,
-                            feedType = feedType,
-                            sort = sort,
-                            searchValue = keyword,
-                            isStrict = isStrict,
-                            pageType = pageType,
-                            pageParam = pageParam,
-                            page = p,
-                            firstItem = first,
-                            lastItem = last,
-                        )
-                    },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val contentType = tabs[page]
+                val feedType = searchType.feedType
+                val sort = sortType.sort
+                val isStrict = sortType.isStrict
+                val viewModel = viewModel(key = "search-$keyword-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
+                    FeedListViewModel(
+                        PageLoader { p, first, last ->
+                            app.repository.search(
+                                type = contentType.type,
+                                feedType = feedType,
+                                sort = sort,
+                                searchValue = keyword,
+                                isStrict = isStrict,
+                                pageType = pageType,
+                                pageParam = pageParam,
+                                page = p,
+                                firstItem = first,
+                                lastItem = last,
+                            )
+                        },
+                    )
+                }
+                FeedList(
+                    viewModel = viewModel,
+                    scrollBehavior = scrollBehavior,
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 12.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                    ),
                 )
             }
-            FeedList(
-                viewModel = viewModel,
-                scrollBehavior = scrollBehavior,
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding() + 12.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                ),
-            )
         }
     }
 }

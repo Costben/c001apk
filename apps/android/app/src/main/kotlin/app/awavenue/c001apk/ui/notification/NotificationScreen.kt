@@ -126,28 +126,30 @@ fun NotificationScreen(
             }
         },
     ) { innerPadding ->
-        NotificationList(
-            viewModel = viewModel,
-            scrollBehavior = scrollBehavior,
-            backdrop = backdrop,
-            leading = if (showShortcuts) {
-                {
-                    NotificationShortcuts(
-                        unread = { kind -> app.unread.unread(*kind.unreadFields) },
-                    ) { target ->
-                        navigator.push(Route.Notification(target))
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            NotificationList(
+                viewModel = viewModel,
+                scrollBehavior = scrollBehavior,
+                backdrop = backdrop,
+                leading = if (showShortcuts) {
+                    {
+                        NotificationShortcuts(
+                            unread = { kind -> app.unread.unread(*kind.unreadFields) },
+                        ) { target ->
+                            navigator.push(Route.Notification(target))
+                        }
                     }
-                }
-            } else {
-                null
-            },
-            contentPadding = PaddingValues(
-                start = 10.dp,
-                end = 10.dp,
-                top = innerPadding.calculateTopPadding() + 10.dp,
-                bottom = innerPadding.calculateBottomPadding() + 10.dp,
-            ),
-        )
+                } else {
+                    null
+                },
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    end = 10.dp,
+                    top = innerPadding.calculateTopPadding() + 10.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 10.dp,
+                ),
+            )
+        }
     }
 }
 

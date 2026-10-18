@@ -116,60 +116,62 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
             }
         },
     ) { innerPadding ->
-        val contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 12.dp,
-            bottom = innerPadding.calculateBottomPadding() + 12.dp,
-        )
-        if (tabs == null) {
-            FFFContent(
-                type = type,
-                uid = listUid,
-                id = id,
-                scrollBehavior = scrollBehavior,
-                contentPadding = contentPadding,
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            val contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 12.dp,
+                bottom = innerPadding.calculateBottomPadding() + 12.dp,
             )
-        } else {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            ) { page ->
-                if (type == FFFListType.Follow) {
-                    when (page) {
-                        0 -> FFFContent(
-                            type = FFFListType.Follow,
-                            uid = listUid,
-                            id = id,
-                            scrollBehavior = scrollBehavior,
-                            contentPadding = contentPadding,
-                        )
-                        1 -> CarouselContent(
-                            url = "#/topic/userFollowTagList",
-                            title = "我关注的话题",
-                            contentPadding = contentPadding,
-                            scrollBehavior = scrollBehavior,
-                        )
-                        2 -> CarouselContent(
-                            url = "#/product/followProductList",
-                            title = "我关注的数码吧",
-                            contentPadding = contentPadding,
-                            scrollBehavior = scrollBehavior,
-                        )
-                        else -> FFFContent(
-                            type = FFFListType.Apk,
+            if (tabs == null) {
+                FFFContent(
+                    type = type,
+                    uid = listUid,
+                    id = id,
+                    scrollBehavior = scrollBehavior,
+                    contentPadding = contentPadding,
+                )
+            } else {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                ) { page ->
+                    if (type == FFFListType.Follow) {
+                        when (page) {
+                            0 -> FFFContent(
+                                type = FFFListType.Follow,
+                                uid = listUid,
+                                id = id,
+                                scrollBehavior = scrollBehavior,
+                                contentPadding = contentPadding,
+                            )
+                            1 -> CarouselContent(
+                                url = "#/topic/userFollowTagList",
+                                title = "我关注的话题",
+                                contentPadding = contentPadding,
+                                scrollBehavior = scrollBehavior,
+                            )
+                            2 -> CarouselContent(
+                                url = "#/product/followProductList",
+                                title = "我关注的数码吧",
+                                contentPadding = contentPadding,
+                                scrollBehavior = scrollBehavior,
+                            )
+                            else -> FFFContent(
+                                type = FFFListType.Apk,
+                                uid = listUid,
+                                id = id,
+                                scrollBehavior = scrollBehavior,
+                                contentPadding = contentPadding,
+                            )
+                        }
+                    } else {
+                        FFFContent(
+                            type = if (page == 0) FFFListType.Reply else FFFListType.ReplyMe,
                             uid = listUid,
                             id = id,
                             scrollBehavior = scrollBehavior,
                             contentPadding = contentPadding,
                         )
                     }
-                } else {
-                    FFFContent(
-                        type = if (page == 0) FFFListType.Reply else FFFListType.ReplyMe,
-                        uid = listUid,
-                        id = id,
-                        scrollBehavior = scrollBehavior,
-                        contentPadding = contentPadding,
-                    )
                 }
             }
         }

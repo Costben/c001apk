@@ -67,27 +67,29 @@ fun CoolPicScreen(title: String) {
             }
         },
     ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            val type = CoolPicTabs[page].second
-            val viewModel = viewModel(key = "coolpic-$decodedTitle-$type") {
-                FeedListViewModel(
-                    PageLoader { p, first, last ->
-                        app.repository.coolPic(decodedTitle, type, p, first, last)
-                    },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val type = CoolPicTabs[page].second
+                val viewModel = viewModel(key = "coolpic-$decodedTitle-$type") {
+                    FeedListViewModel(
+                        PageLoader { p, first, last ->
+                            app.repository.coolPic(decodedTitle, type, p, first, last)
+                        },
+                    )
+                }
+                FeedList(
+                    viewModel = viewModel,
+                    scrollBehavior = scrollBehavior,
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 12.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                    ),
                 )
             }
-            FeedList(
-                viewModel = viewModel,
-                scrollBehavior = scrollBehavior,
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding() + 12.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                ),
-            )
         }
     }
 }

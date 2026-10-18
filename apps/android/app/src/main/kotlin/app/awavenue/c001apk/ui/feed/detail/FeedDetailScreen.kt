@@ -223,125 +223,127 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
             )
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-            when (val status = viewModel.feedStatus) {
-                // The page grows out of the tapped card, so it shows that card's post until the full
-                // one arrives instead of an empty page with a spinner.
-                ListStatus.Loading -> if (preview == null) {
-                    CenterBox(innerPadding) { InfiniteProgressIndicator() }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            top = innerPadding.calculateTopPadding(),
-                            bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                        ),
-                        userScrollEnabled = false,
-                    ) {
-                        item(contentType = "feed") {
-                            FeedDetailBody(preview, Modifier.padding(horizontal = CardPadding))
-                        }
-                        item(contentType = "reply-state") { ReplyStateBox { InfiniteProgressIndicator() } }
-                    }
-                }
-
-                ListStatus.Empty -> CenterBox(innerPadding) {
-                    EmptyState(
-                        title = "暂无内容",
-                        actionText = "刷新",
-                        onActionClick = { viewModel.loadFeed() },
-                    )
-                }
-
-                is ListStatus.Error -> {
-                    val challenge = viewModel.feedFailureKind in setOf(ApiFailureKind.Captcha, ApiFailureKind.Authentication)
-                    CenterBox(innerPadding) {
-                        EmptyState(
-                            title = status.message,
-                            actionText = if (challenge) "验证" else "重试",
-                            onActionClick = { viewModel.loadFeed(verify = challenge) },
-                        )
-                    }
-                }
-
-                ListStatus.Content -> {
-                    val feed = viewModel.feed ?: return@Box
-                    PullToRefresh(
-                        isRefreshing = viewModel.isRefreshing,
-                        onRefresh = viewModel::refreshReplies,
-                        pullToRefreshState = rememberPullToRefreshState(),
-                        contentPadding = innerPadding,
-                        topAppBarScrollBehavior = scrollBehavior,
-                    ) {
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                when (val status = viewModel.feedStatus) {
+                    // The page grows out of the tapped card, so it shows that card's post until the full
+                    // one arrives instead of an empty page with a spinner.
+                    ListStatus.Loading -> if (preview == null) {
+                        CenterBox(innerPadding) { InfiniteProgressIndicator() }
+                    } else {
                         LazyColumn(
-                            state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .overScrollVertical()
-                                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
                                 top = innerPadding.calculateTopPadding(),
                                 bottom = innerPadding.calculateBottomPadding() + 16.dp,
                             ),
+                            userScrollEnabled = false,
                         ) {
-                            feedBody(feed, viewModel)
-                            stickyReplyHeader(viewModel)
-                            when (val replyStatus = viewModel.replyStatus) {
-                                ListStatus.Loading -> item(contentType = "reply-state") {
-                                    ReplyStateBox { InfiniteProgressIndicator() }
-                                }
-                                ListStatus.Empty -> item(contentType = "reply-state") {
-                                    ReplyStateBox { Text("暂无内容") }
-                                }
-                                is ListStatus.Error -> item(contentType = "reply-state") {
-                                    ReplyStateBox(onClick = viewModel::refreshReplies) { Text(replyStatus.message) }
-                                }
-                                ListStatus.Content -> {
-                                    itemsIndexed(
-                                        viewModel.replies,
-                                        key = { index, reply -> reply.entityId.ifEmpty { "reply-$index" } },
-                                        contentType = { _, _ -> "reply" },
-                                    ) { index, reply ->
-                                        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp)) {
-                                            ReplyCard(
-                                                reply = reply,
-                                                onOpenFeed = {
-                                                    val url = reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$id" }
-                                                    navigator.push(Route.Web(url))
-                                                },
-                                                isTopReply = viewModel.showsPinnedReply && index == 0,
-                                                onBlock = viewModel::onBlockReply,
-                                                onReply = { replyId, username, _ ->
-                                                    replyTarget = ReplyTarget(
-                                                        id = replyId,
-                                                        type = "reply",
-                                                        title = username,
-                                                        feedType = "feed",
-                                                    )
-                                                },
-                                                onDelete = viewModel::onDeleteReply,
-                                                onLike = { replyId, liked ->
-                                                    viewModel.onLike(replyId, liked, isFeed = false)
-                                                },
-                                                onShowReplies = {
-                                                    navigator.push(
-                                                        Route.Reply2Reply(
-                                                            id = it.id,
-                                                            replyId = viewModel.id,
-                                                            originUid = it.uid,
-                                                            origin = it,
-                                                        ),
-                                                    )
-                                                },
-                                            )
-                                        }
+                            item(contentType = "feed") {
+                                FeedDetailBody(preview, Modifier.padding(horizontal = CardPadding))
+                            }
+                            item(contentType = "reply-state") { ReplyStateBox { InfiniteProgressIndicator() } }
+                        }
+                    }
+
+                    ListStatus.Empty -> CenterBox(innerPadding) {
+                        EmptyState(
+                            title = "暂无内容",
+                            actionText = "刷新",
+                            onActionClick = { viewModel.loadFeed() },
+                        )
+                    }
+
+                    is ListStatus.Error -> {
+                        val challenge = viewModel.feedFailureKind in setOf(ApiFailureKind.Captcha, ApiFailureKind.Authentication)
+                        CenterBox(innerPadding) {
+                            EmptyState(
+                                title = status.message,
+                                actionText = if (challenge) "验证" else "重试",
+                                onActionClick = { viewModel.loadFeed(verify = challenge) },
+                            )
+                        }
+                    }
+
+                    ListStatus.Content -> {
+                        val feed = viewModel.feed ?: return@Box
+                        PullToRefresh(
+                            isRefreshing = viewModel.isRefreshing,
+                            onRefresh = viewModel::refreshReplies,
+                            pullToRefreshState = rememberPullToRefreshState(),
+                            contentPadding = innerPadding,
+                            topAppBarScrollBehavior = scrollBehavior,
+                        ) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .overScrollVertical()
+                                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                                contentPadding = PaddingValues(
+                                    top = innerPadding.calculateTopPadding(),
+                                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                                ),
+                            ) {
+                                feedBody(feed, viewModel)
+                                stickyReplyHeader(viewModel)
+                                when (val replyStatus = viewModel.replyStatus) {
+                                    ListStatus.Loading -> item(contentType = "reply-state") {
+                                        ReplyStateBox { InfiniteProgressIndicator() }
                                     }
-                                    item(contentType = "footer") {
-                                        // Reaching the footer asks for the next page, as upstream's footer does.
-                                        // The scroll trigger alone misses a list that already ends on screen:
-                                        // it never changes from "near the end", so it never fires again.
-                                        LaunchedEffect(viewModel.replies) { viewModel.loadMoreReplies() }
-                                        ReplyFooter(viewModel.replyFooter, viewModel::retryReplyFooter)
+                                    ListStatus.Empty -> item(contentType = "reply-state") {
+                                        ReplyStateBox { Text("暂无内容") }
+                                    }
+                                    is ListStatus.Error -> item(contentType = "reply-state") {
+                                        ReplyStateBox(onClick = viewModel::refreshReplies) { Text(replyStatus.message) }
+                                    }
+                                    ListStatus.Content -> {
+                                        itemsIndexed(
+                                            viewModel.replies,
+                                            key = { index, reply -> reply.entityId.ifEmpty { "reply-$index" } },
+                                            contentType = { _, _ -> "reply" },
+                                        ) { index, reply ->
+                                            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp)) {
+                                                ReplyCard(
+                                                    reply = reply,
+                                                    onOpenFeed = {
+                                                        val url = reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$id" }
+                                                        navigator.push(Route.Web(url))
+                                                    },
+                                                    isTopReply = viewModel.showsPinnedReply && index == 0,
+                                                    onBlock = viewModel::onBlockReply,
+                                                    onReply = { replyId, username, _ ->
+                                                        replyTarget = ReplyTarget(
+                                                            id = replyId,
+                                                            type = "reply",
+                                                            title = username,
+                                                            feedType = "feed",
+                                                        )
+                                                    },
+                                                    onDelete = viewModel::onDeleteReply,
+                                                    onLike = { replyId, liked ->
+                                                        viewModel.onLike(replyId, liked, isFeed = false)
+                                                    },
+                                                    onShowReplies = {
+                                                        navigator.push(
+                                                            Route.Reply2Reply(
+                                                                id = it.id,
+                                                                replyId = viewModel.id,
+                                                                originUid = it.uid,
+                                                                origin = it,
+                                                            ),
+                                                        )
+                                                    },
+                                                )
+                                            }
+                                        }
+                                        item(contentType = "footer") {
+                                            // Reaching the footer asks for the next page, as upstream's footer does.
+                                            // The scroll trigger alone misses a list that already ends on screen:
+                                            // it never changes from "near the end", so it never fires again.
+                                            LaunchedEffect(viewModel.replies) { viewModel.loadMoreReplies() }
+                                            ReplyFooter(viewModel.replyFooter, viewModel::retryReplyFooter)
+                                        }
                                     }
                                 }
                             }

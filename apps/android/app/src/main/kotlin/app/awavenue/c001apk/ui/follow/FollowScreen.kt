@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ExpandMore
 import io.github.suqi8.coui.kmp.icon.extended.Search
@@ -164,29 +166,31 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
             }
         },
     ) { innerPadding ->
-        val contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding(),
-            bottom = outerPadding.calculateBottomPadding() + 12.dp,
-        )
-        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-            if (showLocal) {
-                LocalFollowFeed(returnTop = returnTop, scrollBehavior = scrollBehavior, contentPadding = contentPadding)
-            } else {
-                // Each stream is filtered server-side and personalised, so its cached pages belong to
-                // one category of one account; switching starts again from the first page.
-                val viewModel = viewModel(key = "follow-${selection.name}-${app.session.uid}") {
-                    FeedListViewModel(
-                        PageLoader { page, first, last ->
-                            app.repository.dataList(followUrl(selection), selection.label, page, first, last)
-                        },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            val contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding(),
+                bottom = outerPadding.calculateBottomPadding() + 12.dp,
+            )
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                if (showLocal) {
+                    LocalFollowFeed(returnTop = returnTop, scrollBehavior = scrollBehavior, contentPadding = contentPadding)
+                } else {
+                    // Each stream is filtered server-side and personalised, so its cached pages belong to
+                    // one category of one account; switching starts again from the first page.
+                    val viewModel = viewModel(key = "follow-${selection.name}-${app.session.uid}") {
+                        FeedListViewModel(
+                            PageLoader { page, first, last ->
+                                app.repository.dataList(followUrl(selection), selection.label, page, first, last)
+                            },
+                        )
+                    }
+                    FeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        returnTop = returnTop,
+                        contentPadding = contentPadding,
                     )
                 }
-                FeedList(
-                    viewModel = viewModel,
-                    scrollBehavior = scrollBehavior,
-                    returnTop = returnTop,
-                    contentPadding = contentPadding,
-                )
             }
         }
     }

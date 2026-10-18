@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +45,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.openBrowser
+import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -53,6 +55,7 @@ import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
@@ -77,6 +80,7 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val backdrop = rememberGlassBackdrop()
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     var title by remember { mutableStateOf("") }
@@ -96,42 +100,44 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            SmallTopAppBar(
-                title = title,
-                gradientGlass = true,
-                navigationIcon = {
-                    TopBarIconButton(onClick = { navigator.pop() }) {
-                        Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    Box {
-                        TopBarIconButton(onClick = { menuOpen = true }) {
-                            Icon(COUIIcons.More, contentDescription = "更多")
+            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                SmallTopAppBar(
+                    title = title,
+                    gradientGlass = true,
+                    navigationIcon = {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
-                        MoreMenu(
-                            show = menuOpen,
-                            onDismissRequest = { menuOpen = false },
-                            entries = listOf(
-                                "刷新" to { webView?.reload() },
-                                "复制" to { context.copyText(currentUrl) },
-                                "在浏览器中打开" to { context.openBrowser(currentUrl) },
-                                "清理缓存" to {
-                                    runCatching {
-                                        webView?.clearCache(true)
-                                        webView?.clearHistory()
-                                    }.onSuccess { context.toast("已清理") }
-                                        .onFailure { context.toast("缓存清理失败，请稍后重试") }
-                                },
-                                "返回上一页" to {
-                                    val view = webView
-                                    if (view != null && view.canGoBack()) view.goBack()
-                                },
-                            ),
-                        )
-                    }
-                },
-            )
+                    },
+                    actions = {
+                        Box {
+                            TopBarIconButton(onClick = { menuOpen = true }) {
+                                Icon(COUIIcons.More, contentDescription = "更多")
+                            }
+                            MoreMenu(
+                                show = menuOpen,
+                                onDismissRequest = { menuOpen = false },
+                                entries = listOf(
+                                    "刷新" to { webView?.reload() },
+                                    "复制" to { context.copyText(currentUrl) },
+                                    "在浏览器中打开" to { context.openBrowser(currentUrl) },
+                                    "清理缓存" to {
+                                        runCatching {
+                                            webView?.clearCache(true)
+                                            webView?.clearHistory()
+                                        }.onSuccess { context.toast("已清理") }
+                                            .onFailure { context.toast("缓存清理失败，请稍后重试") }
+                                    },
+                                    "返回上一页" to {
+                                        val view = webView
+                                        if (view != null && view.canGoBack()) view.goBack()
+                                    },
+                                ),
+                            )
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {

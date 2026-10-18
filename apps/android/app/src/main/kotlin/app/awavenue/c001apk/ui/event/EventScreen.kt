@@ -23,6 +23,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,6 +44,8 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.glassSource
+import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -65,6 +68,7 @@ import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Alarm
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -88,6 +92,7 @@ fun EventScreen(id: String) {
     var event by remember(id) { mutableStateOf<Entity?>(null) }
     var failure by remember(id) { mutableStateOf<String?>(null) }
     var attempts by remember(id) { mutableIntStateOf(0) }
+    val backdrop = rememberGlassBackdrop()
 
     LaunchedEffect(id, attempts) {
         event = null
@@ -105,36 +110,40 @@ fun EventScreen(id: String) {
     val loaded = event
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = "活动详情",
-                gradientGlass = true,
-                navigationIcon = {
-                    TopBarIconButton(onClick = { navigator.pop() }) {
-                        Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                    }
-                },
-            )
-        },
-    ) { innerPadding ->
-        val modifier = Modifier.fillMaxSize().padding(innerPadding)
-        when {
-            loaded != null -> EventContent(
-                event = loaded,
-                modifier = modifier,
-                onOpenUser = { navigator.push(Route.User(it)) },
-            )
-
-            failure != null -> Box(modifier, contentAlignment = Alignment.Center) {
-                EmptyState(
-                    title = "加载失败",
-                    subtitle = failure,
-                    actionText = "重试",
-                    onActionClick = { attempts++ },
+            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                TopAppBar(
+                    title = "活动详情",
+                    gradientGlass = true,
+                    navigationIcon = {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                        }
+                    },
                 )
             }
+        },
+    ) { innerPadding ->
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            val modifier = Modifier.fillMaxSize().glassSource(backdrop).padding(innerPadding)
+            when {
+                loaded != null -> EventContent(
+                    event = loaded,
+                    modifier = modifier,
+                    onOpenUser = { navigator.push(Route.User(it)) },
+                )
 
-            else -> Box(modifier, contentAlignment = Alignment.Center) {
-                InfiniteProgressIndicator()
+                failure != null -> Box(modifier, contentAlignment = Alignment.Center) {
+                    EmptyState(
+                        title = "加载失败",
+                        subtitle = failure,
+                        actionText = "重试",
+                        onActionClick = { attempts++ },
+                    )
+                }
+
+                else -> Box(modifier, contentAlignment = Alignment.Center) {
+                    InfiniteProgressIndicator()
+                }
             }
         }
     }

@@ -76,17 +76,19 @@ fun CarouselScreen(url: String, title: String, isInit: Boolean) {
             }
         },
     ) { innerPadding ->
-        CarouselContent(
-            url = url,
-            title = title,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 12.dp,
-                bottom = innerPadding.calculateBottomPadding() + 12.dp,
-            ),
-            scrollBehavior = scrollBehavior,
-            onPageTitle = { pageTitle = it },
-        )
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            CarouselContent(
+                url = url,
+                title = title,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 12.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                ),
+                scrollBehavior = scrollBehavior,
+                onPageTitle = { pageTitle = it },
+            )
+        }
     }
 }
 

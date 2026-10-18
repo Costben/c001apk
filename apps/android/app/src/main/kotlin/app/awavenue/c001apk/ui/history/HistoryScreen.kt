@@ -74,37 +74,39 @@ fun HistoryScreen(type: HistoryType) {
             }
         },
     ) { innerPadding ->
-        if (entries.isEmpty()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding(), bottom = innerPadding.calculateBottomPadding())
-                    .glassSource(backdrop),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("暂无内容", color = COUITheme.colorScheme.onSurfaceVariantSummary)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .glassSource(backdrop)
-                    .overScrollVertical()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection),
-                contentPadding = PaddingValues(
-                    start = 10.dp,
-                    top = innerPadding.calculateTopPadding() + 10.dp,
-                    end = 10.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 10.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(entries, key = { it.id }) { item ->
-                    FeedCard(
-                        feed = item.asEntity(),
-                        isHistory = true,
-                        onDelete = { app.history.remove(type, item.id) },
-                    )
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            if (entries.isEmpty()) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = innerPadding.calculateTopPadding(), bottom = innerPadding.calculateBottomPadding())
+                        .glassSource(backdrop),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("暂无内容", color = COUITheme.colorScheme.onSurfaceVariantSummary)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .glassSource(backdrop)
+                        .overScrollVertical()
+                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        top = innerPadding.calculateTopPadding() + 10.dp,
+                        end = 10.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 10.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(entries, key = { it.id }) { item ->
+                        FeedCard(
+                            feed = item.asEntity(),
+                            isHistory = true,
+                            onDelete = { app.history.remove(type, item.id) },
+                        )
+                    }
                 }
             }
         }

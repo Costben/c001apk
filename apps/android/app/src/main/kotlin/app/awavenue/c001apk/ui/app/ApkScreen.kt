@@ -308,108 +308,110 @@ fun ApkScreen(packageName: String) {
             )
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-            val current = detail
-            if (current == null) {
-                Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val local = localApp
-                    when {
-                        failure == null -> InfiniteProgressIndicator()
-                        local != null -> LocalApkFallback(
-                            app = local,
-                            notListed = failureKind == ApiFailureKind.Business,
-                            message = failure.orEmpty(),
-                            onRetry = { attempts++ },
-                        )
-                        else -> EmptyState(
-                            title = "加载失败",
-                            subtitle = failure,
-                            actionText = "重试",
-                            onActionClick = { attempts++ },
-                        )
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                val current = detail
+                if (current == null) {
+                    Box(
+                        Modifier.fillMaxSize().padding(innerPadding),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val local = localApp
+                        when {
+                            failure == null -> InfiniteProgressIndicator()
+                            local != null -> LocalApkFallback(
+                                app = local,
+                                notListed = failureKind == ApiFailureKind.Business,
+                                message = failure.orEmpty(),
+                                onRetry = { attempts++ },
+                            )
+                            else -> EmptyState(
+                                title = "加载失败",
+                                subtitle = failure,
+                                actionText = "重试",
+                                onActionClick = { attempts++ },
+                            )
+                        }
                     }
+                    return@Box
                 }
-                return@Box
-            }
 
-            PullToRefresh(
-                isRefreshing = listViewModel?.isRefreshing == true,
-                onRefresh = { if (listViewModel != null) listViewModel.refresh() else attempts++ },
-                pullToRefreshState = rememberPullToRefreshState(),
-                contentPadding = innerPadding,
-                topAppBarScrollBehavior = scrollBehavior,
-            ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .overScrollVertical()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding(),
-                        bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                PullToRefresh(
+                    isRefreshing = listViewModel?.isRefreshing == true,
+                    onRefresh = { if (listViewModel != null) listViewModel.refresh() else attempts++ },
+                    pullToRefreshState = rememberPullToRefreshState(),
+                    contentPadding = innerPadding,
+                    topAppBarScrollBehavior = scrollBehavior,
                 ) {
-                    item(contentType = "header") {
-                        ApkHeader(
-                            app = current,
-                            onOpenIcon = rememberHapticClick {
-                                navigator.push(Route.ImageView(listOf(current.logo)))
-                            },
-                            onDownload = rememberHapticClick { onDownloadClick() },
-                        )
-                    }
-                    stickyHeader(key = "comments") {
-                        Column(Modifier.fillMaxWidth().background(COUITheme.colorScheme.surface)) {
-                            HorizontalDivider()
-                            if (commentsOpen) {
-                                TabRowWithContour(
-                                    tabs = AppCommentTab.entries.map { it.label },
-                                    selectedTabIndex = tab.ordinal,
-                                    onTabSelected = { tab = AppCommentTab.entries[it] },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                                )
-                            }
-                            HorizontalDivider()
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .overScrollVertical()
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        item(contentType = "header") {
+                            ApkHeader(
+                                app = current,
+                                onOpenIcon = rememberHapticClick {
+                                    navigator.push(Route.ImageView(listOf(current.logo)))
+                                },
+                                onDownload = rememberHapticClick { onDownloadClick() },
+                            )
                         }
-                    }
-                    when {
-                        isBlocked -> item(contentType = "state") {
-                            StateBox { Text("已屏蔽 $appName") }
-                        }
-                        commentStatus != 1 -> item(contentType = "state") {
-                            StateBox { Text(commentStatusText) }
-                        }
-                        listViewModel != null -> when (val status = listViewModel.status) {
-                            ListStatus.Loading -> item(contentType = "state") {
-                                StateBox { InfiniteProgressIndicator() }
-                            }
-                            ListStatus.Empty -> item(contentType = "state") {
-                                StateBox {
-                                    EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = listViewModel::refresh)
-                                }
-                            }
-                            is ListStatus.Error -> item(contentType = "state") {
-                                StateBox {
-                                    EmptyState(
-                                        title = "加载失败",
-                                        subtitle = status.message,
-                                        actionText = "重试",
-                                        onActionClick = listViewModel::refresh,
+                        stickyHeader(key = "comments") {
+                            Column(Modifier.fillMaxWidth().background(COUITheme.colorScheme.surface)) {
+                                HorizontalDivider()
+                                if (commentsOpen) {
+                                    TabRowWithContour(
+                                        tabs = AppCommentTab.entries.map { it.label },
+                                        selectedTabIndex = tab.ordinal,
+                                        onTabSelected = { tab = AppCommentTab.entries[it] },
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                                     )
                                 }
+                                HorizontalDivider()
                             }
-                            ListStatus.Content -> {
-                                itemsIndexed(
-                                    listViewModel.items.filterNot(FeedActions::isHidden),
-                                    key = { index, item -> item.entityId.ifEmpty { "comment-$index" } },
-                                    contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
-                                ) { _, item -> EntityItem(item) }
-                                item(contentType = "footer") { CommentFooter(listViewModel) }
+                        }
+                        when {
+                            isBlocked -> item(contentType = "state") {
+                                StateBox { Text("已屏蔽 $appName") }
+                            }
+                            commentStatus != 1 -> item(contentType = "state") {
+                                StateBox { Text(commentStatusText) }
+                            }
+                            listViewModel != null -> when (val status = listViewModel.status) {
+                                ListStatus.Loading -> item(contentType = "state") {
+                                    StateBox { InfiniteProgressIndicator() }
+                                }
+                                ListStatus.Empty -> item(contentType = "state") {
+                                    StateBox {
+                                        EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = listViewModel::refresh)
+                                    }
+                                }
+                                is ListStatus.Error -> item(contentType = "state") {
+                                    StateBox {
+                                        EmptyState(
+                                            title = "加载失败",
+                                            subtitle = status.message,
+                                            actionText = "重试",
+                                            onActionClick = listViewModel::refresh,
+                                        )
+                                    }
+                                }
+                                ListStatus.Content -> {
+                                    itemsIndexed(
+                                        listViewModel.items.filterNot(FeedActions::isHidden),
+                                        key = { index, item -> item.entityId.ifEmpty { "comment-$index" } },
+                                        contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
+                                    ) { _, item -> EntityItem(item) }
+                                    item(contentType = "footer") { CommentFooter(listViewModel) }
+                                }
                             }
                         }
                     }

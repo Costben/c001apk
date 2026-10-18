@@ -435,47 +435,49 @@ private fun TopicPage(tag: String?, id: String?) {
             return@Scaffold
         }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            val tab = tabList[page]
-            val discuss = entityType == "product" && tab.title == "讨论"
-            val url = if (discuss) discussUrl(topic.string("id"), sortType) else tab.url
-            val listTitle = if (discuss) discussTitle(sortType) else tab.title
-            val viewModel = viewModel(key = "topic-$url-$listTitle") {
-                FeedListViewModel(
-                    PageLoader { p, first, last -> app.repository.dataList(url, listTitle, p, first, last) },
-                )
-            }
-            val padding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 12.dp,
-                bottom = innerPadding.calculateBottomPadding() + 12.dp,
-            )
-            if (page == 0) {
-                TopicFeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding) {
-                    TopicHeader(
-                        topic = topic,
-                        isFollow = isFollow,
-                        isBlocked = isBlocked,
-                        onFollow = { onFollowClick() },
-                        onBlock = {
-                            if (isBlocked) {
-                                app.blacklist.unblockTopic(title)
-                            } else {
-                                app.blacklist.blockTopic(title)
-                            }
-                            isBlocked = !isBlocked
-                        },
-                        productConfigCount = productConfigs.size,
-                        comparisonCount = comparisons.size,
-                        onProductConfigs = productConfigAction,
-                        onProductComparison = productCompareAction,
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val tab = tabList[page]
+                val discuss = entityType == "product" && tab.title == "讨论"
+                val url = if (discuss) discussUrl(topic.string("id"), sortType) else tab.url
+                val listTitle = if (discuss) discussTitle(sortType) else tab.title
+                val viewModel = viewModel(key = "topic-$url-$listTitle") {
+                    FeedListViewModel(
+                        PageLoader { p, first, last -> app.repository.dataList(url, listTitle, p, first, last) },
                     )
                 }
-            } else {
-                FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding)
+                val padding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 12.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                )
+                if (page == 0) {
+                    TopicFeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding) {
+                        TopicHeader(
+                            topic = topic,
+                            isFollow = isFollow,
+                            isBlocked = isBlocked,
+                            onFollow = { onFollowClick() },
+                            onBlock = {
+                                if (isBlocked) {
+                                    app.blacklist.unblockTopic(title)
+                                } else {
+                                    app.blacklist.blockTopic(title)
+                                }
+                                isBlocked = !isBlocked
+                            },
+                            productConfigCount = productConfigs.size,
+                            comparisonCount = comparisons.size,
+                            onProductConfigs = productConfigAction,
+                            onProductComparison = productCompareAction,
+                        )
+                    }
+                } else {
+                    FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding)
+                }
             }
         }
     }

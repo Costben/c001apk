@@ -238,50 +238,52 @@ fun UserScreen(uid: String) {
             }
         },
     ) { innerPadding ->
-        val contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 10.dp)
-        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-            when {
-                loading -> CenterState(innerPadding) { InfiniteProgressIndicator() }
-                user == null -> CenterState(innerPadding) {
-                    TextButton(
-                        text = error ?: "暂无内容",
-                        onClick = rememberHapticClick { scope.launch { loadUser() } },
-                    )
-                }
-                blocked -> CenterState(innerPadding) {
-                    Text("已屏蔽用户 $username", color = COUITheme.colorScheme.onSurfaceVariantSummary)
-                }
-                else -> {
-                    val feed = viewModel(key = "user-feed-$resolvedUid") {
-                        FeedListViewModel(
-                            PageLoader { page, first, last -> app.repository.userFeed(resolvedUid, page, first, last) },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            val contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 10.dp)
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                when {
+                    loading -> CenterState(innerPadding) { InfiniteProgressIndicator() }
+                    user == null -> CenterState(innerPadding) {
+                        TextButton(
+                            text = error ?: "暂无内容",
+                            onClick = rememberHapticClick { scope.launch { loadUser() } },
                         )
                     }
-                    UserFeed(
-                        viewModel = feed,
-                        listState = listState,
-                        scrollBehavior = scrollBehavior,
-                        contentPadding = contentPadding,
-                        onReloadUser = { scope.launch { loadUser() } },
-                        header = {
-                            user?.let { data ->
-                                UserInfoCard(
-                                    user = data,
-                                    onFollowClick = rememberHapticClick(onClick = onFollow),
-                                    onLocalFollow = rememberHapticClick(onClick = onLocalFollow),
-                                    onStatClick = { index ->
-                                        val target = when (index) {
-                                            UserStat.Feed -> FFFListType.Feed
-                                            UserStat.Like -> FFFListType.Like
-                                            UserStat.Follow -> FFFListType.UserFollow
-                                            else -> FFFListType.Fan
-                                        }
-                                        navigator.push(Route.FFFList(target, uid = resolvedUid))
-                                    },
-                                )
-                            }
-                        },
-                    )
+                    blocked -> CenterState(innerPadding) {
+                        Text("已屏蔽用户 $username", color = COUITheme.colorScheme.onSurfaceVariantSummary)
+                    }
+                    else -> {
+                        val feed = viewModel(key = "user-feed-$resolvedUid") {
+                            FeedListViewModel(
+                                PageLoader { page, first, last -> app.repository.userFeed(resolvedUid, page, first, last) },
+                            )
+                        }
+                        UserFeed(
+                            viewModel = feed,
+                            listState = listState,
+                            scrollBehavior = scrollBehavior,
+                            contentPadding = contentPadding,
+                            onReloadUser = { scope.launch { loadUser() } },
+                            header = {
+                                user?.let { data ->
+                                    UserInfoCard(
+                                        user = data,
+                                        onFollowClick = rememberHapticClick(onClick = onFollow),
+                                        onLocalFollow = rememberHapticClick(onClick = onLocalFollow),
+                                        onStatClick = { index ->
+                                            val target = when (index) {
+                                                UserStat.Feed -> FFFListType.Feed
+                                                UserStat.Like -> FFFListType.Like
+                                                UserStat.Follow -> FFFListType.UserFollow
+                                                else -> FFFListType.Fan
+                                            }
+                                            navigator.push(Route.FFFList(target, uid = resolvedUid))
+                                        },
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
