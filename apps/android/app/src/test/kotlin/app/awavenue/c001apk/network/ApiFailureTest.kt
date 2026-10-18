@@ -26,4 +26,30 @@ class ApiFailureTest {
         assertEquals(ApiFailureKind.RateLimit, kindOf(200, """{"code":429,"message":"too many"}"""))
         assertEquals(ApiFailureKind.Business, kindOf(200, """{"status":2,"message":"failed","data":null}"""))
     }
+
+    @Test
+    fun actionEnvelopeWithoutDataIsAccepted() {
+        val obj = readApiObject(
+            200,
+            """{"status":1,"error":0,"message":"关注成功","messageStatus":1}""",
+            requireData = false,
+        )
+        assertEquals("关注成功", obj["message"]?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun dataEnvelopeStillRequiresData() {
+        val error = assertThrows(ApiFailure::class.java) {
+            readApiObject(200, """{"status":1,"error":0,"message":"关注成功","messageStatus":1}""")
+        }
+        assertEquals(ApiFailureKind.InvalidResponse, error.kind)
+    }
+
+    @Test
+    fun actionEnvelopeStillRejectsFailures() {
+        val error = assertThrows(ApiFailure::class.java) {
+            readApiObject(200, """{"status":2,"message":"failed"}""", requireData = false)
+        }
+        assertEquals(ApiFailureKind.Business, error.kind)
+    }
 }

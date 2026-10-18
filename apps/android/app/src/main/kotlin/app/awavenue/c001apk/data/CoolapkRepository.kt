@@ -8,6 +8,7 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.network.Body
 import app.awavenue.c001apk.network.FilePart
 import app.awavenue.c001apk.network.HttpResponse
+import app.awavenue.c001apk.network.readActionObject
 import app.awavenue.c001apk.network.readApiObject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -319,24 +320,24 @@ class CoolapkRepository(
             query = mapOf("id" to id, "detail" to 0),
             body = Body.Form(listOf("trace" to "")),
         )
-        return actionResult(readApiObject(response))
+        return actionResult(readActionObject(response))
     }
 
-    suspend fun deleteFeed(id: String): ActionResult = actionResult(readApiObject(api.post(Api.FEED_DELETE, mapOf("id" to id))))
+    suspend fun deleteFeed(id: String): ActionResult = actionResult(readActionObject(api.post(Api.FEED_DELETE, mapOf("id" to id))))
 
-    suspend fun deleteReply(id: String): ActionResult = actionResult(readApiObject(api.post(Api.FEED_DELETE_REPLY, mapOf("id" to id))))
+    suspend fun deleteReply(id: String): ActionResult = actionResult(readActionObject(api.post(Api.FEED_DELETE_REPLY, mapOf("id" to id))))
 
     suspend fun deleteNotification(id: String): ActionResult =
-        actionResult(readApiObject(api.post(Api.NOTIFICATION_DELETE, mapOf("id" to id))))
+        actionResult(readActionObject(api.post(Api.NOTIFICATION_DELETE, mapOf("id" to id))))
 
     suspend fun followUser(uid: String, follow: Boolean): ActionResult =
-        actionResult(readApiObject(api.post(if (follow) Api.USER_UNFOLLOW else Api.USER_FOLLOW, mapOf("uid" to uid))))
+        actionResult(readActionObject(api.post(if (follow) Api.USER_UNFOLLOW else Api.USER_FOLLOW, mapOf("uid" to uid))))
 
     suspend fun followTag(tag: String, follow: Boolean): ActionResult =
-        actionResult(readApiObject(api.post(if (follow) Api.FEED_UNFOLLOW_TAG else Api.FEED_FOLLOW_TAG, mapOf("tag" to tag))))
+        actionResult(readActionObject(api.post(if (follow) Api.FEED_UNFOLLOW_TAG else Api.FEED_FOLLOW_TAG, mapOf("tag" to tag))))
 
     suspend fun followApk(id: String, follow: Boolean): ActionResult =
-        actionResult(readApiObject(api.post(if (follow) Api.APK_UNFOLLOW else Api.APK_FOLLOW, mapOf("id" to id))))
+        actionResult(readActionObject(api.post(if (follow) Api.APK_UNFOLLOW else Api.APK_FOLLOW, mapOf("id" to id))))
 
     /** The product follow state travels in a form body, not the query string. */
     suspend fun changeProductFollow(id: String, follow: Boolean): ActionResult {
@@ -344,7 +345,7 @@ class CoolapkRepository(
             Api.PRODUCT_CHANGE_FOLLOW,
             body = Body.Form(listOf("id" to id, "status" to if (follow) "0" else "1")),
         )
-        return actionResult(readApiObject(response))
+        return actionResult(readActionObject(response))
     }
 
     suspend fun postReply(id: String, type: String, fields: List<Pair<String, String>>, files: List<FilePart>): ActionResult {
@@ -353,7 +354,7 @@ class CoolapkRepository(
             query = mapOf("id" to id, "type" to type),
             body = if (files.isEmpty()) Body.Form(fields) else Body.Multipart(fields, files),
         )
-        return actionResult(readApiObject(response))
+        return actionResult(readActionObject(response))
     }
 
     suspend fun createFeed(fields: List<Pair<String, String>>, files: List<FilePart>): ActionResult {
@@ -366,17 +367,17 @@ class CoolapkRepository(
             Api.FEED_CREATE,
             body = if (files.isEmpty()) Body.Form(normalized) else Body.Multipart(normalized, files),
         )
-        return actionResult(readApiObject(response))
+        return actionResult(readActionObject(response))
     }
 
     suspend fun sendMessage(uid: String, message: String, pic: String?): ActionResult {
         val fields = listOfNotNull("message" to message, pic?.let { "message_pic" to it })
         val response = api.post(Api.MESSAGE_SEND, query = mapOf("uid" to uid), body = Body.Form(fields))
-        return actionResult(readApiObject(response))
+        return actionResult(readActionObject(response))
     }
 
     suspend fun deleteMessage(ukey: String, id: String): ActionResult =
-        actionResult(readApiObject(api.get(Api.MESSAGE_DELETE, mapOf("ukey" to ukey, "id" to id))))
+        actionResult(readActionObject(api.get(Api.MESSAGE_DELETE, mapOf("ukey" to ukey, "id" to id))))
 
     suspend fun appsUpdate(pkgs: String): JsonObject =
         api.postJson(Api.APK_CHECK_UPDATE, query = mapOf("coolmarket_beta" to 0), body = Body.Multipart(listOf("pkgs" to pkgs), emptyList()))

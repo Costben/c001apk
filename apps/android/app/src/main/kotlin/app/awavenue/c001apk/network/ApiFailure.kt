@@ -41,7 +41,7 @@ private val json = Json { ignoreUnknownKeys = true }
  * Checks the envelope before any model mapping. An HTTP 200 alone says nothing
  * about login, risk controls or the shape of the payload.
  */
-fun readApiObject(status: Int, body: String): JsonObject {
+fun readApiObject(status: Int, body: String, requireData: Boolean = true): JsonObject {
     if (status !in 200..299) throw ApiFailure.http(status)
     val element = try {
         json.parseToJsonElement(body)
@@ -62,7 +62,8 @@ fun readApiObject(status: Int, body: String): JsonObject {
         (businessStatus != null && businessStatus !in listOf(0, 1)) ||
         marker.startsWith("err_") ||
         (error != null && error !is JsonNull && error.text() !in listOf("", "0", "false")) ||
-        ((data == null || data is JsonNull) && message.isNotEmpty() && code == null && businessStatus == null)
+        (requireData && (data == null || data is JsonNull) && message.isNotEmpty() &&
+            code == null && businessStatus == null)
     if (failed) {
         throw when {
             businessStatus == -10 || "网络环境" in clues ->
@@ -78,7 +79,7 @@ fun readApiObject(status: Int, body: String): JsonObject {
             else -> ApiFailure(ApiFailureKind.Business, "服务器未能完成请求，请稍后重试")
         }
     }
-    if (!obj.containsKey("data")) {
+    if (requireData && !obj.containsKey("data")) {
         throw ApiFailure(ApiFailureKind.InvalidResponse, "服务器响应缺少数据字段，请稍后重试")
     }
     return obj
@@ -86,6 +87,13 @@ fun readApiObject(status: Int, body: String): JsonObject {
 
 /** Envelope check straight off a response, for callers that need the raw headers too. */
 fun readApiObject(response: HttpResponse): JsonObject = readApiObject(response.code, response.body)
+
+/**
+ * Write endpoints answer with `status` and `message` but no `data`; a success must not be
+ * reported as a missing-field failure just because the payload is absent.
+ */
+fun readActionObject(response: HttpResponse): JsonObject =
+    readApiObject(response.code, response.body, requireData = false)
 
 private fun JsonObject.text(key: String): String = this[key].text()
 
