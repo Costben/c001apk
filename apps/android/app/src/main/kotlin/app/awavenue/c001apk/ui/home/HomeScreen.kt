@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.pager.HorizontalPager
@@ -53,6 +53,7 @@ import app.awavenue.c001apk.ui.app.AppListPage
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -67,14 +68,13 @@ import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
-import io.github.suqi8.coui.kmp.basic.SearchBarDefaults
-import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.TopAppBarState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -145,38 +145,6 @@ private fun Modifier.longPressAnywhere(onLongPress: () -> Unit): Modifier = poin
                 pressed = event.changes.any { it.pressed }
             }
         }
-    }
-}
-
-/**
- * The home search entry, dressed with the shared search-capsule material ([couiSearchMaterial]): the
- * `coui_search_bar_no_blur_solid` fill, the material rim, the inner shadow and the outer drop shadow.
- */
-@Composable
-private fun HomeSearchField(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = SearchBarDefaults.searchBarColors()
-    val shape = RoundedCornerShape(50)
-    Row(
-        modifier = modifier
-            .height(SearchBarDefaults.InputFieldMinHeight)
-            .couiSearchMaterial(shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            COUIIcons.Search,
-            contentDescription = "搜索",
-            tint = colors.iconColor,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "搜索",
-            style = COUITheme.textStyles.main.copy(fontSize = SearchBarDefaults.InputFieldFontSize),
-            color = colors.labelColor,
-            maxLines = 1,
-        )
     }
 }
 
@@ -361,11 +329,10 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                                     .clickable(onClick = openProfile),
                                 contentDescription = "我的",
                             )
-                            Spacer(Modifier.width(10.dp))
-                            HomeSearchField(
-                                onClick = openSearch,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Spacer(Modifier.weight(1f))
+                            TopBarIconButton(onClick = openSearch) {
+                                Icon(COUIIcons.Search, contentDescription = "搜索")
+                            }
                             NotificationBell(Modifier.padding(start = 10.dp))
                         }
                     }
@@ -416,42 +383,44 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
             }
         },
     ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .glassSource(backdrop)
-                .verticalDragWins { vertical -> pagerScrollEnabled = !vertical },
-            userScrollEnabled = pagerScrollEnabled,
-            beyondViewportPageCount = 1,
-        ) { page ->
-            // MainScreen's pager keeps the full tab count; pages past the filtered end show the
-            // last visible tab until the settle effect bounces them back.
-            val tab = tabs.getOrNull(page) ?: tabs.last()
-            val returnTopHere = returnTop.takeIf { page == pagerState.currentPage }
-            val contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = outerPadding.calculateBottomPadding() + 12.dp,
-            )
-            when (tab) {
-                HomeTab.App -> AppListPage(
-                    returnTop = returnTopHere,
-                    contentPadding = contentPadding,
-                    scrollBehavior = scrollBehavior,
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .verticalDragWins { vertical -> pagerScrollEnabled = !vertical },
+                userScrollEnabled = pagerScrollEnabled,
+                beyondViewportPageCount = 1,
+            ) { page ->
+                // MainScreen's pager keeps the full tab count; pages past the filtered end show the
+                // last visible tab until the settle effect bounces them back.
+                val tab = tabs.getOrNull(page) ?: tabs.last()
+                val returnTopHere = returnTop.takeIf { page == pagerState.currentPage }
+                val contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = outerPadding.calculateBottomPadding() + 12.dp,
                 )
-                HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, contentPadding)
-                HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, contentPadding)
-                else -> {
-                    // Every stream is personalised, so its cached page is only valid for one account.
-                    val key = "home-${tab.name}-${app.session.uid}"
-                    val loader = tab.loader(app.repository)
-                    val viewModel = viewModel(key = key) { FeedListViewModel(loader!!) }
-                    FeedList(
-                        viewModel = viewModel,
-                        scrollBehavior = scrollBehavior,
+                when (tab) {
+                    HomeTab.App -> AppListPage(
                         returnTop = returnTopHere,
                         contentPadding = contentPadding,
+                        scrollBehavior = scrollBehavior,
                     )
+                    HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, contentPadding)
+                    HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, contentPadding)
+                    else -> {
+                        // Every stream is personalised, so its cached page is only valid for one account.
+                        val key = "home-${tab.name}-${app.session.uid}"
+                        val loader = tab.loader(app.repository)
+                        val viewModel = viewModel(key = key) { FeedListViewModel(loader!!) }
+                        FeedList(
+                            viewModel = viewModel,
+                            scrollBehavior = scrollBehavior,
+                            returnTop = returnTopHere,
+                            contentPadding = contentPadding,
+                        )
+                    }
                 }
             }
         }
