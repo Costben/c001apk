@@ -1,6 +1,8 @@
 package app.awavenue.c001apk.ui.app
 
+import android.text.format.Formatter
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -35,12 +39,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
+import app.awavenue.c001apk.network.ApiFailureKind
+import app.awavenue.c001apk.platform.InstalledApp
+import app.awavenue.c001apk.platform.installedApp
 import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
@@ -51,6 +59,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.shareText
+import app.awavenue.c001apk.ui.common.toImageBitmap
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
 import app.awavenue.c001apk.ui.feed.FeedActions
@@ -90,9 +99,11 @@ import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class AppCommentTab(val label: String) {
     Reply("最近回复"),
@@ -121,20 +132,29 @@ fun ApkScreen(packageName: String) {
 
     var detail by remember(packageName) { mutableStateOf<Entity?>(null) }
     var failure by remember(packageName) { mutableStateOf<String?>(null) }
+    var failureKind by remember(packageName) { mutableStateOf<ApiFailureKind?>(null) }
+    var localApp by remember(packageName) { mutableStateOf<InstalledApp?>(null) }
     var attempts by remember(packageName) { mutableStateOf(0) }
     var tab by remember(packageName) { mutableStateOf(AppCommentTab.Reply) }
     var menu by remember { mutableStateOf(false) }
     var compose by remember { mutableStateOf(false) }
     var downloadUrl by remember(packageName) { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(packageName) {
+        localApp = withContext(Dispatchers.IO) { installedApp(context, packageName) }
+    }
+
     LaunchedEffect(packageName, attempts) {
         failure = null
+        failureKind = null
         try {
             detail = app.repository.appDetail(packageName)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            failure = ApiFailure.from(e).message
+            val apiFailure = ApiFailure.from(e)
+            failure = apiFailure.message
+            failureKind = apiFailure.kind
         }
     }
 
@@ -292,10 +312,16 @@ fun ApkScreen(packageName: String) {
                     Modifier.fillMaxSize().padding(innerPadding),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (failure == null) {
-                        InfiniteProgressIndicator()
-                    } else {
-                        EmptyState(
+                    val local = localApp
+                    when {
+                        failure == null -> InfiniteProgressIndicator()
+                        local != null -> LocalApkFallback(
+                            app = local,
+                            notListed = failureKind == ApiFailureKind.Business,
+                            message = failure.orEmpty(),
+                            onRetry = { attempts++ },
+                        )
+                        else -> EmptyState(
                             title = "加载失败",
                             subtitle = failure,
                             actionText = "重试",
@@ -402,6 +428,85 @@ fun ApkScreen(packageName: String) {
                 listViewModel?.refresh()
             },
         )
+    }
+}
+
+@Composable
+private fun LocalApkFallback(
+    app: InstalledApp,
+    notListed: Boolean,
+    message: String,
+    onRetry: () -> Unit,
+) {
+    val context = LocalContext.current
+    val icon = remember(app) { app.icon?.toImageBitmap(240) }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Image(
+                        bitmap = icon,
+                        contentDescription = app.appName,
+                        modifier = Modifier.size(80.dp).clip(RoundedCornerShape(18.dp)),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        app.appName,
+                        style = COUITheme.textStyles.body1,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        app.packageName,
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "版本: ${app.versionName}(${app.versionCode})",
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "大小: ${Formatter.formatShortFileSize(context, app.apkSize)}",
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "更新时间: ${if (app.lastUpdateTime > 0) fromToday(app.lastUpdateTime / 1000) else "未知"}",
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(28.dp))
+        Text(
+            if (notListed) "酷安未收录该应用" else "无法获取酷安详情",
+            style = COUITheme.textStyles.body1,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (notListed) "已安装的 ${app.appName} 在酷安没有对应页面。" else message,
+            style = COUITheme.textStyles.body2,
+            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        TextButton(text = "重试", onClick = onRetry)
     }
 }
 

@@ -13,6 +13,7 @@ data class InstalledApp(
     val versionName: String,
     val versionCode: Long,
     val lastUpdateTime: Long,
+    val apkSize: Long,
     val icon: Drawable?,
 )
 
@@ -32,17 +33,35 @@ fun installedApps(context: Context): List<InstalledApp> {
         .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) != ApplicationInfo.FLAG_SYSTEM }
         .mapNotNull { info ->
             val packageInfo = packageInfo(manager, info.packageName) ?: return@mapNotNull null
-            InstalledApp(
-                appName = manager.getApplicationLabel(info).toString(),
-                packageName = info.packageName,
-                versionName = packageInfo.versionName.orEmpty(),
-                versionCode = versionCode(packageInfo),
-                lastUpdateTime = packageInfo.lastUpdateTime,
-                icon = runCatching { info.loadIcon(manager) }.getOrNull(),
-            )
+            info.toInstalledApp(manager, packageInfo)
         }
         .sortedByDescending { it.lastUpdateTime }
 }
+
+/** One installed package, for pages opened by package name. Blocking. */
+fun installedApp(context: Context, packageName: String): InstalledApp? {
+    val manager = context.packageManager
+    val info = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            manager.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            manager.getApplicationInfo(packageName, 0)
+        }
+    }.getOrNull() ?: return null
+    val packageInfo = packageInfo(manager, packageName) ?: return null
+    return info.toInstalledApp(manager, packageInfo)
+}
+
+private fun ApplicationInfo.toInstalledApp(manager: PackageManager, packageInfo: PackageInfo) = InstalledApp(
+    appName = manager.getApplicationLabel(this).toString(),
+    packageName = packageName,
+    versionName = packageInfo.versionName.orEmpty(),
+    versionCode = versionCode(packageInfo),
+    lastUpdateTime = packageInfo.lastUpdateTime,
+    apkSize = runCatching { java.io.File(sourceDir).length() }.getOrDefault(0L),
+    icon = runCatching { loadIcon(manager) }.getOrNull(),
+)
 
 private fun packageInfo(manager: PackageManager, packageName: String): PackageInfo? = runCatching {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
