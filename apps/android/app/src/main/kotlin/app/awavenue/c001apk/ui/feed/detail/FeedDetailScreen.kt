@@ -68,7 +68,6 @@ import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
-import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -422,7 +421,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickyReplyHeader(vie
                 .fillMaxWidth()
                 .background(COUITheme.colorScheme.surface),
         ) {
-            HorizontalDivider()
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -446,7 +444,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickyReplyHeader(vie
                     modifier = Modifier.weight(1f),
                 )
             }
-            HorizontalDivider()
         }
     }
 }

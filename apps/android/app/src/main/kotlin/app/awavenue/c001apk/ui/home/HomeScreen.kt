@@ -21,13 +21,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +44,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -81,6 +83,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** The home tabs in the order the Flutter client lays them out; 关注 has its own main tab. */
 enum class HomeTab(val label: String) {
@@ -112,6 +115,12 @@ enum class HomeTab(val label: String) {
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
 private val TOP_BAR_ROW_HEIGHT = 52.dp
+
+/**
+ * The bar material's alpha when the top row is fully expanded. The material stays on at rest so the
+ * bar reads as a translucent surface rather than as icons sitting directly on the list.
+ */
+private const val MATERIAL_MIN_ALPHA = 0.55f
 
 /**
  * Long-press anywhere on the bar, including over the tabs. The tab items consume their own down,
@@ -181,9 +190,12 @@ private fun Modifier.verticalDragWins(onVerticalDrag: (Boolean) -> Unit): Modifi
  * top; here the downward scroll the list already consumed counts too.
  */
 @Composable
-private fun rememberHomeScrollBehavior(state: TopAppBarState): ScrollBehavior {
+private fun rememberHomeScrollBehavior(
+    state: TopAppBarState,
+    scrolledPx: MutableFloatState,
+): ScrollBehavior {
     val settle = COUIScrollBehavior(state = state)
-    return remember(state, settle) {
+    return remember(state, settle, scrolledPx) {
         object : ScrollBehavior {
             override val state = state
             override val isPinned = false
@@ -203,6 +215,8 @@ private fun rememberHomeScrollBehavior(state: TopAppBarState): ScrollBehavior {
                     source: NestedScrollSource,
                 ): Offset {
                     state.contentOffset += consumed.y
+                    scrolledPx.floatValue =
+                        (scrolledPx.floatValue - consumed.y).coerceAtLeast(0f)
                     val delta = if (consumed.y > 0f) consumed.y else available.y
                     if (delta <= 0f) return Offset.Zero
                     val previous = state.heightOffset
@@ -244,16 +258,28 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
     // Only the top row collapses. The limit is exactly its height, so the tab row stays pinned
     // under the status bar once the header has scrolled away.
     val topRowHeightPx = with(LocalDensity.current) { TOP_BAR_ROW_HEIGHT.toPx() }
+    // How far the list has actually moved below its top. The top row's own collapse is not part of
+    // it: pulling the row back down moves nothing in the list, so the material must not fade there.
+    val scrolledPx = remember { mutableFloatStateOf(0f) }
     val scrollBehavior = rememberHomeScrollBehavior(
         rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
+        scrolledPx,
     )
     SideEffect {
         // The saved state keeps the limit it was created with, so a density change has to reapply it.
         scrollBehavior.state.heightOffsetLimit = -topRowHeightPx
     }
-    val collapsedPx = (-scrollBehavior.state.heightOffset).coerceIn(0f, topRowHeightPx)
-    val collapseFraction = if (topRowHeightPx > 0f) collapsedPx / topRowHeightPx else 0f
-    val topRowHeight = TOP_BAR_ROW_HEIGHT * (1f - collapseFraction)
+    // Collapse state is read from [collapseFraction] inside layout, draw and the material, never
+    // during composition: a scroll frame must move the row without recomposing the pager.
+    val collapseFraction: () -> Float = remember(scrollBehavior, topRowHeightPx) {
+        {
+            if (topRowHeightPx > 0f) {
+                (-scrollBehavior.state.heightOffset).coerceIn(0f, topRowHeightPx) / topRowHeightPx
+            } else {
+                0f
+            }
+        }
+    }
     // A mostly-vertical drag belongs to the list, even when it starts diagonally; see
     // [verticalDragWins]. The pager is switched off for the rest of such a gesture.
     var pagerScrollEnabled by remember { mutableStateOf(true) }
@@ -275,13 +301,17 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
     }
 
     val backdrop = rememberGlassBackdrop()
-    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val density = LocalDensity.current
-    // The material stays off at rest, so the first card is not blurred under the 24dp band; it
-    // fades in as the list scrolls under the bar, `min(1, scrollPx / 30dp)`.
-    val materialScrollFraction = remember(scrollBehavior, density) {
+    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // The material never goes fully dark: at rest the bar keeps a translucent floor so the top row
+    // and the tab capsule still sit on a blurred layer instead of directly on the list. Strength
+    // follows the distance the list has scrolled, not the row's collapse: pulling the row back down
+    // changes no content position, and tying the material to it would visibly thin the blur exactly
+    // when the row reappears. The draw-phase read keeps the shader composed across the gesture.
+    val materialScrollFraction = remember(scrolledPx, density) {
         {
-            AppBarBlurOverlayDefaults.scrollAlpha(abs(scrollBehavior.state.contentOffset), density)
+            val ramp = AppBarBlurOverlayDefaults.scrollAlpha(scrolledPx.floatValue, density)
+            MATERIAL_MIN_ALPHA + (1f - MATERIAL_MIN_ALPHA) * ramp
         }
     }
 
@@ -300,23 +330,32 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                     Spacer(modifier = Modifier.height(statusBar))
                     // The row keeps its full height and slides out of a box that shrinks with the
                     // scroll, so the tab row rises into its place instead of leaving a gap behind.
+                    // The height is resolved in the measure phase and the clip in the draw phase,
+                    // both from [collapseFraction], so scrolling never recomposes the bar.
                     // A circular button's halo reaches 15.5dp past its 40dp circle, while the row only
-                    // leaves 6dp above and below, so clipping at rest would slice the halo off. The
-                    // clip is only needed while the row slides out during the collapse.
-                    val rowClip = if (collapseFraction > 0f) Modifier.clipToBounds() else Modifier
+                    // leaves 6dp above and below, so clipping at rest would slice the halo off; the
+                    // clip only engages while the row is sliding out.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(topRowHeight)
-                            .then(rowClip),
+                            .layout { measurable, constraints ->
+                                val full = TOP_BAR_ROW_HEIGHT.roundToPx()
+                                val placeable = measurable.measure(
+                                    constraints.copy(minHeight = full, maxHeight = full),
+                                )
+                                val visible = (full * (1f - collapseFraction())).roundToInt()
+                                    .coerceIn(0, full)
+                                layout(placeable.width, visible) { placeable.placeRelative(0, 0) }
+                            }
+                            .graphicsLayer { clip = collapseFraction() > 0f },
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(TOP_BAR_ROW_HEIGHT)
                                 .graphicsLayer {
-                                    translationY = -collapsedPx
-                                    alpha = 1f - collapseFraction
+                                    translationY = -topRowHeightPx * collapseFraction()
+                                    alpha = 1f - collapseFraction()
                                 }
                                 .padding(start = 16.dp, end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -357,7 +396,11 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                                 .weight(1f)
                                 .padding(vertical = TAB_ROW_VERTICAL_PADDING)
                                 .height(TabRowDefaults.TabRowWithContourHeight)
-                                .couiSearchMaterial(RoundedCornerShape(50), dropShadow = false),
+                                .couiSearchMaterial(
+                                    RoundedCornerShape(50),
+                                    dropShadow = false,
+                                    fillAlpha = 0.8f,
+                                ),
                         ) {
                             TabRowWithContour(
                                 tabs = tabs.map { it.label },

@@ -37,9 +37,15 @@ private val SearchShadowOffsetY = 1.dp
  *
  * @param shape The capsule outline. The material edge assumes a capsule (radius = height / 2).
  * @param dropShadow Whether to paint the outer drop shadow.
+ * @param fillAlpha Opacity of the capsule fill. Below 1 the bar lets the blurred content behind it
+ *   show through, as the home tab capsule does.
  */
 @Composable
-fun Modifier.couiSearchMaterial(shape: Shape, dropShadow: Boolean = true): Modifier {
+fun Modifier.couiSearchMaterial(
+    shape: Shape,
+    dropShadow: Boolean = true,
+    fillAlpha: Float = 1f,
+): Modifier {
     val isDark = COUITheme.colorScheme.background.luminance() < 0.5f
     // ColorOS soft dark sets the search field below the #303030 page; COUI's own constant is a
     // white veil that assumes a black page, which would read lighter than the new background.
@@ -47,7 +53,7 @@ fun Modifier.couiSearchMaterial(shape: Shape, dropShadow: Boolean = true): Modif
     return this
         .then(if (dropShadow) couiCapsuleDropShadow(shape) else Modifier)
         .clip(shape)
-        .background(fill)
+        .background(fill.copy(alpha = fillAlpha))
         .materialShadowEdge(
             stroke = MaterialStrokeParams.frameworkCapsule13(isDark),
             edgeStyle = GradientStrokeStyle.EDGE_STYLE_0,

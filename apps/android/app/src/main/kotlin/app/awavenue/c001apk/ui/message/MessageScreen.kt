@@ -1,6 +1,5 @@
 package app.awavenue.c001apk.ui.message
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -64,16 +62,15 @@ import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.Card
-import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
+import app.awavenue.c001apk.ui.common.glassHeader
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.VerticalDivider
-import io.github.suqi8.coui.kmp.basic.couiGlassSurface
 import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -127,7 +124,7 @@ fun MessageScreen(outerPadding: PaddingValues) {
                 avatar = user.userAvatar,
                 level = user.int("level"),
                 exp = user.int("experience"),
-                nextExp = user.int("nextLevelExperience"),
+                nextExp = user.int("next_level_experience"),
             )
         } catch (e: CancellationException) {
             throw e
@@ -194,20 +191,19 @@ private fun MessageHeader(
     val backdrop = LocalBackdrop.current
     val level = user?.int("level") ?: app.session.level
     val exp = user?.int("experience") ?: app.session.exp
-    val nextExp = user?.int("nextLevelExperience") ?: app.session.nextExp
+    val nextExp = user?.int("next_level_experience") ?: app.session.nextExp
     val username = user?.username?.ifEmpty { app.session.username } ?: app.session.username
 
     Column(
         Modifier
             .fillMaxWidth()
-            .couiGlassSurface(
+            .glassHeader(
                 backdrop = backdrop,
-                shape = RectangleShape,
                 containerColor = COUITheme.colorScheme.surface,
-                fallback = Modifier.background(COUITheme.colorScheme.surface),
+                fadeHeight = 18.dp,
             )
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
-            .padding(bottom = 10.dp),
+            .padding(bottom = 18.dp),
     ) {
         Row(
             Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 16.dp),
@@ -271,7 +267,6 @@ private fun MessageHeader(
                 }
             }
         }
-        HorizontalDivider(Modifier.padding(top = 10.dp))
     }
 }
 
@@ -617,7 +612,12 @@ private fun CellCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Text(titles[index], maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        titles[index],
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
