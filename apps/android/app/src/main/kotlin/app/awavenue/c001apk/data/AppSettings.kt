@@ -11,6 +11,9 @@ import app.awavenue.c001apk.ui.home.HomeTab
 
 enum class DarkMode(val label: String) { System("跟随系统"), Off("始终关闭"), On("始终开启") }
 
+/** How many rows the 浏览历史 card on 我的 shows: a short preview, or the whole list. */
+enum class HistoryCardMode(val label: String) { Compact("缩略展开"), Full("完整展开") }
+
 /**
  * Persistent settings and the API device profile. Values are Compose state so screens
  * recompose when a setting changes; writes go straight to SharedPreferences.
@@ -68,6 +71,11 @@ class AppSettings(context: Context) {
         private set
 
     var recordHistory by mutableStateOf(prefs.getBoolean(KEY_RECORD_HISTORY, true))
+        private set
+
+    var historyCardMode by mutableStateOf(
+        HistoryCardMode.entries.getOrElse(prefs.getInt(KEY_HISTORY_CARD_MODE, 0)) { HistoryCardMode.Compact },
+    )
         private set
 
     var showEmoji by mutableStateOf(prefs.getBoolean(KEY_SHOW_EMOJI, true))
@@ -134,6 +142,9 @@ class AppSettings(context: Context) {
     fun updateOpenInBrowser(value: Boolean) = put { putBoolean(KEY_OPEN_IN_BROWSER, value) }.also { openInBrowser = value }
 
     fun updateRecordHistory(value: Boolean) = put { putBoolean(KEY_RECORD_HISTORY, value) }.also { recordHistory = value }
+
+    fun updateHistoryCardMode(value: HistoryCardMode) =
+        put { putInt(KEY_HISTORY_CARD_MODE, value.ordinal) }.also { historyCardMode = value }
 
     fun updateShowEmoji(value: Boolean) = put { putBoolean(KEY_SHOW_EMOJI, value) }.also { showEmoji = value }
 
@@ -224,6 +235,7 @@ class AppSettings(context: Context) {
         const val KEY_FOLLOW_SELECTION = "followFeedSelectionV1"
         const val KEY_OPEN_IN_BROWSER = "openInBrowser"
         const val KEY_RECORD_HISTORY = "recordHistory"
+        const val KEY_HISTORY_CARD_MODE = "historyCardMode"
         const val KEY_SHOW_EMOJI = "showEmoji"
         const val KEY_HAPTIC_FEEDBACK = "hapticFeedback"
         const val KEY_CUSTOM_HAPTICS = "customHaptics"

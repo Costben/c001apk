@@ -18,12 +18,13 @@ fun NetworkImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
+    crossfade: Boolean = true,
 ) {
     val context = LocalPlatformContext.current
     val placeholder = Modifier.background(COUITheme.colorScheme.secondaryContainer)
-    val request = remember(context, url) {
+    val request = remember(context, url, crossfade) {
         url.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-            ?.let { ImageRequest.Builder(context).data(it).crossfade(true).build() }
+            ?.let { ImageRequest.Builder(context).data(it).crossfade(crossfade).build() }
     }
     AsyncImage(
         model = request,

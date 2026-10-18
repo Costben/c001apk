@@ -31,6 +31,7 @@ import app.awavenue.c001apk.BuildConfig
 import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.HapticStrength
+import app.awavenue.c001apk.data.HistoryCardMode
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
@@ -248,6 +249,16 @@ fun SettingsScreen() {
                         title = "记录浏览历史",
                         checked = settings.recordHistory,
                         onCheckedChange = settings::updateRecordHistory,
+                        startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                    )
+                    WindowDropdownPreference(
+                        title = "浏览历史卡片",
+                        summary = "缩略展开只显示最近 5 条",
+                        items = HistoryCardMode.entries.map { it.label },
+                        selectedIndex = HistoryCardMode.entries.indexOf(settings.historyCardMode),
+                        onSelectedIndexChange = {
+                            settings.updateHistoryCardMode(HistoryCardMode.entries[it])
+                        },
                         startAction = { PreferenceStartIcon(COUIIcons.Recent) },
                     )
                     SwitchPreference(

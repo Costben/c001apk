@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,10 +22,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,47 +32,39 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.fromHtml
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import app.awavenue.c001apk.data.HistoryCardMode
 import app.awavenue.c001apk.data.HistoryType
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
-import app.awavenue.c001apk.ui.chat.MessageRow
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
-import app.awavenue.c001apk.ui.feed.EntityItem
-import app.awavenue.c001apk.ui.feed.FeedActions
-import app.awavenue.c001apk.ui.feed.FeedListViewModel
-import app.awavenue.c001apk.ui.feed.FooterStatus
-import app.awavenue.c001apk.ui.feed.ListStatus
-import app.awavenue.c001apk.ui.feed.PageLoader
+import app.awavenue.c001apk.ui.follow.localFollowLabel
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import app.awavenue.c001apk.ui.nav.NotificationType
 import app.awavenue.c001apk.ui.nav.Route
-import app.awavenue.c001apk.ui.notification.NotificationItem
-import io.github.suqi8.coui.kmp.basic.Badge
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
-import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -84,49 +75,21 @@ import io.github.suqi8.coui.kmp.basic.couiGlassSurface
 import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
-import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronForward
-import io.github.suqi8.coui.kmp.icon.extended.Community
-import io.github.suqi8.coui.kmp.icon.extended.ContactsBook
 import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
-import io.github.suqi8.coui.kmp.icon.extended.Email
 import io.github.suqi8.coui.kmp.icon.extended.Favorites
 import io.github.suqi8.coui.kmp.icon.extended.Folder
-import io.github.suqi8.coui.kmp.icon.extended.Location
-import io.github.suqi8.coui.kmp.icon.extended.Recent
 import io.github.suqi8.coui.kmp.icon.extended.Reply
 import io.github.suqi8.coui.kmp.icon.extended.Settings
-import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
-private val EntryColors = listOf(
-    Color(0xFF2196F3),
-    Color(0xFF00BCD4),
-    Color(0xFF4CAF50),
-    Color(0xFFF44336),
-    Color(0xFFFF9800),
-)
-
-private val EntryTitles = listOf("@我的动态", "@我的评论", "我收到的赞", "好友关注", "私信与信息")
-
-/** The entries the 我的 page lists, in [EntryTitles] order; 酷安小秘书 opens from inside 私信与信息. */
-private val EntryTypes = listOf(
-    NotificationType.At,
-    NotificationType.Comment,
-    NotificationType.Like,
-    NotificationType.Follow,
-    NotificationType.Message,
-)
-
 /**
- * 我的: the account header, its counters and shortcuts, and the notification entries. Conversations
- * live behind 私信与信息; switching or adding accounts happens on 账号管理.
+ * 我的: the account header, its counters and shortcuts, and preview cards for the lists kept
+ * around it. Every card opens its full list; nothing expands or collapses in place.
  */
 @Composable
 fun MessageScreen(outerPadding: PaddingValues) {
@@ -138,10 +101,18 @@ fun MessageScreen(outerPadding: PaddingValues) {
 
     val isLogin = app.session.isLogin
     var profile by remember { mutableStateOf<Entity?>(null) }
-    var counts by remember { mutableStateOf<List<Int?>>(emptyList()) }
-    // 酷安小秘书's own unread count; 私信与信息 shows it on its leading row.
-    var systemCount by remember { mutableStateOf<Int?>(null) }
+    // Null until the first request lands, so a card does not flash its empty state.
+    var recent by remember { mutableStateOf<List<Entity>?>(null) }
+    var follows by remember { mutableStateOf<List<Entity>?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+
+    suspend fun loadPreview(url: String): List<Entity> = try {
+        app.repository.userList(url, app.session.uid, null, 1, null, null)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyList()
+    }
 
     suspend fun reload() {
         if (!app.session.isLogin) return
@@ -156,22 +127,13 @@ fun MessageScreen(outerPadding: PaddingValues) {
                 exp = user.int("experience"),
                 nextExp = user.int("nextLevelExperience"),
             )
-            val count = app.repository.checkCount()
-            val message = count.int("message")
-            val notification = count.int("notification")
-            systemCount = notification
-            counts = listOf(
-                count.int("atme"),
-                count.int("atcommentme"),
-                count.int("feedlike"),
-                count.int("contacts_follow"),
-                if (message != null || notification != null) (message ?: 0) + (notification ?: 0) else null,
-            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             context.toast(ApiFailure.from(e).message)
         }
+        recent = loadPreview("/v6/user/recentHistoryList")
+        follows = loadPreview("/v6/user/followList")
     }
 
     LaunchedEffect(isLogin) {
@@ -179,8 +141,8 @@ fun MessageScreen(outerPadding: PaddingValues) {
             reload()
         } else {
             profile = null
-            counts = emptyList()
-            systemCount = null
+            recent = null
+            follows = null
         }
     }
 
@@ -199,16 +161,9 @@ fun MessageScreen(outerPadding: PaddingValues) {
             backdrop = backdrop,
             isLogin = isLogin,
             profile = profile,
-            counts = counts,
+            recent = recent,
+            follows = follows,
             refreshing = refreshing,
-            onOpen = { index ->
-                val type = EntryTypes[index]
-                navigator.push(
-                    Route.Notification(type, systemCount = if (type == NotificationType.Message) systemCount ?: 0 else 0),
-                )
-                if (index < counts.size) counts = counts.toMutableList().also { it[index] = null }
-                if (type == NotificationType.Message) systemCount = null
-            },
             onRefresh = {
                 scope.launch {
                     refreshing = true
@@ -319,13 +274,33 @@ private fun MessageList(
     backdrop: LayerBackdrop?,
     isLogin: Boolean,
     profile: Entity?,
-    counts: List<Int?>,
+    recent: List<Entity>?,
+    follows: List<Entity>?,
     refreshing: Boolean,
-    onOpen: (Int) -> Unit,
     onRefresh: () -> Unit,
     contentPadding: PaddingValues,
 ) {
+    val app = LocalApp.current
     val navigator = LocalNavigator.current
+    // Parse and shorten once per history change, not every time the card scrolls back in.
+    val history = remember(app.history.historyFeeds) {
+        app.history.list(HistoryType.History).map { item ->
+            val text = plainText(item.message)
+            val snippet = when {
+                text.length > 80 -> text.take(80) + "…"
+                item.message.length >= 150 -> "$text…"
+                else -> text
+            }
+            HistoryPreview(
+                avatar = item.userAvatar,
+                title = if (item.username.isEmpty()) "动态" else "${item.username}的动态",
+                snippet = snippet,
+                time = item.time,
+            )
+        }
+    }
+    val localFollows = app.localFollow.users
+    val historyRows = if (app.settings.historyCardMode == HistoryCardMode.Full) history else history.take(5)
 
     PullToRefresh(
         isRefreshing = refreshing,
@@ -343,7 +318,7 @@ private fun MessageList(
         ) {
             // A guest has no counters to show, so the page starts at the shortcuts.
             if (isLogin) {
-                item(contentType = "stats") {
+                item(key = "stats", contentType = "stats") {
                     CellCard(
                         values = listOf(profile?.int("feed"), profile?.int("follow"), profile?.int("fans")),
                         titles = listOf("动态", "关注", "粉丝"),
@@ -356,42 +331,221 @@ private fun MessageList(
                     )
                 }
             }
-            item(contentType = "shortcuts") {
-                Column {
-                    CellCard(
-                        values = null,
-                        titles = listOf("本地收藏", "浏览历史", "我的常去"),
-                        icons = listOf(COUIIcons.Folder, COUIIcons.Recent, COUIIcons.Location),
-                        onClicks = listOf(
-                            { navigator.push(Route.History(HistoryType.Fav)) },
-                            { navigator.push(Route.History(HistoryType.History)) },
-                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Recent)) },
-                        ),
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    CellCard(
-                        values = null,
-                        titles = listOf("我的收藏", "我的赞", "我的回复"),
-                        icons = listOf(COUIIcons.Favorites, AppIcons.ThumbUpOutlined, COUIIcons.Reply),
-                        onClicks = listOf(
-                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Collection)) },
-                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Like)) },
-                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Reply)) },
-                        ),
+            item(key = "shortcuts", contentType = "shortcuts") {
+                CellCard(
+                    values = null,
+                    titles = listOf("本地收藏", "我的收藏", "我的赞", "我的回复"),
+                    icons = listOf(COUIIcons.Folder, COUIIcons.Favorites, AppIcons.ThumbUpOutlined, COUIIcons.Reply),
+                    onClicks = listOf(
+                        { navigator.push(Route.History(HistoryType.Fav)) },
+                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Collection)) },
+                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Like)) },
+                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Reply)) },
+                    ),
+                )
+            }
+            item(key = "history", contentType = "history") {
+                PreviewCard(
+                    title = "浏览历史",
+                    onClick = { navigator.push(Route.History(HistoryType.History)) },
+                ) {
+                    if (historyRows.isEmpty()) {
+                        PreviewEmpty("暂无浏览记录")
+                    } else {
+                        historyRows.forEach { item -> HistoryPreviewRow(item) }
+                    }
+                }
+            }
+            if (isLogin) {
+                item(key = "recent", contentType = "recent") {
+                    PreviewCard(
+                        title = "我的常去",
+                        onClick = { navigator.push(Route.FFFList(FFFListType.Recent)) },
+                    ) {
+                        when {
+                            recent == null -> Unit
+                            recent.isEmpty() -> PreviewEmpty("暂无最近访问")
+                            else -> recent.take(5).forEach { item -> RecentRow(item) }
+                        }
+                    }
+                }
+                item(key = "follow", contentType = "follow") {
+                    PreviewCard(
+                        title = "我的关注",
+                        onClick = { navigator.push(Route.FFFList(FFFListType.Follow)) },
+                    ) {
+                        when {
+                            follows == null -> Unit
+                            follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
+                            else -> follows.take(5).forEach { item ->
+                                // followList answers with contacts: the followed side sits in f*.
+                                val user = item.obj("fUserInfo") ?: item.obj("userInfo")
+                                val fans = user?.string("fans").orEmpty()
+                                PreviewRow(
+                                    avatar = item.string("fUserAvatar")
+                                        .ifEmpty { user?.string("userAvatar").orEmpty() },
+                                    title = item.string("fusername")
+                                        .ifEmpty { user?.string("username").orEmpty() },
+                                    subtitle = if (fans.isEmpty()) "已关注" else "${fans}粉丝",
+                                    circle = true,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item(key = "local-follow", contentType = "local-follow") {
+                PreviewCard(
+                    title = localFollowLabel(),
+                    onClick = { navigator.push(Route.LocalFollowList) },
+                ) {
+                    if (localFollows.isEmpty()) {
+                        PreviewEmpty("暂无${localFollowLabel()}")
+                    } else {
+                        localFollows.take(5).forEach { user ->
+                            PreviewRow(
+                                avatar = user.avatar,
+                                title = user.name,
+                                subtitle = localFollowLabel(),
+                                circle = true,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One preview card: the title row opens the full list, and a few rows sit underneath. */
+@Composable
+private fun PreviewCard(
+    title: String,
+    onClick: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        insideMargin = PaddingValues(0.dp),
+        onClick = rememberHapticClick(onClick = onClick),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    title,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Icon(
+                    COUIIcons.ChevronForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            content()
+        }
+    }
+}
+
+/** A row of a [PreviewCard]: avatar, one-line title, optional meta line, optional trailing time. */
+@Composable
+private fun PreviewRow(
+    avatar: String,
+    title: String,
+    subtitle: String,
+    trailing: String? = null,
+    circle: Boolean = false,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NetworkImage(
+            avatar,
+            Modifier.size(42.dp).clip(if (circle) CircleShape else RoundedCornerShape(10.dp)),
+            contentDescription = title,
+            crossfade = false,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!trailing.isNullOrEmpty()) {
+                    Text(
+                        trailing,
+                        style = COUITheme.textStyles.footnote1,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
                     )
                 }
             }
-            items(count = EntryTypes.size) { index ->
-                NotificationEntry(
-                    color = EntryColors[index],
-                    icon = EntryIcons[index],
-                    title = EntryTitles[index],
-                    badge = counts.getOrNull(index),
-                    onClick = { if (isLogin) onOpen(index) },
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    subtitle,
+                    style = COUITheme.textStyles.footnote1,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
+}
+
+private class HistoryPreview(
+    val avatar: String,
+    val title: String,
+    val snippet: String,
+    val time: Long,
+)
+
+@Composable
+private fun HistoryPreviewRow(item: HistoryPreview) {
+    PreviewRow(
+        avatar = item.avatar,
+        title = item.title,
+        subtitle = item.snippet,
+        trailing = fromToday(item.time / 1000),
+    )
+}
+
+/** A 常去 entry names its target type, as the full 我的常去 list does. */
+@Composable
+private fun RecentRow(item: Entity) {
+    val isUser = item.string("target_type") == "user"
+    PreviewRow(
+        avatar = item.logo.ifEmpty { item.pic },
+        title = if (isUser) item.title else "${item.string("target_type_title")}: ${item.title}",
+        subtitle = if (isUser) "${item.string("fans_num")}粉丝" else "${item.string("comment_num")}讨论",
+        circle = isUser,
+    )
+}
+
+/** A stored message is HTML; the one-line preview only has room for its text. */
+private fun plainText(html: String): String =
+    AnnotatedString.fromHtml(html).text.replace(Regex("\\s+"), " ").trim()
+
+@Composable
+private fun PreviewEmpty(text: String) {
+    Text(
+        text,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+        textAlign = TextAlign.Center,
+        style = COUITheme.textStyles.footnote1,
+        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+    )
 }
 
 /** The three-up card of the message tab: counters, or shortcuts when [icons] is given. */
@@ -440,48 +594,6 @@ private fun CellCard(
                     Text(titles[index], maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-        }
-    }
-}
-
-private val EntryIcons = listOf(
-    COUIIcons.Community,
-    AppIcons.ChatBubbleOutlined,
-    AppIcons.ThumbUpOutlined,
-    COUIIcons.ContactsBook,
-    COUIIcons.Email,
-)
-
-@Composable
-private fun NotificationEntry(
-    color: Color,
-    icon: ImageVector,
-    title: String,
-    badge: Int?,
-    onClick: () -> Unit,
-) {
-    Card(
-        Modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(10.dp),
-        onClick = rememberHapticClick(onClick = onClick),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(color),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White)
-            }
-            Spacer(Modifier.width(10.dp))
-            Text(title, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (badge != null && badge > 0) {
-                Badge(count = badge)
-                Spacer(Modifier.width(6.dp))
-            }
-            Icon(COUIIcons.ChevronForward, contentDescription = null, tint = COUITheme.colorScheme.outline)
         }
     }
 }
