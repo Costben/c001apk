@@ -2,6 +2,9 @@ package app.awavenue.c001apk.ui.feed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,13 +20,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +42,7 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -41,13 +53,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Blocklist
-import io.github.suqi8.coui.kmp.icon.extended.Copy
-import io.github.suqi8.coui.kmp.icon.extended.Delete
-import io.github.suqi8.coui.kmp.icon.extended.ExpandMore
-import io.github.suqi8.coui.kmp.icon.extended.Messages
-import io.github.suqi8.coui.kmp.icon.extended.Report
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** One row of a sheet menu, shared by the feed menu, the reply panel and the web page menu. */
@@ -178,33 +184,32 @@ fun ReplyCard(
                 }
             }
         }
-        IconButton(
-            onClick = { panelOpen = true },
-            modifier = Modifier.align(Alignment.TopEnd),
-        ) {
-            Icon(
-                COUIIcons.ExpandMore,
-                contentDescription = "更多",
-                tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+        Box(Modifier.align(Alignment.TopEnd)) {
+            IconButton(onClick = { panelOpen = true }) {
+                Icon(
+                    COUIIcons.More,
+                    contentDescription = "更多",
+                    tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            MoreMenu(
+                show = panelOpen,
+                onDismissRequest = { panelOpen = false },
+                entries = replyMenuEntries(
+                    reply = reply,
+                    isOwn = reply.uid.isNotEmpty() && reply.uid == app.session.uid,
+                    onCopy = { navigator.push(Route.Copy(reply.message)) },
+                    onBlock = { onBlock?.invoke(reply.uid, null) },
+                    onDelete = { onDelete?.invoke(reply.id, null) },
+                    onReport = { navigator.push(Route.Web(Protocol.reportLink(reply.id, isReply = true))) },
+                    onShowReplies = { onShowReplies?.invoke(reply) },
+                ),
             )
         }
     }
-
-    OverlayBottomSheet(show = panelOpen, onDismissRequest = { panelOpen = false }) {
-        ReplyMenuSheet(
-            reply = reply,
-            isOwn = reply.uid.isNotEmpty() && reply.uid == app.session.uid,
-            onCopy = { navigator.push(Route.Copy(reply.message)) },
-            onBlock = { onBlock?.invoke(reply.uid, null) },
-            onDelete = { onDelete?.invoke(reply.id, null) },
-            onReport = { navigator.push(Route.Web(Protocol.reportLink(reply.id, isReply = true))) },
-            onShowReplies = { onShowReplies?.invoke(reply) },
-        )
-    }
 }
 
-@Composable
-private fun ReplyMenuSheet(
+private fun replyMenuEntries(
     reply: Entity,
     isOwn: Boolean,
     onCopy: () -> Unit,
@@ -212,14 +217,12 @@ private fun ReplyMenuSheet(
     onDelete: () -> Unit,
     onReport: () -> Unit,
     onShowReplies: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-        if (reply.message.isNotEmpty()) ActionSheetItem(COUIIcons.Copy, "复制", onCopy)
-        ActionSheetItem(COUIIcons.Blocklist, "屏蔽", onBlock)
-        if (isOwn) ActionSheetItem(COUIIcons.Delete, "删除", onDelete)
-        ActionSheetItem(COUIIcons.Report, "举报", onReport)
-        ActionSheetItem(COUIIcons.Messages, "查看回复", onShowReplies)
-    }
+): List<Pair<String, () -> Unit>> = buildList {
+    if (reply.message.isNotEmpty()) add("复制" to onCopy)
+    add("屏蔽" to onBlock)
+    if (isOwn) add("删除" to onDelete)
+    add("举报" to onReport)
+    add("查看回复" to onShowReplies)
 }
 
 @Composable
@@ -232,7 +235,9 @@ private fun NestedReplies(
     onShowReplies: ((reply: Entity) -> Unit)?,
 ) {
     val navigator = LocalNavigator.current
-    var panelFor by remember { mutableStateOf<Entity?>(null) }
+    val session = LocalApp.current.session
+    // By id: the nested rows are read afresh on every pass, so the same reply is a new object each time.
+    var panelFor by remember { mutableStateOf<String?>(null) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -243,10 +248,8 @@ private fun NestedReplies(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = { onReply?.invoke(nested.id, nested.username, reply.id) },
-                        onLongClick = { panelFor = nested },
-                    )
+                    .longPressBeforeLinks { panelFor = nested.id }
+                    .combinedClickable(onClick = { onReply?.invoke(nested.id, nested.username, reply.id) })
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 HtmlText(
@@ -256,6 +259,19 @@ private fun NestedReplies(
                     onTextClick = { onShowReplies?.invoke(reply) },
                     onShowTotalReply = { onShowReplies?.invoke(reply) },
                     picArr = nested.picArr,
+                )
+                MoreMenu(
+                    show = panelFor == nested.id,
+                    onDismissRequest = { panelFor = null },
+                    entries = replyMenuEntries(
+                        reply = nested,
+                        isOwn = nested.uid.isNotEmpty() && nested.uid == session.uid,
+                        onCopy = { navigator.push(Route.Copy(nested.message)) },
+                        onBlock = { onBlock?.invoke(nested.uid, reply.id) },
+                        onDelete = { onDelete?.invoke(nested.id, reply.id) },
+                        onReport = { navigator.push(Route.Web(Protocol.reportLink(nested.id, isReply = true))) },
+                        onShowReplies = { onShowReplies?.invoke(nested) },
+                    ),
                 )
             }
         }
@@ -274,20 +290,36 @@ private fun NestedReplies(
             }
         }
     }
+}
 
-    panelFor?.let { nested ->
-        OverlayBottomSheet(show = true, onDismissRequest = { panelFor = null }) {
-            ReplyMenuSheet(
-                reply = nested,
-                isOwn = nested.uid.isNotEmpty() && nested.uid == LocalApp.current.session.uid,
-                onCopy = { navigator.push(Route.Copy(nested.message)) },
-                onBlock = { onBlock?.invoke(nested.uid, reply.id) },
-                onDelete = { onDelete?.invoke(nested.id, reply.id) },
-                onReport = { navigator.push(Route.Web(Protocol.reportLink(nested.id, isReply = true))) },
-                onShowReplies = { onShowReplies?.invoke(nested) },
-            )
+/**
+ * A long press on a row whose text carries links. The links take every touch that lands on them,
+ * and a long press on one ends as its tap; watching the press before they see it lets the row's own
+ * long press win anywhere on it.
+ */
+private fun Modifier.longPressBeforeLinks(onLongPress: () -> Unit): Modifier = composed {
+    val haptic = LocalHapticFeedback.current
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+    semantics { onLongClick { currentOnLongPress(); true } }
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                var ended = false
+                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    // Null once a scroll takes the touch over, which ends it just the same.
+                    waitForUpOrCancellation(PointerEventPass.Initial)
+                    ended = true
+                }
+                if (ended) return@awaitEachGesture
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                currentOnLongPress()
+                // The rest of the touch belongs to the long press, so the release taps nothing.
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
         }
-    }
 }
 
 @Composable

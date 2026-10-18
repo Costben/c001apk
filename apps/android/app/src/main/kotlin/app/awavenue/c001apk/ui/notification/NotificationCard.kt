@@ -28,11 +28,11 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
-import app.awavenue.c001apk.ui.feed.ActionSheetItem
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Navigator
@@ -43,11 +43,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Blocklist
-import io.github.suqi8.coui.kmp.icon.extended.Delete
-import io.github.suqi8.coui.kmp.icon.extended.ExpandMore
-import io.github.suqi8.coui.kmp.icon.extended.Report
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -170,26 +166,26 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                     )
                 }
             }
-            IconButton(
-                onClick = rememberHapticClick { menuOpen = true },
-                modifier = Modifier.align(Alignment.TopEnd),
-            ) {
-                Icon(
-                    COUIIcons.ExpandMore,
-                    contentDescription = "更多",
-                    tint = COUITheme.colorScheme.outline,
+            Box(Modifier.align(Alignment.TopEnd)) {
+                IconButton(onClick = rememberHapticClick { menuOpen = true }) {
+                    Icon(
+                        COUIIcons.More,
+                        contentDescription = "更多",
+                        tint = COUITheme.colorScheme.outline,
+                    )
+                }
+                MoreMenu(
+                    show = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    entries = listOf(
+                        "删除" to onDelete,
+                        "屏蔽" to onBlock,
+                        "举报" to {
+                            navigator.push(Route.Web(Protocol.reportLink(item.string("fromuid"), isUser = true)))
+                        },
+                    ),
                 )
             }
-        }
-    }
-
-    OverlayBottomSheet(show = menuOpen, onDismissRequest = { menuOpen = false }) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            ActionSheetItem(COUIIcons.Delete, "删除", onDelete)
-            ActionSheetItem(COUIIcons.Blocklist, "屏蔽", onBlock)
-            ActionSheetItem(COUIIcons.Report, "举报", onClick = {
-                navigator.push(Route.Web(Protocol.reportLink(item.string("fromuid"), isUser = true)))
-            })
         }
     }
 }

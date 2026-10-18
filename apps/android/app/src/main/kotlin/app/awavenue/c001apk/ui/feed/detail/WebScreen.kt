@@ -41,10 +41,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.toast
-import app.awavenue.c001apk.ui.feed.ActionSheetItem
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
@@ -55,13 +55,8 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
-import io.github.suqi8.coui.kmp.icon.extended.Copy
-import io.github.suqi8.coui.kmp.icon.extended.Delete
-import io.github.suqi8.coui.kmp.icon.extended.Link
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.icon.extended.Refresh
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.Dispatchers
@@ -109,8 +104,30 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(COUIIcons.More, contentDescription = "更多")
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(COUIIcons.More, contentDescription = "更多")
+                        }
+                        MoreMenu(
+                            show = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                            entries = listOf(
+                                "刷新" to { webView?.reload() },
+                                "复制" to { context.copyText(currentUrl) },
+                                "在浏览器中打开" to { context.openBrowser(currentUrl) },
+                                "清理缓存" to {
+                                    runCatching {
+                                        webView?.clearCache(true)
+                                        webView?.clearHistory()
+                                    }.onSuccess { context.toast("已清理") }
+                                        .onFailure { context.toast("缓存清理失败，请稍后重试") }
+                                },
+                                "返回上一页" to {
+                                    val view = webView
+                                    if (view != null && view.canGoBack()) view.goBack()
+                                },
+                            ),
+                        )
                     }
                 },
             )
@@ -206,30 +223,6 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
             webView?.stopLoading()
             webView?.destroy()
             webView = null
-        }
-    }
-
-    OverlayBottomSheet(show = menuOpen, onDismissRequest = { menuOpen = false }) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            ActionSheetItem(COUIIcons.Refresh, "刷新", onClick = { webView?.reload() })
-            ActionSheetItem(COUIIcons.Copy, "复制", onClick = { context.copyText(currentUrl) })
-            ActionSheetItem(COUIIcons.Link, "在浏览器中打开", onClick = { context.openBrowser(currentUrl) })
-            ActionSheetItem(COUIIcons.Delete, "清理缓存", onClick = {
-                runCatching {
-                    webView?.clearCache(true)
-                    webView?.clearHistory()
-                }.onSuccess { context.toast("已清理") }
-                    .onFailure { context.toast("缓存清理失败，请稍后重试") }
-            })
-            ActionSheetItem(
-                COUIIcons.ChevronBackward,
-                "返回上一页",
-                onClick = {
-                    val view = webView
-                    if (view != null && view.canGoBack()) view.goBack()
-                },
-                color = COUITheme.colorScheme.error,
-            )
         }
     }
 

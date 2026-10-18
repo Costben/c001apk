@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -39,6 +40,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
@@ -58,12 +60,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Blocklist
-import io.github.suqi8.coui.kmp.icon.extended.Copy
-import io.github.suqi8.coui.kmp.icon.extended.Delete
-import io.github.suqi8.coui.kmp.icon.extended.ExpandMore
-import io.github.suqi8.coui.kmp.icon.extended.Report
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -157,7 +154,42 @@ fun FeedCard(
             feed,
             onUserClick = rememberHapticClick { navigator.push(Route.User(feed.uid)) },
             onMore = rememberHapticClick { menuOpen = true },
-        )
+        ) {
+            MoreMenu(
+                show = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                entries = feedMenuEntries(
+                    showDelete = isHistory || (feed.uid.isNotEmpty() && feed.uid == app.session.uid),
+                    onCopy = { context.copyText("${Protocol.URL_COOLAPK}/feed/${feed.id}") },
+                    onBlock = {
+                        app.blacklist.blockUser(feed.uid)
+                        FeedActions.blockUser(feed.uid)
+                    },
+                    onReport = { navigator.push(Route.Web(Protocol.reportLink(feed.id))) },
+                    onDelete = {
+                        if (onDelete != null) {
+                            onDelete()
+                        } else {
+                            scope.launch {
+                                try {
+                                    val result = app.repository.deleteFeed(feed.id)
+                                    if (result.message.isNotEmpty()) {
+                                        context.toast(result.message)
+                                    } else {
+                                        FeedActions.removeFeed(feed.id)
+                                        if (result.count.isNotEmpty()) context.toast(result.count)
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    context.toast(ApiFailure.from(e).message)
+                                }
+                            }
+                        }
+                    },
+                ),
+            )
+        }
         // Title and body sizes follow the Flutter feed card: 16sp, title bold.
         if (feed.messageTitle.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -234,66 +266,28 @@ fun FeedCard(
         }
     }
 
-    OverlayBottomSheet(show = menuOpen, onDismissRequest = { menuOpen = false }) {
-        FeedMoreSheet(
-            showDelete = isHistory || (feed.uid.isNotEmpty() && feed.uid == app.session.uid),
-            onCopy = {
-                menuOpen = false
-                context.copyText("${Protocol.URL_COOLAPK}/feed/${feed.id}")
-            },
-            onBlock = {
-                menuOpen = false
-                app.blacklist.blockUser(feed.uid)
-                FeedActions.blockUser(feed.uid)
-            },
-            onReport = {
-                menuOpen = false
-                navigator.push(Route.Web(Protocol.reportLink(feed.id)))
-            },
-            onDelete = {
-                menuOpen = false
-                if (onDelete != null) {
-                    onDelete()
-                } else {
-                    scope.launch {
-                        try {
-                            val result = app.repository.deleteFeed(feed.id)
-                            if (result.message.isNotEmpty()) {
-                                context.toast(result.message)
-                            } else {
-                                FeedActions.removeFeed(feed.id)
-                                if (result.count.isNotEmpty()) context.toast(result.count)
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            context.toast(ApiFailure.from(e).message)
-                        }
-                    }
-                }
-            },
-        )
-    }
 }
 
-@Composable
-private fun FeedMoreSheet(
+private fun feedMenuEntries(
     showDelete: Boolean,
     onCopy: () -> Unit,
     onBlock: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-        ActionSheetItem(COUIIcons.Copy, "复制", onCopy)
-        ActionSheetItem(COUIIcons.Blocklist, "屏蔽", onBlock)
-        ActionSheetItem(COUIIcons.Report, "举报", onReport)
-        if (showDelete) ActionSheetItem(COUIIcons.Delete, "删除", onDelete)
-    }
+): List<Pair<String, () -> Unit>> = buildList {
+    add("复制" to onCopy)
+    add("屏蔽" to onBlock)
+    add("举报" to onReport)
+    if (showDelete) add("删除" to onDelete)
 }
 
 @Composable
-private fun FeedHeader(feed: Entity, onUserClick: () -> Unit, onMore: () -> Unit) {
+private fun FeedHeader(
+    feed: Entity,
+    onUserClick: () -> Unit,
+    onMore: () -> Unit,
+    menu: @Composable () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         NetworkImage(
             feed.userAvatar,
@@ -339,8 +333,11 @@ private fun FeedHeader(feed: Entity, onUserClick: () -> Unit, onMore: () -> Unit
             }
         }
         if (feed.isStickTop) StickTopTag()
-        IconButton(onClick = onMore) {
-            Icon(COUIIcons.ExpandMore, contentDescription = "更多", tint = COUITheme.colorScheme.outline)
+        Box {
+            IconButton(onClick = onMore) {
+                Icon(COUIIcons.More, contentDescription = "更多", tint = COUITheme.colorScheme.outline)
+            }
+            menu()
         }
     }
 }

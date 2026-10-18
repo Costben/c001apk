@@ -46,6 +46,7 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
@@ -54,7 +55,6 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
-import app.awavenue.c001apk.ui.feed.ActionSheetItem
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.feed.ListStatus
@@ -82,16 +82,10 @@ import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Blocklist
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
-import io.github.suqi8.coui.kmp.icon.extended.Copy
-import io.github.suqi8.coui.kmp.icon.extended.Favorites
 import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.icon.extended.Report
 import io.github.suqi8.coui.kmp.icon.extended.Reply
-import io.github.suqi8.coui.kmp.icon.extended.Share
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
@@ -184,8 +178,25 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                     }
                                 }
                             }
-                            IconButton(onClick = { menuOpen = true }) {
-                                Icon(COUIIcons.More, contentDescription = "更多")
+                            Box {
+                                IconButton(onClick = { menuOpen = true }) {
+                                    Icon(COUIIcons.More, contentDescription = "更多")
+                                }
+                                MoreMenu(
+                                    show = menuOpen,
+                                    onDismissRequest = { menuOpen = false },
+                                    entries = listOf(
+                                        "复制" to { context.copyText(viewModel.shareUrl) },
+                                        "分享" to { context.shareText(viewModel.shareUrl) },
+                                        (if (viewModel.isFav) "取消收藏" else "收藏") to viewModel::toggleFav,
+                                        (if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock,
+                                        "举报" to {
+                                            if (viewModel.feedUid.isNotEmpty()) {
+                                                navigator.push(Route.Web(viewModel.reportUrl))
+                                            }
+                                        },
+                                    ),
+                                )
                             }
                         }
                     },
@@ -338,20 +349,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                 }
             }
         }
-    }
-
-    OverlayBottomSheet(show = menuOpen, onDismissRequest = { menuOpen = false }) {
-        FeedMenuSheet(
-            isFav = viewModel.isFav,
-            isBlocked = viewModel.isBlocked,
-            onCopy = { context.copyText(viewModel.shareUrl) },
-            onShare = { context.shareText(viewModel.shareUrl) },
-            onFav = viewModel::toggleFav,
-            onBlock = viewModel::toggleBlock,
-            onReport = {
-                if (viewModel.feedUid.isNotEmpty()) navigator.push(Route.Web(viewModel.reportUrl))
-            },
-        )
     }
 
     OverlayDialog(
@@ -660,25 +657,6 @@ private fun InsetBlock(
             )
             .padding(10.dp),
     ) { content() }
-}
-
-@Composable
-private fun FeedMenuSheet(
-    isFav: Boolean,
-    isBlocked: Boolean,
-    onCopy: () -> Unit,
-    onShare: () -> Unit,
-    onFav: () -> Unit,
-    onBlock: () -> Unit,
-    onReport: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-        ActionSheetItem(COUIIcons.Copy, "复制", onCopy)
-        ActionSheetItem(COUIIcons.Share, "分享", onShare)
-        ActionSheetItem(COUIIcons.Favorites, if (isFav) "取消收藏" else "收藏", onFav)
-        ActionSheetItem(COUIIcons.Blocklist, if (isBlocked) "取消屏蔽" else "屏蔽", onBlock)
-        ActionSheetItem(COUIIcons.Report, "举报", onReport)
-    }
 }
 
 @Composable

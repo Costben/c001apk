@@ -49,6 +49,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -75,14 +76,12 @@ import io.github.suqi8.coui.kmp.basic.TextFieldMode
 import io.github.suqi8.coui.kmp.basic.TopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Blocklist
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.Copy
 import io.github.suqi8.coui.kmp.icon.extended.Delete
 import io.github.suqi8.coui.kmp.icon.extended.Email
 import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.icon.extended.Photos
-import io.github.suqi8.coui.kmp.icon.extended.Report
 import io.github.suqi8.coui.kmp.icon.extended.Send
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
@@ -208,8 +207,19 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(COUIIcons.More, contentDescription = "更多")
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(COUIIcons.More, contentDescription = "更多")
+                            }
+                            MoreMenu(
+                                show = menuOpen,
+                                onDismissRequest = { menuOpen = false },
+                                entries = listOf(
+                                    "查看用户" to { navigator.push(Route.User(uid)) },
+                                    "屏蔽" to { app.blacklist.blockUser(uid) },
+                                    "举报" to { navigator.push(Route.Web(Protocol.reportLink(uid, isUser = true))) },
+                                ),
+                            )
                         }
                     },
                 )
@@ -345,16 +355,6 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
     }
 
     OverlayLoadingDialog(show = progress != null, text = progress)
-
-    OverlayBottomSheet(show = menuOpen, onDismissRequest = { menuOpen = false }) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            ActionSheetItem(COUIIcons.Email, "查看用户", onClick = { navigator.push(Route.User(uid)) })
-            ActionSheetItem(COUIIcons.Blocklist, "屏蔽", onClick = { app.blacklist.blockUser(uid) })
-            ActionSheetItem(COUIIcons.Report, "举报", onClick = {
-                navigator.push(Route.Web(Protocol.reportLink(uid, isUser = true)))
-            })
-        }
-    }
 
     messageMenu?.let { item ->
         OverlayBottomSheet(show = true, onDismissRequest = { messageMenu = null }) {
