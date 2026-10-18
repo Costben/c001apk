@@ -12,6 +12,7 @@ import app.awavenue.c001apk.data.SearchHistoryStore
 import app.awavenue.c001apk.data.SessionStore
 import app.awavenue.c001apk.data.UpdateService
 import app.awavenue.c001apk.network.ApiClient
+import app.awavenue.c001apk.platform.MessageCheckWorker
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -58,6 +59,7 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
         repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
+        MessageCheckWorker.schedule(this)
     }
 
     // image.coolapk.com answers generic client agents with HTTP 567, so images go out with the

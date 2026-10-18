@@ -13,6 +13,7 @@ junit = "4.13.2"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
 okhttp = "5.5.0"
+androidx-work = "2.11.2"
 
 [libraries]
 coui-ui = { module = "io.github.suqi8.coui.kmp:coui-ui", version.ref = "coui" }
@@ -30,6 +31,7 @@ junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "androidx-work" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

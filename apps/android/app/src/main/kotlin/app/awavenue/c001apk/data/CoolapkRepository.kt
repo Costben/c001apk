@@ -303,7 +303,8 @@ class CoolapkRepository(
 
     suspend fun checkLoginInfo(): Entity = fromUrl("/v6/account/checkLoginInfo", skipCaptcha = true)
 
-    suspend fun checkCount(): Entity = fromUrl("/v6/notification/checkCount")
+    suspend fun checkCount(skipCaptcha: Boolean = false): Entity =
+        fromUrl("/v6/notification/checkCount", skipCaptcha = skipCaptcha)
 
     // ---- writes ------------------------------------------------------------------------------
 

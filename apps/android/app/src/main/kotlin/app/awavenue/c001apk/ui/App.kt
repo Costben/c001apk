@@ -7,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import app.awavenue.c001apk.C001apkApp
+import app.awavenue.c001apk.platform.MessageNotifier
 import app.awavenue.c001apk.ui.feed.detail.CaptchaVerifierHost
 import app.awavenue.c001apk.ui.nav.AppNavHost
 import app.awavenue.c001apk.ui.theme.AppTheme
@@ -26,6 +27,7 @@ fun App(app: C001apkApp, deepLinks: Flow<String> = emptyFlow()) {
         ) {
             Box(Modifier.fillMaxSize()) {
                 AppNavHost(deepLinks = deepLinks)
+                MessageNotifier.RequestPermission()
                 // The captcha page mounts as the last child so it draws over the whole app.
                 CaptchaVerifierHost()
             }

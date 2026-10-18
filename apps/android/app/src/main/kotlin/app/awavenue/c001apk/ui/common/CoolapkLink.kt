@@ -5,10 +5,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import app.awavenue.c001apk.C001apkApp
+import app.awavenue.c001apk.platform.MessageNotifier
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Navigator
+import app.awavenue.c001apk.ui.nav.NotificationType
 import app.awavenue.c001apk.ui.nav.Route
 import java.net.URI
 import java.net.URLDecoder
@@ -27,6 +29,13 @@ fun openCoolapkLink(
     openInBrowser: Boolean = false,
 ): Boolean {
     if (url.isEmpty()) return false
+    if (url.startsWith(MessageNotifier.LINK_PREFIX)) {
+        val name = url.removePrefix(MessageNotifier.LINK_PREFIX).substringBefore('?')
+        val type = NotificationType.entries.firstOrNull { it.name == name } ?: return false
+        val system = queryValue(url, "system")?.toIntOrNull() ?: 0
+        navigator.push(Route.Notification(type, systemCount = system))
+        return true
+    }
     val path = coolapkPath(url)
     return when {
         path.startsWith("/feed/") -> {
