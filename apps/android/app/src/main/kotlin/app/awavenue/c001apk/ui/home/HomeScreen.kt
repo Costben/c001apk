@@ -35,10 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.CoolapkRepository
@@ -59,8 +63,10 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
+import io.github.suqi8.coui.kmp.basic.TopAppBarState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Email
@@ -167,6 +173,50 @@ private fun Modifier.verticalDragWins(onVerticalDrag: (Boolean) -> Unit): Modifi
     }
 }
 
+/**
+ * Collapses the top row while scrolling up, but brings it back as soon as the content moves down,
+ * even in the middle of a list. [COUIScrollBehavior] only expands once the content is back at the
+ * top; here the downward scroll the list already consumed counts too.
+ */
+@Composable
+private fun rememberHomeScrollBehavior(state: TopAppBarState): ScrollBehavior {
+    val settle = COUIScrollBehavior(state = state)
+    return remember(state, settle) {
+        object : ScrollBehavior {
+            override val state = state
+            override val isPinned = false
+            override val snapAnimationSpec = settle.snapAnimationSpec
+            override val flingAnimationSpec = settle.flingAnimationSpec
+            override val nestedScrollConnection = object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (available.y >= 0f) return Offset.Zero
+                    val previous = state.heightOffset
+                    state.heightOffset += available.y
+                    return Offset(0f, state.heightOffset - previous)
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    state.contentOffset += consumed.y
+                    val delta = if (consumed.y > 0f) consumed.y else available.y
+                    if (delta <= 0f) return Offset.Zero
+                    val previous = state.heightOffset
+                    state.heightOffset += delta
+                    return Offset(0f, state.heightOffset - previous)
+                }
+
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                    if (available.y > 0f) state.contentOffset = 0f
+                    return settle.nestedScrollConnection.onPostFling(consumed, available)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: ReturnTopController) {
     val app = LocalApp.current
@@ -199,8 +249,8 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
     // Only the top row collapses. The limit is exactly its height, so the tab row stays pinned
     // under the status bar once the header has scrolled away.
     val topRowHeightPx = with(LocalDensity.current) { TOP_BAR_ROW_HEIGHT.toPx() }
-    val scrollBehavior = COUIScrollBehavior(
-        state = rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
+    val scrollBehavior = rememberHomeScrollBehavior(
+        rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
     )
     SideEffect {
         // The saved state keeps the limit it was created with, so a density change has to reapply it.
