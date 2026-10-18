@@ -20,6 +20,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -68,6 +69,7 @@ fun HtmlText(
     onShowTotalReply: (() -> Unit)? = null,
     onViewFan: (() -> Unit)? = null,
     picArr: List<String>? = null,
+    onTextLayout: (TextLayoutResult) -> Unit = {},
 ) {
     val linkColor = COUITheme.colorScheme.primary
     val context = LocalContext.current
@@ -111,6 +113,7 @@ fun HtmlText(
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         inlineContent = text.second,
+        onTextLayout = onTextLayout,
     )
 }
 

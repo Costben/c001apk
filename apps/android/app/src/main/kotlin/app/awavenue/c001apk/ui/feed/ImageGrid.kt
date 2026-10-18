@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -32,11 +33,19 @@ private const val LONG_IMAGE_RATIO = 22f / 9f
 
 /**
  * Feed pictures laid out like the Flutter client: one picture sized by its encoded aspect
- * ratio, four in a 2×2 block, everything else three per row.
+ * ratio, four in a 2×2 block, everything else three per row. With [maxCount] set, only that many
+ * are shown and the last one carries the count of the rest.
  */
 @Composable
-fun ImageGrid(pictures: List<String>, onClick: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun ImageGrid(
+    pictures: List<String>,
+    onClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    maxCount: Int = Int.MAX_VALUE,
+) {
     if (pictures.isEmpty()) return
+    val shown = pictures.take(maxCount)
+    val hidden = pictures.size - shown.size
     BoxWithConstraints(modifier) {
         val cell = (maxWidth - GridSpacing * 2) / 3
         if (pictures.size == 1) {
@@ -50,13 +59,14 @@ fun ImageGrid(pictures: List<String>, onClick: (Int) -> Unit, modifier: Modifier
             }
             GridImage(pictures[0], itemWidth, itemWidth * minOf(ratioHW, LONG_IMAGE_RATIO)) { onClick(0) }
         } else {
-            val columns = if (pictures.size == 4) 2 else 3
+            val columns = if (shown.size == 4) 2 else 3
             Column(verticalArrangement = Arrangement.spacedBy(GridSpacing)) {
-                pictures.chunked(columns).forEachIndexed { rowIndex, row ->
+                shown.chunked(columns).forEachIndexed { rowIndex, row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(GridSpacing)) {
                         row.forEachIndexed { columnIndex, url ->
                             val index = rowIndex * columns + columnIndex
-                            GridImage(url, cell, cell) { onClick(index) }
+                            val more = if (index == shown.lastIndex) hidden else 0
+                            GridImage(url, cell, cell, more) { onClick(index) }
                         }
                     }
                 }
@@ -66,7 +76,7 @@ fun ImageGrid(pictures: List<String>, onClick: (Int) -> Unit, modifier: Modifier
 }
 
 @Composable
-private fun GridImage(url: String, width: Dp, height: Dp, onClick: () -> Unit) {
+private fun GridImage(url: String, width: Dp, height: Dp, more: Int = 0, onClick: () -> Unit) {
     val (w, h) = imageSize(url)
     val badge = when {
         url.isLivePhotoUrl() -> "实况"
@@ -83,7 +93,14 @@ private fun GridImage(url: String, width: Dp, height: Dp, onClick: () -> Unit) {
     ) {
         // A live photo's thumbnail suffix is not served; the still image doubles as its preview.
         NetworkImage(if (url.isLivePhotoUrl()) url else thumbnail(url), Modifier.size(width, height))
-        if (badge != null) {
+        if (more > 0) {
+            Box(
+                Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+$more", style = COUITheme.textStyles.title3, color = Color.White)
+            }
+        } else if (badge != null) {
             Text(
                 badge,
                 modifier = Modifier

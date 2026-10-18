@@ -70,6 +70,11 @@ import kotlinx.coroutines.launch
 
 private val CardPadding = 12.dp
 
+// A card previews the post: a long body is cut at this many lines and the pictures at a nine-grid,
+// the rest is on the detail page.
+private const val PreviewMaxLines = 7
+private const val PreviewMaxPictures = 9
+
 /** A like the user just made, together with the feed it was made on. */
 internal class FeedLike(val liked: Boolean, val count: String, val source: Entity)
 
@@ -164,11 +169,30 @@ fun FeedCard(
         }
         if (feed.message.isNotEmpty()) {
             Spacer(Modifier.height(if (feed.messageTitle.isNotEmpty()) 4.dp else 10.dp))
-            HtmlText(feed.message, style = HtmlTextDefaults.style().copy(fontSize = 16.sp), onTextClick = openFeed)
+            var truncated by remember(feed) { mutableStateOf(false) }
+            HtmlText(
+                feed.message,
+                style = HtmlTextDefaults.style().copy(fontSize = 16.sp),
+                maxLines = PreviewMaxLines,
+                onTextClick = openFeed,
+                onTextLayout = { truncated = it.hasVisualOverflow },
+            )
+            if (truncated) {
+                Text(
+                    "查看更多",
+                    modifier = Modifier.padding(top = 2.dp).clickable(onClick = openFeed),
+                    style = HtmlTextDefaults.style().copy(fontSize = 16.sp),
+                    color = COUITheme.colorScheme.primary,
+                )
+            }
         }
         if (feed.picArr.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            ImageGrid(feed.picArr, onClick = { index -> navigator.push(Route.ImageView(feed.picArr, index)) })
+            ImageGrid(
+                feed.picArr,
+                onClick = { index -> navigator.push(Route.ImageView(feed.picArr, index)) },
+                maxCount = PreviewMaxPictures,
+            )
         }
         if (feed.forwardSourceType.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -357,7 +381,11 @@ private fun ForwardSource(source: Entity?) {
         val sourcePics = sourceFeed.picArr
         if (sourcePics.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            ImageGrid(sourcePics, onClick = { index -> navigator.push(Route.ImageView(sourcePics, index)) })
+            ImageGrid(
+                sourcePics,
+                onClick = { index -> navigator.push(Route.ImageView(sourcePics, index)) },
+                maxCount = PreviewMaxPictures,
+            )
         }
     }
 }
