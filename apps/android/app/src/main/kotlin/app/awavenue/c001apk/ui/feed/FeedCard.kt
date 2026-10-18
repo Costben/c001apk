@@ -49,13 +49,10 @@ import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import app.awavenue.c001apk.ui.nav.expandOrigin
-import app.awavenue.c001apk.ui.nav.rememberExpandOrigin
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.Card
-import io.github.suqi8.coui.kmp.basic.CardDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
@@ -120,8 +117,7 @@ fun FeedCard(
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val origin = rememberExpandOrigin(CardDefaults.CornerRadius, CardDefaults.defaultColors().color)
-    val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
+    val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed)) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
 
     val like = FeedActions.like(feed)
@@ -145,7 +141,7 @@ fun FeedCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth().expandOrigin(origin),
+        modifier = modifier.fillMaxWidth(),
         insideMargin = PaddingValues(CardPadding),
         onClick = openFeed,
         onLongPress = { navigator.push(Route.Copy(feed.message)) },

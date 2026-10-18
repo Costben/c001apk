@@ -10,8 +10,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -95,8 +93,8 @@ import kotlin.math.roundToInt
 
 /**
  * Hosts the back stack. The main screen stays composed underneath so its tabs keep their lists;
- * pushed routes animate in over it and back pops them. A route pushed with an [ExpandOrigin] grows
- * out of that element instead of sliding in, and shrinks back into it when popped.
+ * pushed routes slide in over it as whole opaque pages and back slides them out. Only the image
+ * viewer draws its own growth from the tapped thumbnail.
  *
  * The back gesture is predictive: while it runs, the top page follows the finger and the page under
  * it is revealed; releasing early puts the page back where it was.
@@ -201,11 +199,18 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         pushed?.growsFromOrigin() == true || popped?.shrinksToOrigin() == true ->
                             EnterTransition.None togetherWith ExitTransition.None
                         popped == null ->
-                            (slideInHorizontally(tween(280)) { it / GestureSlideDivisor } + fadeIn(tween(220))) togetherWith
-                                (slideOutHorizontally(tween(280)) { -it / 6 } + fadeOut(tween(220)))
+                            // The whole page slides in from the right edge, fully opaque; the page
+                            // under it trails a quarter of the width, as the system's card stack
+                            // does. No fade: one card simply slides over another.
+                            slideInHorizontally(tween(RouteSlideMillis, easing = ExpandEasing)) { it } togetherWith
+                                slideOutHorizontally(tween(RouteSlideMillis, easing = ExpandEasing)) {
+                                    -it / RouteParallaxDivisor
+                                }
                         else ->
-                            (fadeIn(tween(220)) + slideInHorizontally(tween(280)) { -it / 6 }) togetherWith
-                                (slideOutHorizontally(tween(280)) { it / GestureSlideDivisor } + fadeOut(tween(220)))
+                            slideInHorizontally(tween(RouteSlideMillis, easing = ExpandEasing)) {
+                                -it / RouteParallaxDivisor
+                            } togetherWith
+                                slideOutHorizontally(tween(RouteSlideMillis, easing = ExpandEasing)) { it }
                     }
                     // Every page fills the screen, so the default size animation only ever grew the
                     // first page out of a zero-sized box at the top-left corner.
@@ -268,16 +273,16 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         Box(
                             Modifier.fillMaxSize().graphicsLayer {
                                 // A page that shrinks back into something draws its own exit; every
-                                // other one slides out and fades, the way the pop transition does.
-                                // One a gesture already carried away stays fully away for as long as
-                                // the pop keeps it composed.
+                                // other one leaves as a whole opaque page, the way the pop
+                                // transition does. One a gesture already carried away stays fully
+                                // away for as long as the pop keeps it composed.
                                 val p = when {
                                     entry.previewed -> 1f
                                     previewing && !entry.shrinksToOrigin() -> 1f - entryGesture()
                                     else -> 0f
                                 }
-                                translationX = p * size.width / GestureSlideDivisor
-                                alpha = 1f - p
+                                translationX = p * size.width
+                                alpha = 1f
                             },
                         ) {
                             ExpandFrame(
@@ -317,8 +322,11 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
 /** The progress a page reports while no gesture is pulling it away. */
 private val SettledGesture: () -> Float = { 1f }
 
-/** How far the top page travels as it leaves: a quarter of the width, as the pop transition does. */
-private const val GestureSlideDivisor = 4
+/** How long a page takes to slide a full width in or out. */
+private const val RouteSlideMillis = 320
+
+/** How far the covered page trails the incoming one, as a fraction of the screen width. */
+private const val RouteParallaxDivisor = 4
 
 /** How long the page takes to ease back under the finger when a gesture is released early. */
 private const val GestureSettleMillis = 200
