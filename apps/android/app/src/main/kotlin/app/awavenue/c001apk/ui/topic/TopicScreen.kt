@@ -1,6 +1,5 @@
 package app.awavenue.c001apk.ui.topic
 
-import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.awavenue.c001apk.data.ActionResult
 import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.ProductComparisonSelection
 import app.awavenue.c001apk.data.ProductComparisonStore
@@ -68,10 +68,11 @@ import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.EmptyState
+import io.github.suqi8.coui.kmp.basic.HighlightedIconButton
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
@@ -88,6 +89,7 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
+import io.github.suqi8.coui.kmp.icon.extended.Ok
 import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -156,6 +158,7 @@ private fun TopicPage(tag: String?, id: String?) {
     val pagerState = rememberPagerState(initialPage = selected.coerceAtLeast(0)) { tabList.size }
 
     var isFollow by remember(topic) { mutableStateOf(topic.obj("userAction")?.string("follow") == "1") }
+    var followPending by remember(topic) { mutableStateOf(false) }
     var isBlocked by remember(topic) { mutableStateOf(app.blacklist.topicBlacklist.any { title.contains(it) }) }
     var sortType by remember { mutableStateOf(TopicSortType.Default) }
     var menu by remember { mutableStateOf(false) }
@@ -279,16 +282,24 @@ private fun TopicPage(tag: String?, id: String?) {
         }
 
     fun onFollowClick() {
-        if (!app.session.isLogin) return
+        if (followPending) return
+        if (!app.session.isLogin) {
+            navigator.push(Route.Login)
+            return
+        }
         val followed = isFollow
+        followPending = true
         scope.launch {
             try {
-                postFollow(app.repository, context, isTopic, title, topic.string("id"), followed)
+                val result = postFollow(app.repository, isTopic, title, topic.string("id"), followed)
                 isFollow = !followed
+                context.toast(result.message.ifEmpty { if (followed) "已取消关注" else "关注成功" })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 context.toast(ApiFailure.from(e).message)
+            } finally {
+                followPending = false
             }
         }
     }
@@ -298,11 +309,21 @@ private fun TopicPage(tag: String?, id: String?) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = title,
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = { BackIcon(navigator) },
                     actions = {
                         if (!isBlocked) {
-                            IconButton(onClick = {
+                            HighlightedIconButton(
+                                onClick = { onFollowClick() },
+                                enabled = !followPending,
+                            ) {
+                                Icon(
+                                    if (isFollow) COUIIcons.Ok else COUIIcons.Add,
+                                    contentDescription = if (isFollow) "已关注" else "关注",
+                                )
+                            }
+                            HighlightedIconButton(onClick = {
                                 navigator.push(
                                     Route.Search(
                                         title = title,
@@ -315,7 +336,7 @@ private fun TopicPage(tag: String?, id: String?) {
                             }
                         }
                         Box {
-                            IconButton(onClick = { menu = true }) {
+                            HighlightedIconButton(onClick = { menu = true }) {
                                 Icon(COUIIcons.More, contentDescription = "菜单")
                             }
                             OverlayListPopup(
@@ -342,10 +363,11 @@ private fun TopicPage(tag: String?, id: String?) {
                                     }
                                     entries.forEachIndexed { index, entry ->
                                         DropdownImpl(
-                                            text = entry.first,
+                                            item = DropdownItem(text = entry.first),
                                             optionSize = entries.size,
                                             isSelected = false,
                                             index = index,
+                                            groupKey = "topic-menu",
                                             onSelectedIndexChange = {
                                                 menu = false
                                                 entry.second()
@@ -362,10 +384,11 @@ private fun TopicPage(tag: String?, id: String?) {
                                 ListPopupColumn {
                                     TopicSortType.entries.forEachIndexed { index, item ->
                                         DropdownImpl(
-                                            text = item.label,
+                                            item = DropdownItem(text = item.label),
                                             optionSize = TopicSortType.entries.size,
                                             isSelected = sortType == item,
                                             index = index,
+                                            groupKey = "topic-sort",
                                             onSelectedIndexChange = {
                                                 showSort = false
                                                 sortType = TopicSortType.entries[it]
@@ -494,23 +517,20 @@ private fun TopicPage(tag: String?, id: String?) {
 
 private suspend fun postFollow(
     repository: CoolapkRepository,
-    context: Context,
     isTopic: Boolean,
     tag: String,
     id: String,
     followed: Boolean,
-) {
+): ActionResult =
     if (isTopic) {
         repository.followTag(tag, followed)
     } else {
         repository.changeProductFollow(id, followed)
     }
-    context.toast(if (followed) "取消关注成功" else "关注成功")
-}
 
 @Composable
 private fun BackIcon(navigator: Navigator) {
-    IconButton(onClick = { navigator.pop() }) {
+    HighlightedIconButton(onClick = { navigator.pop() }) {
         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
     }
 }

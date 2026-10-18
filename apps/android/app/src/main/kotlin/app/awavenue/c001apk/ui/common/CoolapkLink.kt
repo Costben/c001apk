@@ -32,8 +32,7 @@ fun openCoolapkLink(
     if (url.startsWith(MessageNotifier.LINK_PREFIX)) {
         val name = url.removePrefix(MessageNotifier.LINK_PREFIX).substringBefore('?')
         val type = NotificationType.entries.firstOrNull { it.name == name } ?: return false
-        val system = queryValue(url, "system")?.toIntOrNull() ?: 0
-        navigator.push(Route.Notification(type, systemCount = system))
+        navigator.push(Route.Notification(type))
         return true
     }
     val path = coolapkPath(url)

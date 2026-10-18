@@ -27,6 +27,7 @@ import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
@@ -54,9 +55,10 @@ fun LocalFollowListScreen() {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = "管理$label",
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },

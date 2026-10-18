@@ -108,7 +108,11 @@ fun EntityItem(
             val navigator = LocalNavigator.current
             val openLink = rememberLinkOpener()
             UserRow(item) {
-                val uid = item.uid.ifEmpty { item.obj("userInfo")?.string("uid").orEmpty() }
+                val uid = if (item.entityType == "contacts") {
+                    item.contactUid
+                } else {
+                    item.uid.ifEmpty { item.obj("userInfo")?.string("uid").orEmpty() }
+                }
                 if (item.entityType == "recentHistory" || uid.isEmpty()) {
                     openLink(item.url, item.title)
                 } else {

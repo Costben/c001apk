@@ -52,7 +52,7 @@ import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
@@ -182,18 +182,19 @@ fun UserScreen(uid: String) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = if (collapsed) username else "",
+                    gradientGlass = true,
                     color = if (opaque) COUITheme.colorScheme.surface else Color.Transparent,
                     dividerColor = if (opaque) COUITheme.colorScheme.dividerLine else Color.Transparent,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
+                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (user != null) {
                             if (!blocked) {
-                                IconButton(
+                                TopBarIconButton(
                                     onClick = rememberHapticClick {
                                         navigator.push(
                                             Route.Search(title = username, pageType = "user", pageParam = resolvedUid),
@@ -204,7 +205,7 @@ fun UserScreen(uid: String) {
                                 }
                             }
                             Box {
-                                IconButton(onClick = rememberHapticClick { menuOpen = true }) {
+                                TopBarIconButton(onClick = rememberHapticClick { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "更多")
                                 }
                                 UserMenu(

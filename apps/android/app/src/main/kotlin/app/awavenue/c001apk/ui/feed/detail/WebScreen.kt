@@ -47,7 +47,7 @@ import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
@@ -98,14 +98,15 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
         topBar = {
             SmallTopAppBar(
                 title = title,
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },
                 actions = {
                     Box {
-                        IconButton(onClick = { menuOpen = true }) {
+                        TopBarIconButton(onClick = { menuOpen = true }) {
                             Icon(COUIIcons.More, contentDescription = "更多")
                         }
                         MoreMenu(

@@ -36,7 +36,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -49,7 +51,9 @@ import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.app.AppListPage
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
+import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -58,9 +62,12 @@ import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
+import io.github.suqi8.coui.kmp.basic.SearchBarDefaults
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
@@ -69,7 +76,6 @@ import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.TopAppBarState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Email
 import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
@@ -106,10 +112,6 @@ enum class HomeTab(val label: String) {
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
 private val TOP_BAR_ROW_HEIGHT = 52.dp
-private val SEARCH_FIELD_HEIGHT = 38.dp
-
-/** How far the material reaches past the bar, so the list fades out under it. */
-private val BAR_EXTRA_HEIGHT = 14.dp
 
 /**
  * Long-press anywhere on the bar, including over the tabs. The tab items consume their own down,
@@ -143,6 +145,38 @@ private fun Modifier.longPressAnywhere(onLongPress: () -> Unit): Modifier = poin
                 pressed = event.changes.any { it.pressed }
             }
         }
+    }
+}
+
+/**
+ * The home search entry, dressed with the shared search-capsule material ([couiSearchMaterial]): the
+ * `coui_search_bar_no_blur_solid` fill, the material rim, the inner shadow and the outer drop shadow.
+ */
+@Composable
+private fun HomeSearchField(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = SearchBarDefaults.searchBarColors()
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = modifier
+            .height(SearchBarDefaults.InputFieldMinHeight)
+            .couiSearchMaterial(shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            COUIIcons.Search,
+            contentDescription = "搜索",
+            tint = colors.iconColor,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "搜索",
+            style = COUITheme.textStyles.main.copy(fontSize = SearchBarDefaults.InputFieldFontSize),
+            color = colors.labelColor,
+            maxLines = 1,
+        )
     }
 }
 
@@ -238,13 +272,6 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
     val openSearch = rememberHapticClick {
         navigator.push(Route.Search(title = ""))
     }
-    val openNotifications = rememberHapticClick {
-        if (app.session.isLogin) {
-            navigator.push(Route.NotificationCenter)
-        } else {
-            navigator.push(Route.Login)
-        }
-    }
     val scope = rememberCoroutineScope()
     // Only the top row collapses. The limit is exactly its height, so the tab row stays pinned
     // under the status bar once the header has scrolled away.
@@ -281,29 +308,39 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
 
     val backdrop = rememberGlassBackdrop()
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val barHeight = statusBar + topRowHeight + TabRowDefaults.TabRowWithContourHeight +
-        TAB_ROW_VERTICAL_PADDING * 2
-    val extraHeight = BAR_EXTRA_HEIGHT
+    val density = LocalDensity.current
+    // The material stays off at rest, so the first card is not blurred under the 24dp band; it
+    // fades in as the list scrolls under the bar, `min(1, scrollPx / 30dp)`.
+    val materialScrollFraction = remember(scrollBehavior, density) {
+        {
+            AppBarBlurOverlayDefaults.scrollAlpha(abs(scrollBehavior.state.contentOffset), density)
+        }
+    }
 
     Scaffold(
         topBar = {
-            // The material is sized to the bar plus the band below it, so the list keeps fading out
-            // past the bar's edge instead of meeting a hard line.
-            Box(modifier = Modifier.fillMaxWidth().height(barHeight + extraHeight)) {
-                HomeBarMaterial(
-                    backdrop = backdrop,
-                    modifier = Modifier.fillMaxSize(),
-                    extraHeight = extraHeight,
-                )
+            // COUI's own app bar material: progressive blur plus the gradient surface ramp. The
+            // overlay measures the bar and draws the material 24dp past it without adding that
+            // band to the Scaffold's content padding.
+            AppBarBlurOverlay(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = COUITheme.colorScheme.surface,
+                backdrop = backdrop,
+                scrollFraction = materialScrollFraction,
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Spacer(modifier = Modifier.height(statusBar))
                     // The row keeps its full height and slides out of a box that shrinks with the
                     // scroll, so the tab row rises into its place instead of leaving a gap behind.
+                    // A circular button's halo reaches 15.5dp past its 40dp circle, while the row only
+                    // leaves 6dp above and below, so clipping at rest would slice the halo off. The
+                    // clip is only needed while the row slides out during the collapse.
+                    val rowClip = if (collapseFraction > 0f) Modifier.clipToBounds() else Modifier
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(topRowHeight)
-                            .clipToBounds(),
+                            .then(rowClip),
                     ) {
                         Row(
                             modifier = Modifier
@@ -313,7 +350,7 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                                     translationY = -collapsedPx
                                     alpha = 1f - collapseFraction
                                 }
-                                .padding(start = 16.dp, end = 4.dp),
+                                .padding(start = 16.dp, end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             NetworkImage(
@@ -325,56 +362,55 @@ fun HomeScreen(outerPadding: PaddingValues, pagerState: PagerState, returnTop: R
                                 contentDescription = "我的",
                             )
                             Spacer(Modifier.width(10.dp))
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(SEARCH_FIELD_HEIGHT)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(COUITheme.colorScheme.surfaceContainerHigh)
-                                    .clickable(onClick = openSearch)
-                                    .padding(horizontal = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    "搜索",
-                                    modifier = Modifier.weight(1f),
-                                    style = COUITheme.textStyles.body2,
-                                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                                    maxLines = 1,
-                                )
-                                Icon(
-                                    COUIIcons.Search,
-                                    contentDescription = "搜索",
-                                    tint = COUITheme.colorScheme.onSurfaceVariantSummary,
-                                )
-                            }
-                            IconButton(onClick = openNotifications) {
-                                Icon(COUIIcons.Email, contentDescription = "通知")
-                            }
+                            HomeSearchField(
+                                onClick = openSearch,
+                                modifier = Modifier.weight(1f),
+                            )
+                            NotificationBell(Modifier.padding(start = 10.dp))
                         }
                     }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            // Six labels only fit the bar with a narrow side margin: COUI's segments
-                            // carry 12dp of padding each, so 16dp sides leave the labels ellipsised.
-                            .padding(horizontal = 4.dp)
+                            // The capsule shares the top row's 16dp margins, so its edges line up
+                            // with the avatar's left edge and the bell's right edge.
+                            .padding(horizontal = 16.dp)
                             // Long-press anywhere on the bar, including the tabs themselves,
                             // opens the editor; taps and drags still reach the tab row below.
                             .longPressAnywhere(openTabEditor),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // The contour form keeps the sliding indicator's shadow inside a container
-                        // capsule; the bare TabRow has no container, so the shadow was clipped.
-                        TabRowWithContour(
-                            tabs = tabs.map { it.label },
-                            selectedTabIndex = selectedTabIndex,
-                            onTabSelected = {
-                                if (it == selectedTabIndex) returnTop.requestReturn()
-                                scope.launch { pagerState.animateScrollToPage(it) }
-                            },
-                            modifier = Modifier.weight(1f).padding(vertical = TAB_ROW_VERTICAL_PADDING),
-                        )
+                        // The container wears the search-capsule material, so the tabs read as one surface
+                        // with the search field above. The contour form keeps the sliding indicator inside
+                        // that capsule; the transparent container lets the shared fill show through. No
+                        // outer drop shadow: its ~8dp halo pushed the visible edge outside the avatar and
+                        // bell the capsule is aligned to, making the bar read wider than the top row.
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = TAB_ROW_VERTICAL_PADDING)
+                                .height(TabRowDefaults.TabRowWithContourHeight)
+                                .couiSearchMaterial(RoundedCornerShape(50), dropShadow = false),
+                        ) {
+                            TabRowWithContour(
+                                tabs = tabs.map { it.label },
+                                selectedTabIndex = selectedTabIndex,
+                                onTabSelected = {
+                                    if (it == selectedTabIndex) returnTop.requestReturn()
+                                    scope.launch { pagerState.animateScrollToPage(it) }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = TabRowDefaults.tabRowColors(backgroundColor = Color.Transparent),
+                                // Six labels have to share the narrower capsule: COUI's 52dp floor and
+                                // 12dp segment padding overflow it, so the segments give up some of
+                                // both instead of the capsule growing.
+                                minWidth = 44.dp,
+                                segmentPadding = 8.dp,
+                                indicatorMaterial = MaterialStrokeParams.frameworkCapsule13(
+                                    COUITheme.colorScheme.background.luminance() < 0.5f,
+                                ),
+                            )
+                        }
                     }
                 }
             }

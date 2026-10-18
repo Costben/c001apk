@@ -53,6 +53,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.icon.extended.NotesFill
 import io.github.suqi8.coui.kmp.icon.extended.Update
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class MainTab(
@@ -113,8 +114,25 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val followReturnTop = remember { ReturnTopController() }
     val navigator = LocalNavigator.current
     val onHome = pagerState.currentPage == MainTab.Home.ordinal
-    val session = LocalApp.current.session
-    val settings = LocalApp.current.settings
+    val app = LocalApp.current
+    val session = app.session
+    val settings = app.settings
+
+    // The bell badge keeps itself current: a periodic read while signed in, plus one whenever a
+    // page stacked over the main screen closes (that is when a notification list was just read).
+    LaunchedEffect(session.isLogin, session.generation) {
+        if (!session.isLogin) {
+            app.unread.clear()
+            return@LaunchedEffect
+        }
+        while (true) {
+            app.unread.refresh()
+            delay(30_000)
+        }
+    }
+    LaunchedEffect(navigator.stack.size) {
+        if (session.isLogin && navigator.stack.size == 1) app.unread.refresh()
+    }
     val homeTab = settings.homeTab
     // The same visible-tab list HomeScreen builds: the pager, the ball checks and the tab bodies
     // must agree on what page N means.

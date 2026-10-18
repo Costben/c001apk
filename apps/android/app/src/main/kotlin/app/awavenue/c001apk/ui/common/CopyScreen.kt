@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
@@ -63,13 +63,14 @@ fun CopyScreen(text: String) {
         topBar = {
             SmallTopAppBar(
                 title = "",
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { context.copyText(body.text) }) {
+                    TopBarIconButton(onClick = { context.copyText(body.text) }) {
                         Icon(COUIIcons.Copy, contentDescription = "复制")
                     }
                 },

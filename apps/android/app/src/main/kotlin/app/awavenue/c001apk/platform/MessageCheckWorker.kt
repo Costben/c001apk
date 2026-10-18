@@ -23,7 +23,15 @@ class MessageCheckWorker(context: Context, params: WorkerParameters) : Coroutine
         try {
             // Nobody is there to solve a captcha in the background.
             val count = app.repository.checkCount(skipCaptcha = true)
-            MessageNotifier.notifyNew(applicationContext, app.session.uid, count)
+            MessageNotifier.notifyNew(applicationContext, app.session.uid, count) { type ->
+                try {
+                    app.repository.notificationList(type.endpoint, 1, null, null).firstOrNull()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

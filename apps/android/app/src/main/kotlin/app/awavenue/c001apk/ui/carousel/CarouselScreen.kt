@@ -30,7 +30,7 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
@@ -65,9 +65,10 @@ fun CarouselScreen(url: String, title: String, isInit: Boolean) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = pageTitle.ifEmpty { title },
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -162,7 +163,9 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
     val pagerState = rememberPagerState { entries.size }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize()) {
+    // The pager fills the screen behind the caller's bar, so the tab row takes the top inset and
+    // the child lists start right below it instead of applying that inset a second time.
+    Column(Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
         TabRowWithContour(
             tabs = entries.map { it.title },
             selectedTabIndex = pagerState.currentPage,
@@ -179,7 +182,10 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
                 url = entry.url,
                 title = entry.title,
                 isInit = false,
-                contentPadding = contentPadding,
+                contentPadding = PaddingValues(
+                    top = 12.dp,
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
                 scrollBehavior = scrollBehavior,
             )
         }

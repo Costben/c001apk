@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,7 +99,10 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                     .padding(top = contentPadding.calculateTopPadding()),
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxHeight().weight(0.22f),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(0.22f)
+                        .nestedScroll(scrollBehavior.nestedScrollConnection),
                     contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                 ) {
                     itemsIndexed(list) { index, entry ->

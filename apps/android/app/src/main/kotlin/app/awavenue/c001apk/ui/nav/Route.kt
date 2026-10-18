@@ -21,14 +21,14 @@ enum class FFFListType(val label: String) {
     CollectionItem("收藏夹"),
 }
 
-/** The notification lists behind `/notification`; 酷安小秘书 opens from inside 私信与信息. */
-enum class NotificationType(val label: String) {
-    At("@我的动态"),
-    Comment("@我的评论"),
-    Like("我收到的赞"),
-    Follow("好友关注"),
-    Message("私信与信息"),
-    System("酷安小秘书"),
+/** The notification lists behind `/notification`. 通知 is the combined comment stream. */
+enum class NotificationType(val label: String, val endpoint: String) {
+    At("@我的动态", "/v6/notification/atMeList"),
+    Comment("@我的评论", "/v6/notification/atCommentMeList"),
+    Like("我收到的赞", "/v6/notification/feedLikeList"),
+    Follow("好友关注", "/v6/notification/contactsFollowList"),
+    Message("私信与信息", "/v6/message/list"),
+    System("通知", "/v6/notification/list"),
 }
 
 /**
@@ -70,8 +70,7 @@ sealed interface Route {
     data class Dyh(val id: String, val title: String) : Route
     data class CoolPic(val title: String) : Route
     data class ImageView(val images: List<String>, val initialPage: Int = 0) : Route
-    /** [systemCount] is the unread 酷安小秘书 count 私信与信息 shows on its leading row. */
-    data class Notification(val type: NotificationType, val systemCount: Int = 0) : Route
+    data class Notification(val type: NotificationType) : Route
     /** 通知: the shortcuts for 点赞/@我/私信 over the combined interaction stream. */
     data object NotificationCenter : Route
     data class FFFList(

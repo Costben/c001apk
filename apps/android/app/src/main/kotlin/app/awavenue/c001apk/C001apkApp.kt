@@ -10,6 +10,7 @@ import app.awavenue.c001apk.data.LocalFollowStore
 import app.awavenue.c001apk.data.ProductComparisonStore
 import app.awavenue.c001apk.data.SearchHistoryStore
 import app.awavenue.c001apk.data.SessionStore
+import app.awavenue.c001apk.data.UnreadStore
 import app.awavenue.c001apk.data.UpdateService
 import app.awavenue.c001apk.network.ApiClient
 import app.awavenue.c001apk.platform.MessageCheckWorker
@@ -43,6 +44,8 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var repository: CoolapkRepository
         private set
+    lateinit var unread: UnreadStore
+        private set
 
     private val httpClient = OkHttpClient()
 
@@ -58,6 +61,7 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         productComparison = ProductComparisonStore()
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
         repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
+        unread = UnreadStore(this, repository, session)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
         MessageCheckWorker.schedule(this)
     }

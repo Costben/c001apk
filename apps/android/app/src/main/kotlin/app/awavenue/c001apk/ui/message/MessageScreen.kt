@@ -52,10 +52,12 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.follow.localFollowLabel
 import app.awavenue.c001apk.ui.nav.FFFListType
@@ -64,7 +66,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -208,16 +210,20 @@ private fun MessageHeader(
             .padding(bottom = 10.dp),
     ) {
         Row(
-            Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 4.dp),
+            Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("我的", modifier = Modifier.weight(1f), style = COUITheme.textStyles.title3)
-            IconButton(onClick = rememberHapticClick { navigator.push(Route.Accounts) }) {
+            TopBarIconButton(onClick = rememberHapticClick { navigator.push(Route.Accounts) }) {
                 Icon(COUIIcons.ContactsCircle, contentDescription = "账号管理")
             }
-            IconButton(onClick = rememberHapticClick { navigator.push(Route.Settings) }) {
+            TopBarIconButton(
+                onClick = rememberHapticClick { navigator.push(Route.Settings) },
+                modifier = Modifier.padding(start = 10.dp),
+            ) {
                 Icon(COUIIcons.Settings, contentDescription = "设置")
             }
+            NotificationBell(Modifier.padding(start = 10.dp))
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (!isLogin) {
@@ -292,6 +298,7 @@ private fun MessageList(
                 else -> text
             }
             HistoryPreview(
+                id = item.id,
                 avatar = item.userAvatar,
                 title = if (item.username.isEmpty()) "动态" else "${item.username}的动态",
                 snippet = snippet,
@@ -377,19 +384,7 @@ private fun MessageList(
                         when {
                             follows == null -> Unit
                             follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
-                            else -> follows.take(5).forEach { item ->
-                                // followList answers with contacts: the followed side sits in f*.
-                                val user = item.obj("fUserInfo") ?: item.obj("userInfo")
-                                val fans = user?.string("fans").orEmpty()
-                                PreviewRow(
-                                    avatar = item.string("fUserAvatar")
-                                        .ifEmpty { user?.string("userAvatar").orEmpty() },
-                                    title = item.string("fusername")
-                                        .ifEmpty { user?.string("username").orEmpty() },
-                                    subtitle = if (fans.isEmpty()) "已关注" else "${fans}粉丝",
-                                    circle = true,
-                                )
-                            }
+                            else -> follows.take(5).forEach { item -> FollowPreviewRow(item) }
                         }
                     }
                 }
@@ -462,9 +457,14 @@ private fun PreviewRow(
     subtitle: String,
     trailing: String? = null,
     circle: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
+    val click = if (onClick != null) rememberHapticClick(onClick = onClick) else null
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        Modifier
+            .fillMaxWidth()
+            .then(if (click != null) Modifier.clickable(onClick = click) else Modifier)
+            .padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NetworkImage(
@@ -505,6 +505,7 @@ private fun PreviewRow(
 }
 
 private class HistoryPreview(
+    val id: String,
     val avatar: String,
     val title: String,
     val snippet: String,
@@ -513,23 +514,48 @@ private class HistoryPreview(
 
 @Composable
 private fun HistoryPreviewRow(item: HistoryPreview) {
+    val navigator = LocalNavigator.current
     PreviewRow(
         avatar = item.avatar,
         title = item.title,
         subtitle = item.snippet,
         trailing = fromToday(item.time / 1000),
+        // A preview row is the post itself: opening it should not require going through the full
+        // history list first.
+        onClick = { navigator.push(Route.Feed(item.id)) },
     )
 }
 
-/** A 常去 entry names its target type, as the full 我的常去 list does. */
+/** A 常去 entry opens its target directly, as the full 我的常去 list does. */
 @Composable
 private fun RecentRow(item: Entity) {
+    val openLink = rememberLinkOpener()
     val isUser = item.string("target_type") == "user"
     PreviewRow(
         avatar = item.logo.ifEmpty { item.pic },
         title = if (isUser) item.title else "${item.string("target_type_title")}: ${item.title}",
         subtitle = if (isUser) "${item.string("fans_num")}粉丝" else "${item.string("comment_num")}讨论",
         circle = isUser,
+        onClick = { openLink(item.url, item.title) },
+    )
+}
+
+/** A follow entry opens the followed account, whichever side of the contact carries it. */
+@Composable
+private fun FollowPreviewRow(item: Entity) {
+    val navigator = LocalNavigator.current
+    val user = item.obj("fUserInfo") ?: item.obj("userInfo")
+    val uid = item.contactUid
+    val fans = user?.string("fans").orEmpty()
+    val open = if (uid.isEmpty()) null else rememberHapticClick { navigator.push(Route.User(uid)) }
+    PreviewRow(
+        avatar = user?.string("userAvatar").orEmpty()
+            .ifEmpty { item.string("fUserAvatar") },
+        title = user?.string("username").orEmpty()
+            .ifEmpty { item.string("fusername") },
+        subtitle = if (fans.isEmpty()) "已关注" else "${fans}粉丝",
+        circle = true,
+        onClick = open,
     )
 }
 

@@ -25,9 +25,10 @@ import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -93,17 +94,18 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = keyword,
+                    gradientGlass = true,
                     subtitle = if (title.isEmpty()) "" else "${scopeLabel(pageType)}：$title",
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (pagerState.currentPage == 0) {
                             Box {
-                                IconButton(onClick = { menu = SearchMenuType.Type }) {
+                                TopBarIconButton(onClick = { menu = SearchMenuType.Type }) {
                                     Icon(COUIIcons.More, contentDescription = "菜单")
                                 }
                                 OverlayListPopup(
@@ -114,10 +116,11 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                     ListPopupColumn {
                                         SearchMenuType.entries.forEachIndexed { index, item ->
                                             DropdownImpl(
-                                                text = item.label,
+                                                item = DropdownItem(text = item.label),
                                                 optionSize = SearchMenuType.entries.size,
                                                 isSelected = false,
                                                 index = index,
+                                                groupKey = "search-type",
                                                 // The entry with a submenu swaps this popup for the next.
                                                 onSelectedIndexChange = { menu = SearchMenuType.entries[it] },
                                             )
@@ -132,10 +135,11 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                     ListPopupColumn {
                                         SearchSortType.entries.forEachIndexed { index, item ->
                                             DropdownImpl(
-                                                text = item.label,
+                                                item = DropdownItem(text = item.label),
                                                 optionSize = SearchSortType.entries.size,
                                                 isSelected = sortType == item,
                                                 index = index,
+                                                groupKey = "search-sort",
                                                 onSelectedIndexChange = {
                                                     sortType = SearchSortType.entries[it]
                                                     menu = null

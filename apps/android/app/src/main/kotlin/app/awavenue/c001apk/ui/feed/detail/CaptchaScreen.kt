@@ -20,7 +20,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.awavenue.c001apk.network.CaptchaChallenge
 import app.awavenue.c001apk.ui.LocalApp
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -76,13 +76,14 @@ fun CaptchaScreen(challenge: CaptchaChallenge, onResult: (String?) -> Unit) {
         topBar = {
             SmallTopAppBar(
                 title = "人机验证",
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { onResult(null) }) {
+                    TopBarIconButton(onClick = { onResult(null) }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { reloads++ }) {
+                    TopBarIconButton(onClick = { reloads++ }) {
                         Icon(COUIIcons.Refresh, contentDescription = "重新加载")
                     }
                 },

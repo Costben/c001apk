@@ -122,7 +122,12 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
                     lastItem = result.last().id
                     val merged = if (isRefresh) result else items + result
                     val seen = HashSet<String>()
-                    items = merged.filter { it.entityId.isEmpty() || seen.add(it.entityId) }
+                    // Contact rows share their own entityId (the signed-in account); the followed
+                    // side is what tells them apart.
+                    items = merged.filter { item ->
+                        val key = if (item.entityType == "contacts") item.contactUid else item.entityId
+                        key.isEmpty() || seen.add(key)
+                    }
                     status = ListStatus.Content
                     footer = FooterStatus.Idle
                     page = requestPage + 1

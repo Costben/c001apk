@@ -89,7 +89,7 @@ import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
@@ -229,12 +229,13 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
             ) {
                 SmallTopAppBar(
                     title = if (images.isEmpty()) "" else "${pagerState.currentPage + 1}/${images.size}",
+                    gradientGlass = true,
                     color = ChromeColor,
                     titleColor = Color.White,
                     showDivider = false,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回", tint = Color.White)
+                        TopBarIconButton(onClick = { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                 )

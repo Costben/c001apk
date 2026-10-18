@@ -39,7 +39,7 @@ import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Chip
 import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextField
@@ -116,28 +116,29 @@ fun BlacklistScreen(type: BlacklistType) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = "",
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (entries.isNotEmpty()) {
-                            IconButton(onClick = { confirmClear = true }) {
+                            TopBarIconButton(onClick = { confirmClear = true }) {
                                 Icon(COUIIcons.Delete, contentDescription = "清除全部")
                             }
                         }
-                        IconButton(
+                        TopBarIconButton(
                             onClick = {
-                                if (entries.isEmpty()) return@IconButton
+                                if (entries.isEmpty()) return@TopBarIconButton
                                 val stamp = SimpleDateFormat("yyyy-MM-dd_HH.mm.ss", Locale.CHINA).format(Date())
                                 exportLauncher.launch("${type.name.lowercase()}-blacklist_$stamp.json")
                             },
                         ) {
                             Icon(COUIIcons.UploadCloud, contentDescription = "导出")
                         }
-                        IconButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
+                        TopBarIconButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
                             Icon(COUIIcons.FileDownloads, contentDescription = "导入")
                         }
                     },

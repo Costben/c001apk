@@ -48,6 +48,10 @@ class Entity(val json: JsonObject) {
     val entityId get() = string("entityId")
     val id get() = string("id")
     val uid get() = string("uid")
+    /** A contact row's counterpart: its own [uid] belongs to the signed-in account. */
+    val contactUid get() = string("fuid").ifEmpty {
+        obj("fUserInfo")?.string("uid").orEmpty().ifEmpty { obj("userInfo")?.string("uid").orEmpty() }
+    }
     val title get() = string("title")
     val url get() = string("url")
     val pic get() = string("pic")

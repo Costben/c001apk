@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.common
 
 import androidx.compose.runtime.Composable
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
@@ -26,10 +27,11 @@ fun MoreMenu(
         ListPopupColumn {
             entries.forEachIndexed { index, entry ->
                 DropdownImpl(
-                    text = entry.first,
+                    item = DropdownItem(text = entry.first),
                     optionSize = entries.size,
                     isSelected = false,
                     index = index,
+                    groupKey = "more-menu",
                     onSelectedIndexChange = {
                         onDismissRequest()
                         entry.second()

@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
@@ -66,6 +67,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -200,15 +202,16 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = username,
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         Box {
-                            IconButton(onClick = { menuOpen = true }) {
+                            TopBarIconButton(onClick = { menuOpen = true }) {
                                 Icon(COUIIcons.More, contentDescription = "更多")
                             }
                             MoreMenu(
@@ -256,7 +259,8 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
                         modifier = Modifier
                             .fillMaxSize()
                             .glassSource(backdrop)
-                            .overScrollVertical(),
+                            .overScrollVertical()
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
                         contentPadding = PaddingValues(vertical = 12.dp),
                         reverseLayout = true,
                     ) {

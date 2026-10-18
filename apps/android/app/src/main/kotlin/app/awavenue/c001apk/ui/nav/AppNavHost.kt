@@ -485,7 +485,7 @@ private fun RouteHost(route: Route) {
         is Route.Dyh -> DyhScreen(id = route.id, title = route.title)
         is Route.CoolPic -> CoolPicScreen(title = route.title)
         is Route.ImageView -> ImageViewScreen(images = route.images, initialPage = route.initialPage)
-        is Route.Notification -> NotificationScreen(type = route.type, systemCount = route.systemCount)
+        is Route.Notification -> NotificationScreen(type = route.type)
         is Route.NotificationCenter -> NotificationScreen(
             type = NotificationType.System,
             title = "通知",

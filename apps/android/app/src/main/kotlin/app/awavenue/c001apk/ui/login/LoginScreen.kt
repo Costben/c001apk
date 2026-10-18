@@ -39,6 +39,7 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.Icon
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.LoadingButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -155,8 +156,9 @@ fun LoginScreen(onDone: () -> Unit) {
         topBar = {
             SmallTopAppBar(
                 title = "登录",
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },

@@ -28,6 +28,7 @@ import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.InputField
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -66,10 +67,10 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
         topBar = {
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                     InputField(
@@ -81,7 +82,7 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
                         modifier = Modifier.weight(1f),
                         label = if (title.isNotEmpty()) "在 $title 中搜索" else "搜索",
                     )
-                    IconButton(onClick = { submit(keyword.trim()) }) {
+                    TopBarIconButton(onClick = { submit(keyword.trim()) }) {
                         Icon(COUIIcons.Search, contentDescription = "搜索")
                     }
                 }

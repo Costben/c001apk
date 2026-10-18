@@ -21,10 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.math.abs
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -36,9 +39,10 @@ import app.awavenue.c001apk.ui.common.glassSource
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -96,21 +100,25 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
     val scrollBehavior = COUIScrollBehavior(state = rememberTopAppBarState(initialHeightOffsetLimit = 0f))
     val backdrop = rememberGlassBackdrop()
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val barHeight = statusBar + BarHeight
-    val extraHeight = AppBarBlurOverlayDefaults.ExtraHeight
+    val density = LocalDensity.current
+    val materialScrollFraction = remember(scrollBehavior, density) {
+        {
+            AppBarBlurOverlayDefaults.scrollAlpha(abs(scrollBehavior.state.contentOffset), density)
+        }
+    }
 
     Scaffold(
         topBar = {
             AppBarBlurOverlay(
-                modifier = Modifier.fillMaxWidth().height(barHeight + extraHeight),
+                modifier = Modifier.fillMaxWidth(),
                 containerColor = COUITheme.colorScheme.surface,
                 backdrop = backdrop,
-                extraHeight = extraHeight,
+                scrollFraction = materialScrollFraction,
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     Spacer(Modifier.height(statusBar))
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(BarHeight).padding(start = 8.dp, end = 4.dp),
+                        modifier = Modifier.fillMaxWidth().height(BarHeight).padding(start = 8.dp, end = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.weight(1f)) {
@@ -147,9 +155,10 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
                                 )
                             }
                         }
-                        IconButton(onClick = { navigator.push(Route.Search(title = "")) }) {
+                        TopBarIconButton(onClick = { navigator.push(Route.Search(title = "")) }) {
                             Icon(COUIIcons.Search, contentDescription = "搜索")
                         }
+                        NotificationBell(Modifier.padding(start = 10.dp))
                     }
                 }
             }
@@ -198,11 +207,19 @@ private fun SelectionMenu(
         ListPopupColumn {
             val entries = FollowSelection.entries
             entries.forEachIndexed { index, item ->
+                val group = when (item) {
+                    // The aggregate sits above the categories, the way 所有项目 does in Photos.
+                    FollowSelection.All -> "all"
+                    // Local follows are not server-side follows; keep them in their own group.
+                    FollowSelection.Local -> "local"
+                    else -> "categories"
+                }
                 DropdownImpl(
-                    text = item.label,
+                    item = DropdownItem(text = item.label),
                     optionSize = entries.size,
                     isSelected = item == selected,
                     index = index,
+                    groupKey = group,
                     onSelectedIndexChange = { onSelect(item) },
                 )
             }

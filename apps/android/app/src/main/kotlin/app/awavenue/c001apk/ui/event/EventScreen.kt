@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,7 +58,7 @@ import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
@@ -106,8 +107,9 @@ fun EventScreen(id: String) {
         topBar = {
             TopAppBar(
                 title = "活动详情",
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },
@@ -164,7 +166,12 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
         ) { page ->
             val contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
             if (page == 0) {
-                EventHeaderPage(event = event, contentPadding = contentPadding, onOpenUser = onOpenUser)
+                EventHeaderPage(
+                    event = event,
+                    contentPadding = contentPadding,
+                    scrollBehavior = scrollBehavior,
+                    onOpenUser = onOpenUser,
+                )
             } else {
                 EventTabPage(tab = tabs[page - 1], contentPadding = contentPadding, scrollBehavior = scrollBehavior)
             }
@@ -176,6 +183,7 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
 private fun EventHeaderPage(
     event: Entity,
     contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
     onOpenUser: (String) -> Unit,
 ) {
     val openLink = rememberLinkOpener()
@@ -190,7 +198,7 @@ private fun EventHeaderPage(
     val prizes = event.list("sponsorPrize")
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

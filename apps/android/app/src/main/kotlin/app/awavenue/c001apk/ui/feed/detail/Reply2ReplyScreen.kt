@@ -42,7 +42,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
@@ -94,8 +94,9 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
         topBar = {
             SmallTopAppBar(
                 title = "共 ${origin?.replyNum ?: viewModel.replies.size} 回复",
+                gradientGlass = true,
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    TopBarIconButton(onClick = { navigator.pop() }) {
                         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                     }
                 },

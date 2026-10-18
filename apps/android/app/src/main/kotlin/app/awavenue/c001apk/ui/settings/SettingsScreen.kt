@@ -48,9 +48,10 @@ import coil3.SingletonImageLoader
 import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -129,15 +130,16 @@ fun SettingsScreen() {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = "设置",
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
+                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         Box {
-                            IconButton(onClick = rememberHapticClick { menu = true }) {
+                            TopBarIconButton(onClick = rememberHapticClick { menu = true }) {
                                 Icon(COUIIcons.More, contentDescription = "菜单")
                             }
                             OverlayListPopup(
@@ -152,10 +154,11 @@ fun SettingsScreen() {
                                     )
                                     entries.forEachIndexed { index, entry ->
                                         DropdownImpl(
-                                            text = entry.first,
+                                            item = DropdownItem(text = entry.first),
                                             optionSize = entries.size,
                                             isSelected = false,
                                             index = index,
+                                            groupKey = "settings-menu",
                                             onSelectedIndexChange = {
                                                 menu = false
                                                 entry.second()

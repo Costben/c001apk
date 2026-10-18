@@ -70,7 +70,7 @@ import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -158,16 +158,17 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         viewModel.feed == null -> preview?.string("feedTypeName").orEmpty()
                         else -> viewModel.feedTypeName.orEmpty()
                     },
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (viewModel.feed != null) {
                             if (viewModel.isPublic && app.session.isLogin) {
-                                IconButton(
+                                TopBarIconButton(
                                     onClick = { accountDialog = true },
                                     enabled = !viewModel.isLoadingDetail,
                                 ) {
@@ -179,7 +180,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                 }
                             }
                             Box {
-                                IconButton(onClick = { menuOpen = true }) {
+                                TopBarIconButton(onClick = { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "更多")
                                 }
                                 MoreMenu(

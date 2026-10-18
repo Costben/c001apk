@@ -27,7 +27,7 @@ import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
@@ -95,9 +95,10 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = titleText,
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
+                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -141,8 +142,18 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
                             scrollBehavior = scrollBehavior,
                             contentPadding = contentPadding,
                         )
-                        1 -> CarouselContent("#/topic/userFollowTagList", "我关注的话题")
-                        2 -> CarouselContent("#/product/followProductList", "我关注的数码吧")
+                        1 -> CarouselContent(
+                            url = "#/topic/userFollowTagList",
+                            title = "我关注的话题",
+                            contentPadding = contentPadding,
+                            scrollBehavior = scrollBehavior,
+                        )
+                        2 -> CarouselContent(
+                            url = "#/product/followProductList",
+                            title = "我关注的数码吧",
+                            contentPadding = contentPadding,
+                            scrollBehavior = scrollBehavior,
+                        )
                         else -> FFFContent(
                             type = FFFListType.Apk,
                             uid = listUid,

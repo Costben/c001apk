@@ -47,7 +47,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -122,8 +122,9 @@ fun AppUpdateScreen() {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 SmallTopAppBar(
                     title = "更新${total?.let { "：$it" } ?: ""}",
+                    gradientGlass = true,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },

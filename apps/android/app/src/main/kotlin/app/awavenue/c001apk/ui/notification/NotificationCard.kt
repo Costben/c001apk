@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
@@ -32,12 +33,13 @@ import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
+import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
@@ -47,29 +49,6 @@ import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-
-private val linkPattern = Regex("<a[^>]*href=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-
-/**
- * What a notification points at: the item's own url for a contact follow, otherwise the first link
- * inside the note HTML.
- */
-fun notificationLink(item: Entity): String? =
-    if (item.string("type") == "contacts_follow") {
-        item.url.ifEmpty { null }
-    } else {
-        linkPattern.find(item.string("note"))?.groupValues?.getOrNull(1)
-    }
-
-/** Coolapk links open in the in-app browser, which is where unported detail pages land. */
-private fun openNotificationLink(navigator: Navigator, url: String) {
-    val target = when {
-        url.startsWith("http") -> url
-        url.startsWith("/") -> Protocol.URL_COOLAPK + url
-        else -> return
-    }
-    navigator.push(Route.Web(target))
-}
 
 /**
  * A notification with the side effects the list owns: deleting it drops it from the server, blocking
@@ -81,10 +60,14 @@ fun NotificationItem(item: Entity, onChanged: () -> Unit) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // The same dispatcher the links inside the note use: a Coolapk path stays in the app, only an
+    // external site falls back to the browser. Building a web URL for every tap sent a like or a
+    // reply to the web page even though the post screen exists here.
+    val openLink = rememberLinkOpener()
 
     NotificationCard(
         item = item,
-        onOpen = { notificationLink(item)?.let { openNotificationLink(navigator, it) } },
+        onOpen = { notificationDisplay(item).link?.let { openLink(it, "") } },
         onDelete = {
             scope.launch {
                 try {
@@ -110,8 +93,9 @@ fun NotificationItem(item: Entity, onChanged: () -> Unit) {
 @Composable
 fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit) {
     val navigator = LocalNavigator.current
+    val display = remember(item) { notificationDisplay(item) }
     val note = item.string("note")
-    val fromUid = item.string("fromuid").ifEmpty { item.uid }
+    val fromUid = display.actorUid.ifEmpty { item.uid }
     val isFollow = item.string("type") == "contacts_follow"
     val pictures = item.picArr
     var menuOpen by remember { mutableStateOf(false) }
@@ -128,7 +112,7 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                 verticalAlignment = Alignment.Top,
             ) {
                 NetworkImage(
-                    item.string("fromUserAvatar"),
+                    display.actorAvatar,
                     Modifier
                         .size(30.dp)
                         .clip(CircleShape)
@@ -136,19 +120,38 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                             enabled = fromUid.isNotEmpty(),
                             onClick = rememberHapticClick { navigator.push(Route.User(fromUid)) },
                         ),
-                    contentDescription = item.string("fromusername"),
+                    contentDescription = display.actorName,
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    HtmlText(item.string("fromusername"))
-                    HtmlText(
-                        note,
-                        onViewFan = if (isFollow) {
-                            { navigator.push(Route.User(fromUid)) }
-                        } else {
-                            null
-                        },
-                    )
+                    if (display.actorName.isNotEmpty()) HtmlText(display.actorName)
+                    if (display.action.isNotEmpty()) {
+                        HtmlText(
+                            display.action,
+                            onViewFan = if (isFollow) {
+                                { navigator.push(Route.User(fromUid)) }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                    // The reply itself. At-comment and like rows keep it in `message`, not in the
+                    // note, so rendering the note alone dropped the very content being notified.
+                    if (display.content.isNotEmpty()) {
+                        HtmlText(
+                            display.content,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    if (display.target.isNotEmpty()) {
+                        HtmlText(
+                            display.target,
+                            modifier = Modifier.padding(top = 2.dp),
+                            style = HtmlTextDefaults.style().copy(fontSize = 13.sp),
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 3,
+                        )
+                    }
                     if (pictures.isNotEmpty()) {
                         ImageGrid(
                             pictures = pictures,

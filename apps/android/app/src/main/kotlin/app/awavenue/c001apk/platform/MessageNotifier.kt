@@ -20,6 +20,8 @@ import app.awavenue.c001apk.R
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.nav.NotificationType
+import app.awavenue.c001apk.ui.notification.notificationDisplay
+import app.awavenue.c001apk.ui.notification.summary
 
 /**
  * System notifications for what arrived on the account since the last look: one per kind of
@@ -44,11 +46,19 @@ object MessageNotifier {
         Kind("feedlike", NotificationType.Like, "我收到的赞") { "收到 $it 个新的赞" },
         Kind("contacts_follow", NotificationType.Follow, "好友关注") { "$it 位新的关注者" },
         Kind("message", NotificationType.Message, "私信") { "$it 条未读私信" },
-        Kind("notification", NotificationType.Message, "酷安小秘书") { "$it 条未读通知" },
     )
 
-    /** Posts a notification for every count in [count] that grew since it was last notified. */
-    fun notifyNew(context: Context, uid: String, count: Entity) {
+    /**
+     * Posts a notification for every count in [count] that grew since it was last notified.
+     * [latest] supplies the newest row of that list so the reminder names the sender and carries
+     * the comment, instead of only saying that some number of likes arrived.
+     */
+    suspend fun notifyNew(
+        context: Context,
+        uid: String,
+        count: Entity,
+        latest: suspend (NotificationType) -> Entity? = { null },
+    ) {
         if (uid.isEmpty() || !canNotify(context)) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -58,8 +68,7 @@ object MessageNotifier {
             val current = count.int(kind.field) ?: return@forEachIndexed
             val key = "$uid.${kind.field}"
             if (current > prefs.getInt(key, 0)) {
-                val system = if (kind.field == "notification") current else count.int("notification") ?: 0
-                manager.notify(index, build(context, index, kind, current, system))
+                manager.notify(index, build(context, index, kind, current, latest(kind.type)))
             } else if (current == 0) {
                 manager.cancel(index)
             }
@@ -87,12 +96,14 @@ object MessageNotifier {
         )
     }
 
-    private fun build(context: Context, id: Int, kind: Kind, count: Int, system: Int): Notification {
-        val link = if (kind.type == NotificationType.Message) {
-            "$LINK_PREFIX${kind.type.name}?system=$system"
-        } else {
-            "$LINK_PREFIX${kind.type.name}"
-        }
+    private fun build(
+        context: Context,
+        id: Int,
+        kind: Kind,
+        count: Int,
+        latest: Entity?,
+    ): Notification {
+        val link = "$LINK_PREFIX${kind.type.name}"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link), context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(
             context,
@@ -106,10 +117,16 @@ object MessageNotifier {
             @Suppress("DEPRECATION")
             Notification.Builder(context)
         }
+        val display = latest?.let(::notificationDisplay)
+        val fallback = kind.text(count)
+        val text = display?.summary(fallback) ?: fallback
+        val title = display?.actorName?.takeIf(String::isNotEmpty) ?: kind.title
         return builder
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(kind.title)
-            .setContentText(kind.text(count))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setSubText(kind.title)
             .setNumber(count)
             .setContentIntent(pending)
             .setAutoCancel(true)

@@ -33,40 +33,58 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /**
- * One entry of「我收到的赞」, ported from `components/cards/like_card.dart`: who liked, what was
- * liked, and a preview of the liked content.
+ * One entry of「我收到的赞」. The API aggregates a post's likers into the post row: `likeUserInfo`
+ * is the latest one, `likeTime` when they liked, and `recent_like_list` the other names. Rendering
+ * the row as a plain feed card dropped all three, so the list looked like the author's own posts.
  */
 @Composable
 fun LikeCard(item: Entity, modifier: Modifier = Modifier) {
     val navigator = LocalNavigator.current
     val openLink = rememberLinkOpener()
     val likeUser = item.likeUserInfo
+    val name = likeUser?.string("username").orEmpty()
+        .ifEmpty { item.string("likeUsername") }
+        .ifEmpty { item.username }
+    val avatar = likeUser?.string("userAvatar").orEmpty()
+        .ifEmpty { item.string("likeAvatar") }
+        .ifEmpty { item.userAvatar }
+    val uid = likeUser?.string("uid").orEmpty()
+        .ifEmpty { item.string("likeUid") }
+    val feedType = item.string("feedTypeName").ifEmpty { item.infoHtml }.ifEmpty { "动态" }
+    val others = item.string("recent_like_list")
+        .split(',')
+        .count { it.isNotBlank() }
+        .minus(1)
+        .coerceAtLeast(0)
+    val action = if (others > 0) "和另外 $others 人赞了你的$feedType" else "赞了你的$feedType"
+    val time = item.likeTime?.takeIf { it > 0 } ?: item.dateline
+    val previewPic = item.pic.ifEmpty { item.picArr.firstOrNull().orEmpty() }
     Card(modifier.fillMaxWidth(), insideMargin = PaddingValues(10.dp)) {
         Column(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NetworkImage(
-                    likeUser?.string("userAvatar").orEmpty(),
+                    avatar,
                     Modifier
                         .size(30.dp)
                         .clip(CircleShape)
-                        .clickable { navigator.push(Route.User(likeUser?.string("uid").orEmpty())) },
-                    contentDescription = likeUser?.string("username").orEmpty(),
+                        .clickable(enabled = uid.isNotEmpty()) { navigator.push(Route.User(uid)) },
+                    contentDescription = name,
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    likeUser?.string("username").orEmpty(),
+                    name,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    fromToday(item.likeTime),
+                    fromToday(time),
                     fontSize = 13.sp,
                     color = COUITheme.colorScheme.outline,
                 )
             }
             Spacer(Modifier.height(10.dp))
-            HtmlText("赞了你的${item.infoHtml}", style = HtmlTextDefaults.style())
+            HtmlText(action, style = HtmlTextDefaults.style())
             Spacer(Modifier.height(10.dp))
             Row(
                 Modifier
@@ -77,8 +95,8 @@ fun LikeCard(item: Entity, modifier: Modifier = Modifier) {
                     .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (item.pic.isNotEmpty()) {
-                    NetworkImage(item.pic, Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)))
+                if (previewPic.isNotEmpty()) {
+                    NetworkImage(previewPic, Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)))
                     Spacer(Modifier.width(10.dp))
                 }
                 Column(Modifier.weight(1f)) {

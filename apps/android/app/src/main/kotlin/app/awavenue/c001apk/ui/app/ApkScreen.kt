@@ -74,11 +74,12 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
@@ -231,16 +232,17 @@ fun ApkScreen(packageName: String) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 SmallTopAppBar(
                     title = if (scrolledPastHeader) appName else "",
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = rememberHapticClick { navigator.pop() }) {
+                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (detail != null) {
                             if (commentsOpen) {
-                                IconButton(
+                                TopBarIconButton(
                                     onClick = rememberHapticClick {
                                         navigator.push(
                                             Route.Search(title = appName, pageType = "apk", pageParam = id),
@@ -251,7 +253,7 @@ fun ApkScreen(packageName: String) {
                                 }
                             }
                             Box {
-                                IconButton(onClick = rememberHapticClick { menu = true }) {
+                                TopBarIconButton(onClick = rememberHapticClick { menu = true }) {
                                     Icon(COUIIcons.More, contentDescription = "菜单")
                                 }
                                 OverlayListPopup(
@@ -277,10 +279,11 @@ fun ApkScreen(packageName: String) {
                                         }
                                         entries.forEachIndexed { index, entry ->
                                             DropdownImpl(
-                                                text = entry.first,
+                                                item = DropdownItem(text = entry.first),
                                                 optionSize = entries.size,
                                                 isSelected = false,
                                                 index = index,
+                                                groupKey = "apk-menu",
                                                 onSelectedIndexChange = {
                                                     menu = false
                                                     entry.second()

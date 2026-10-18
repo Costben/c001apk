@@ -27,7 +27,7 @@ import app.awavenue.c001apk.ui.feed.FeedCard
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TopAppBar
@@ -56,15 +56,16 @@ fun HistoryScreen(type: HistoryType) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = type.label,
+                    gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
                     actions = {
                         if (entries.isNotEmpty()) {
-                            IconButton(onClick = { confirmClear = true }) {
+                            TopBarIconButton(onClick = { confirmClear = true }) {
                                 Icon(COUIIcons.Delete, contentDescription = "清除全部")
                             }
                         }
