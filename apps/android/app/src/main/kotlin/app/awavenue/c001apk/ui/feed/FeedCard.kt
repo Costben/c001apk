@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,7 @@ import app.awavenue.c001apk.ui.common.openCoolapkLink
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.expandOrigin
@@ -121,6 +123,8 @@ fun FeedCard(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val origin = rememberExpandOrigin(CardDefaults.CornerRadius, CardDefaults.defaultColors().color)
+    val listState = LocalFeedListState.current
+    SideEffect { origin.listState = listState }
     val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
 

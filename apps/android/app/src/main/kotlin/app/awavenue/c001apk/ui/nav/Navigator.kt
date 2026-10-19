@@ -25,6 +25,9 @@ class BackStackEntry internal constructor(
     /** Set when back takes the entry off the stack, as opposed to a replace swapping it out. */
     internal var popped = false
 
+    /** Set once the list under a popped entry has been scrolled clear of the app bar. */
+    internal var returnScrolled = false
+
     /** Set when a back gesture had already pulled the screen away before it was popped. */
     internal var previewed = false
 

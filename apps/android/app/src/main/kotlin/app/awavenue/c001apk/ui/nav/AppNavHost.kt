@@ -14,6 +14,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,7 +45,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -81,6 +84,7 @@ import app.awavenue.c001apk.ui.settings.SettingsScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
 import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
@@ -107,6 +111,11 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     val openInBrowser = LocalApp.current.settings.openInBrowser
     val scope = rememberCoroutineScope()
     val imageOrigins = remember { ImageOrigins() }
+    // The current tab's bar line; a card returning into a main-tab list is scrolled clear of it.
+    // The material reaches a little past the layout box, so aim past that fade as well.
+    val appBarBounds = remember { AppBarBounds() }
+    val density = LocalDensity.current
+    val appBarFadePx = with(density) { AppBarBlurOverlayDefaults.ExtraHeight.toPx() }
 
     // How far the back gesture has pulled the top page: 1 at rest, 0 once it is fully away. It is
     // read in layer blocks, so a running gesture never recomposes the page.
@@ -121,7 +130,11 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     // pulled away. Derived so a running gesture does not recompose the host on every event.
     val revealing by remember { derivedStateOf { gestureProgress < 1f } }
 
-    CompositionLocalProvider(LocalNavigator provides navigator, LocalImageOrigins provides imageOrigins) {
+    CompositionLocalProvider(
+        LocalNavigator provides navigator,
+        LocalImageOrigins provides imageOrigins,
+        LocalAppBarBounds provides appBarBounds,
+    ) {
         // One collector for the host's lifetime: a link is opened against whichever page is on top
         // when it arrives, and recomposition does not restart the collection and replay it.
         LaunchedEffect(deepLinks, navigator, context, openInBrowser) {
@@ -149,6 +162,12 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                 // left it, then goes. Popping it while it is still only part way out would make it
                 // disappear from mid-air.
                 if (gestureProgress < 1f) {
+                    // The row is about to come back; lift the list so its header clears the bar.
+                    val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+                    if (below?.route == Route.Main && !top.returnScrolled) {
+                        top.returnScrolled = true
+                        alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
+                    }
                     animate(gestureProgress, 0f, animationSpec = tween(GestureCommitMillis)) { value, _ ->
                         gestureProgress = value
                     }
@@ -191,6 +210,18 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                 targetState = overlay,
                 transitionSpec = {
                     val popped = initialState?.takeIf { it.popped }
+                    // A row that sat under the bar is brought out from under it before the shrink
+                    // settles, so the returned card shows its header instead of staying hidden.
+                    if (popped?.shrinksToOrigin() == true && !popped.returnScrolled) {
+                        val covered = navigator.stack.lastOrNull()
+                        val origin = popped.origin
+                        if (covered?.route == Route.Main && origin != null && appBarBounds.bottom > 0f) {
+                            popped.returnScrolled = true
+                            scope.launch {
+                                alignCardBelowBar(origin) { appBarBounds.bottom + appBarFadePx }
+                            }
+                        }
+                    }
                     val pushed = targetState?.takeIf { popped == null }
                     val transform = when {
                         // A gesture already carried this page away; animating it again would double it.
@@ -322,6 +353,28 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
 
 /** The progress a page reports while no gesture is pulling it away. */
 private val SettledGesture: () -> Float = { 1f }
+
+/**
+ * Scrolls the list that owns [origin] just enough to put the row's top below the app bar. The
+ * avatar, name and device sit at the row's top, so this is the smallest move that keeps them clear
+ * of the bar. Scrolling the list back down can also bring the bar's collapsible row back, which
+ * moves the line down; a couple of passes settle on the line the bar actually ends at.
+ */
+private suspend fun alignCardBelowBar(origin: ExpandOrigin?, barBottom: () -> Float) {
+    if (origin == null) return
+    val state = origin.listState ?: return
+    repeat(3) {
+        val target = barBottom()
+        if (target <= 0f) return
+        val coordinates = origin.coordinates?.takeIf { it.isAttached } ?: return
+        val delta = target - coordinates.positionInRoot().y
+        if (delta <= 0.5f) return
+        state.scrollBy(-delta)
+        // One frame for the list to lay out, one for the bar to report its new height.
+        withFrameNanos { }
+        withFrameNanos { }
+    }
+}
 
 /** How long a page takes to slide a full width in or out. */
 private const val RouteSlideMillis = 320

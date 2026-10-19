@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,7 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.follow.localFollowLabel
 import app.awavenue.c001apk.ui.nav.ExpandOrigin
 import app.awavenue.c001apk.ui.nav.FFFListType
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.expandOrigin
@@ -95,12 +98,13 @@ import kotlinx.coroutines.launch
  * around it. Every card opens its full list; nothing expands or collapses in place.
  */
 @Composable
-fun MessageScreen(outerPadding: PaddingValues) {
+fun MessageScreen(outerPadding: PaddingValues, barSlot: Int) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val backdrop = rememberGlassBackdrop()
+    val appBarBounds = LocalAppBarBounds.current
 
     val isLogin = app.session.isLogin
     var profile by remember { mutableStateOf<Entity?>(null) }
@@ -152,11 +156,17 @@ fun MessageScreen(outerPadding: PaddingValues) {
     Scaffold(
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                MessageHeader(
-                    user = profile,
-                    isLogin = isLogin,
-                    onLogin = { navigator.push(Route.Login) },
-                )
+                Box(
+                    Modifier.onGloballyPositioned {
+                        appBarBounds.report(barSlot, it.positionInRoot().y + it.size.height.toFloat())
+                    },
+                ) {
+                    MessageHeader(
+                        user = profile,
+                        isLogin = isLogin,
+                        onLogin = { navigator.push(Route.Login) },
+                    )
+                }
             }
         },
     ) { innerPadding ->

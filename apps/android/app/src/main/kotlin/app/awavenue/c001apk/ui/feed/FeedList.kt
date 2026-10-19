@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -30,6 +31,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
@@ -149,22 +151,24 @@ fun FeedList(
                 contentPadding = contentPadding,
                 topAppBarScrollBehavior = scrollBehavior,
             ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .overScrollVertical()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
-                    contentPadding = contentPadding,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    itemsIndexed(
-                        viewModel.items.filterNot { FeedActions.isRemoved(it) },
-                        contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
-                    ) { _, item ->
-                        EntityItem(item, onBlock = onBlock, onDelete = onDelete, onLike = onLike)
+                CompositionLocalProvider(LocalFeedListState provides listState) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .overScrollVertical()
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        contentPadding = contentPadding,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        itemsIndexed(
+                            viewModel.items.filterNot { FeedActions.isRemoved(it) },
+                            contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
+                        ) { _, item ->
+                            EntityItem(item, onBlock = onBlock, onDelete = onDelete, onLike = onLike)
+                        }
+                        item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
                     }
-                    item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
                 }
             }
         }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -59,6 +60,12 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
     internal var cornerRadius: Dp = 0.dp
     internal var color: Color = Color.Transparent
     internal var coordinates: LayoutCoordinates? = null
+
+    /**
+     * The list this row lives in, when it lives in a [LazyColumn]. A return scrolls it by the few
+     * pixels needed to bring the row's top below the app bar, so the header is not left hidden.
+     */
+    internal var listState: LazyListState? = null
 
     /** False once the element is gone, e.g. its list item was recycled or its screen disposed. */
     internal val isAvailable: Boolean
