@@ -46,6 +46,34 @@ class CoolapkRepository(
     private val session: SessionStore,
     private val accounts: AccountStore,
 ) {
+    private class CachedDetail(val detail: FeedDetail, val at: Long)
+
+    /**
+     * Recently loaded feed bodies. Opening the same post again within a minute reuses the copy
+     * instead of asking again: the detail endpoint answers bursts of requests with an access
+     * challenge, and re-reading a post is common. Short-lived, so counts stay close to live.
+     */
+    private val detailCache = HashMap<String, CachedDetail>()
+    private val detailCacheLock = Any()
+
+    private fun cachedDetail(id: String, now: Long): FeedDetail? = synchronized(detailCacheLock) {
+        val hit = detailCache[id]
+        if (hit == null || now - hit.at > FeedDetailTtlMillis) {
+            detailCache.remove(id)
+            null
+        } else {
+            hit.detail
+        }
+    }
+
+    private fun cacheDetail(id: String, detail: FeedDetail, now: Long) = synchronized(detailCacheLock) {
+        if (detailCache.size >= 32) {
+            detailCache.entries.removeAll { now - it.value.at > FeedDetailTtlMillis }
+            if (detailCache.size >= 32) detailCache.clear()
+        }
+        detailCache[id] = CachedDetail(detail, now)
+    }
+
     // ---- lists -------------------------------------------------------------------------------
 
     suspend fun homeFeed(page: Int, firstItem: String?, lastItem: String?): List<Entity> = parse(
@@ -254,6 +282,10 @@ class CoolapkRepository(
         if (!Regex("^[0-9]+$").matches(id)) {
             throw ApiFailure(ApiFailureKind.InvalidResponse, "动态编号无效")
         }
+        val startedAt = System.currentTimeMillis()
+        // A checked copy is as good as a fresh one for a quick re-entry, and reusing it is what
+        // keeps the challenge from coming back.
+        if (!verify) cachedDetail(id, startedAt)?.let { return it }
         val response = api.get(Api.FEED_DETAIL, mapOf("id" to id), skipCaptcha = !verify)
         // The challenge arrives as HTTP 200 with a captcha envelope, so the envelope check is what
         // has to fall back — not the transport.
@@ -267,8 +299,10 @@ class CoolapkRepository(
             // network; when it fails the caller still needs the challenge reason to offer the check.
             val public = runCatching { readApiObject(api.get(Api.publicFeed(id))) }.getOrElse { throw failure }
             return FeedDetail(dataObject(public), isPublic = true, captchaVerification = null)
+                .also { cacheDetail(id, it, startedAt) }
         }
         return FeedDetail(dataObject(json), isPublic = false, captchaVerification = response.captchaVerification)
+            .also { cacheDetail(id, it, startedAt) }
     }
 
     suspend fun userSpace(uid: String): Entity = fromUrl("/v6/user/space?uid=$uid")
@@ -320,7 +354,10 @@ class CoolapkRepository(
             query = mapOf("id" to id, "detail" to 0),
             body = Body.Form(listOf("trace" to "")),
         )
-        return actionResult(readActionObject(response))
+        val result = actionResult(readActionObject(response))
+        // The cached body carries the old like count and state; a re-entry should see this one.
+        if (isFeed) synchronized(detailCacheLock) { detailCache.remove(id) }
+        return result
     }
 
     suspend fun deleteFeed(id: String): ActionResult = actionResult(readActionObject(api.post(Api.FEED_DELETE, mapOf("id" to id))))
@@ -555,3 +592,6 @@ class CoolapkRepository(
         }
     }
 }
+
+/** How long a feed body stays reusable for a quick re-entry. */
+private const val FeedDetailTtlMillis = 60_000L
