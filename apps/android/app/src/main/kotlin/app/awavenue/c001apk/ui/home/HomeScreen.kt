@@ -45,7 +45,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -64,7 +63,6 @@ import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
-import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
@@ -240,7 +238,6 @@ fun HomeScreen(
     outerPadding: PaddingValues,
     pagerState: PagerState,
     returnTop: ReturnTopController,
-    barSlot: Int,
 ) {
     val app = LocalApp.current
     val settings = app.settings
@@ -310,10 +307,6 @@ fun HomeScreen(
     val backdrop = rememberGlassBackdrop()
     val density = LocalDensity.current
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // Where the bar ends, so a route shrinking back into the list can go underneath it. The height
-    // changes as the top row collapses; the holder is written from the layout callback and read at
-    // draw time, so following the collapse costs no recomposition.
-    val appBarBounds = LocalAppBarBounds.current
     // The material never goes fully dark: at rest the bar keeps a translucent floor so the top row
     // and the tab capsule still sit on a blurred layer instead of directly on the list. Strength
     // follows the distance the list has scrolled, not the row's collapse: pulling the row back down
@@ -332,11 +325,7 @@ fun HomeScreen(
             // overlay measures the bar and draws the material 24dp past it without adding that
             // band to the Scaffold's content padding.
             AppBarBlurOverlay(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned {
-                        appBarBounds.report(barSlot, it.size.height.toFloat())
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 containerColor = COUITheme.colorScheme.surface,
                 backdrop = backdrop,
                 scrollFraction = materialScrollFraction,
