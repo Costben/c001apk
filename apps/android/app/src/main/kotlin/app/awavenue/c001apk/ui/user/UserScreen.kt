@@ -25,9 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
@@ -46,6 +49,8 @@ import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.FFFListType
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
@@ -72,6 +77,7 @@ import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -90,6 +96,22 @@ private enum class UserMenuItem(val label: String) {
     Info("用户信息"),
 }
 
+/**
+ * The header outlives the screen itself. A post pushed on top disposes the user page, and loading
+ * it again on the way back put a spinner over the list every time the user returned.
+ */
+private class UserHeaderState(uid: String) : ViewModel() {
+    val user = mutableStateOf<Entity?>(null)
+    val error = mutableStateOf<String?>(null)
+    val loading = mutableStateOf(true)
+    val blocked = mutableStateOf(false)
+    val resolvedUid = mutableStateOf(uid)
+    val username = mutableStateOf("")
+
+    /** Set once the header has been fetched, so a return reuses it instead of loading it again. */
+    var loaded = false
+}
+
 @Composable
 fun UserScreen(uid: String) {
     val app = LocalApp.current
@@ -99,31 +121,41 @@ fun UserScreen(uid: String) {
     val scrollBehavior = COUIScrollBehavior()
     val backdrop = rememberGlassBackdrop()
     val listState = rememberLazyListState()
+    val appBarBounds = LocalAppBarBounds.current
 
-    var user by remember(uid) { mutableStateOf<Entity?>(null) }
-    var error by remember(uid) { mutableStateOf<String?>(null) }
-    var loading by remember(uid) { mutableStateOf(true) }
-    var blocked by remember(uid) { mutableStateOf(false) }
-    var resolvedUid by remember(uid) { mutableStateOf(uid) }
-    var username by remember(uid) { mutableStateOf("") }
+    // Kept in the entry's ViewModel store, so a post stacked on top does not reset the header.
+    val header = viewModel(key = "user-header-$uid") { UserHeaderState(uid) }
+    var user by header.user
+    var error by header.error
+    var loading by header.loading
+    var blocked by header.blocked
+    var resolvedUid by header.resolvedUid
+    var username by header.username
     var menuOpen by remember(uid) { mutableStateOf(false) }
     var infoOpen by remember(uid) { mutableStateOf(false) }
 
     val loadUser: suspend () -> Unit = {
         loading = true
         error = null
-        runCatching { app.repository.userSpace(uid) }
-            .onSuccess { data ->
-                resolvedUid = data.uid.ifEmpty { uid }
-                username = data.username
-                blocked = app.blacklist.isUserBlocked(resolvedUid)
-                user = data
-            }
-            .onFailure { error = ApiFailure.from(it).message }
-        loading = false
+        try {
+            val data = app.repository.userSpace(uid)
+            resolvedUid = data.uid.ifEmpty { uid }
+            username = data.username
+            blocked = app.blacklist.isUserBlocked(resolvedUid)
+            user = data
+            header.loaded = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = ApiFailure.from(e).message
+        } finally {
+            loading = false
+        }
     }
 
-    LaunchedEffect(uid) { loadUser() }
+    LaunchedEffect(uid) {
+        if (!header.loaded) loadUser()
+    }
 
     val hasFeed = user != null && !blocked
     val collapsed by remember {
@@ -182,6 +214,12 @@ fun UserScreen(uid: String) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = if (collapsed) username else "",
+                    modifier = Modifier.onGloballyPositioned {
+                        appBarBounds.reportPage(
+                            Route.User(uid),
+                            it.positionInRoot().y + it.size.height,
+                        )
+                    },
                     gradientGlass = true,
                     color = if (opaque) COUITheme.colorScheme.surface else Color.Transparent,
                     dividerColor = if (opaque) COUITheme.colorScheme.dividerLine else Color.Transparent,
@@ -368,36 +406,38 @@ private fun UserFeed(
         contentPadding = contentPadding,
         topAppBarScrollBehavior = scrollBehavior,
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item(key = "header", contentType = "header") { header() }
-            when (val status = viewModel.status) {
-                ListStatus.Loading -> item(key = "loading") {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                        InfiniteProgressIndicator()
+        CompositionLocalProvider(LocalFeedListState provides listState) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item(key = "header", contentType = "header") { header() }
+                when (val status = viewModel.status) {
+                    ListStatus.Loading -> item(key = "loading") {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            InfiniteProgressIndicator()
+                        }
                     }
-                }
-                ListStatus.Empty -> item(key = "empty") {
-                    FeedMessage("暂无内容") { viewModel.refresh() }
-                }
-                is ListStatus.Error -> item(key = "error") {
-                    FeedMessage(status.message) { viewModel.refresh() }
-                }
-                ListStatus.Content -> {
-                    itemsIndexed(
-                        viewModel.items.filterNot(FeedActions::isHidden),
-                        contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
-                    ) { _, item ->
-                        EntityItem(item)
+                    ListStatus.Empty -> item(key = "empty") {
+                        FeedMessage("暂无内容") { viewModel.refresh() }
                     }
-                    item(key = "footer", contentType = "footer") { FeedFooter(viewModel) }
+                    is ListStatus.Error -> item(key = "error") {
+                        FeedMessage(status.message) { viewModel.refresh() }
+                    }
+                    ListStatus.Content -> {
+                        itemsIndexed(
+                            viewModel.items.filterNot(FeedActions::isHidden),
+                            contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
+                        ) { _, item ->
+                            EntityItem(item)
+                        }
+                        item(key = "footer", contentType = "footer") { FeedFooter(viewModel) }
+                    }
                 }
             }
         }

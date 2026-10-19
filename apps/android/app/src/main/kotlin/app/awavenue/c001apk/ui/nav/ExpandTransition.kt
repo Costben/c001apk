@@ -185,7 +185,15 @@ internal fun ExpandFrame(
     // Taken while the page underneath is still composed: it is disposed once this one is fully in.
     if (origin != null) {
         LaunchedEffect(origin) {
+            // The page that owns the element is disposed as soon as the new one is fully in. On a
+            // page stacked over it that happens right around [SnapshotSettleMillis], so the still
+            // taken after the wait can find the element already released. Take one on the first
+            // frame too, while the element is certainly still drawn; the later one replaces it when
+            // the element did survive long enough for the press feedback to be gone.
             withFrameNanos { }
+            if (origin.isAvailable && origin.layer.size != IntSize.Zero) {
+                origin.picture = origin.layer.toImageBitmap()
+            }
             delay(SnapshotSettleMillis)
             if (origin.isAvailable && origin.layer.size != IntSize.Zero) {
                 origin.picture = origin.layer.toImageBitmap()

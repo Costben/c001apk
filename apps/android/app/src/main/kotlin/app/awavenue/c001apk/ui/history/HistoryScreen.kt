@@ -22,6 +22,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.data.FavHistoryItem
 import app.awavenue.c001apk.data.HistoryType
+import app.awavenue.c001apk.data.asEntity
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.glassSource
@@ -45,8 +46,6 @@ import io.github.suqi8.coui.kmp.icon.extended.Delete
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 
 @Composable
 fun HistoryScreen(type: HistoryType) {
@@ -155,14 +154,3 @@ private fun ClearDialog(type: HistoryType, onConfirm: () -> Unit, onCancel: () -
     )
 }
 
-private fun FavHistoryItem.asEntity() = Entity(
-    buildJsonObject {
-        put("id", JsonPrimitive(id))
-        put("uid", JsonPrimitive(uid))
-        put("userInfo", buildJsonObject { put("username", JsonPrimitive(username)) })
-        put("userAvatar", JsonPrimitive(userAvatar))
-        put("message", JsonPrimitive(message))
-        put("device_title", JsonPrimitive(device))
-        put("dateline", JsonPrimitive(dateline))
-    },
-)

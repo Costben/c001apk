@@ -21,11 +21,13 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.HistoryCardMode
 import app.awavenue.c001apk.data.HistoryType
+import app.awavenue.c001apk.data.asEntity
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
@@ -63,6 +66,7 @@ import app.awavenue.c001apk.ui.follow.localFollowLabel
 import app.awavenue.c001apk.ui.nav.ExpandOrigin
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.expandOrigin
@@ -297,6 +301,7 @@ private fun MessageList(
 ) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
+    val listState = rememberLazyListState()
     // Parse and shorten once per history change, not every time the card scrolls back in.
     val history = remember(app.history.historyFeeds) {
         app.history.list(HistoryType.History).map { item ->
@@ -312,6 +317,7 @@ private fun MessageList(
                 title = if (item.username.isEmpty()) "动态" else "${item.username}的动态",
                 snippet = snippet,
                 time = item.time,
+                feed = item.asEntity(),
             )
         }
     }
@@ -324,95 +330,98 @@ private fun MessageList(
         pullToRefreshState = rememberPullToRefreshState(),
         contentPadding = contentPadding,
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .glassSource(backdrop)
-                .overScrollVertical(),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // A guest has no counters to show, so the page starts at the shortcuts.
-            if (isLogin) {
-                item(key = "stats", contentType = "stats") {
+        CompositionLocalProvider(LocalFeedListState provides listState) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .overScrollVertical(),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // A guest has no counters to show, so the page starts at the shortcuts.
+                if (isLogin) {
+                    item(key = "stats", contentType = "stats") {
+                        CellCard(
+                            values = listOf(profile?.int("feed"), profile?.int("follow"), profile?.int("fans")),
+                            titles = listOf("动态", "关注", "粉丝"),
+                            icons = null,
+                            onClicks = listOf(
+                                { navigator.push(Route.FFFList(FFFListType.Feed)) },
+                                { navigator.push(Route.FFFList(FFFListType.Follow)) },
+                                { navigator.push(Route.FFFList(FFFListType.Fan)) },
+                            ),
+                        )
+                    }
+                }
+                item(key = "shortcuts", contentType = "shortcuts") {
                     CellCard(
-                        values = listOf(profile?.int("feed"), profile?.int("follow"), profile?.int("fans")),
-                        titles = listOf("动态", "关注", "粉丝"),
-                        icons = null,
+                        values = null,
+                        titles = listOf("本地收藏", "我的收藏", "我的赞", "我的回复"),
+                        icons = listOf(COUIIcons.Folder, COUIIcons.Favorites, AppIcons.ThumbUpOutlined, COUIIcons.Reply),
                         onClicks = listOf(
-                            { navigator.push(Route.FFFList(FFFListType.Feed)) },
-                            { navigator.push(Route.FFFList(FFFListType.Follow)) },
-                            { navigator.push(Route.FFFList(FFFListType.Fan)) },
+                            { navigator.push(Route.History(HistoryType.Fav)) },
+                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Collection)) },
+                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Like)) },
+                            { if (isLogin) navigator.push(Route.FFFList(FFFListType.Reply)) },
                         ),
                     )
                 }
-            }
-            item(key = "shortcuts", contentType = "shortcuts") {
-                CellCard(
-                    values = null,
-                    titles = listOf("本地收藏", "我的收藏", "我的赞", "我的回复"),
-                    icons = listOf(COUIIcons.Folder, COUIIcons.Favorites, AppIcons.ThumbUpOutlined, COUIIcons.Reply),
-                    onClicks = listOf(
-                        { navigator.push(Route.History(HistoryType.Fav)) },
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Collection)) },
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Like)) },
-                        { if (isLogin) navigator.push(Route.FFFList(FFFListType.Reply)) },
-                    ),
-                )
-            }
-            item(key = "history", contentType = "history") {
-                PreviewCard(
-                    title = "浏览历史",
-                    onClick = { navigator.push(Route.History(HistoryType.History)) },
-                ) {
-                    if (historyRows.isEmpty()) {
-                        PreviewEmpty("暂无浏览记录")
-                    } else {
-                        historyRows.forEach { item -> HistoryPreviewRow(item) }
-                    }
-                }
-            }
-            if (isLogin) {
-                item(key = "recent", contentType = "recent") {
+                item(key = "history", contentType = "history") {
                     PreviewCard(
-                        title = "我的常去",
-                        onClick = { navigator.push(Route.FFFList(FFFListType.Recent)) },
+                        title = "浏览历史",
+                        onClick = { navigator.push(Route.History(HistoryType.History)) },
                     ) {
-                        when {
-                            recent == null -> Unit
-                            recent.isEmpty() -> PreviewEmpty("暂无最近访问")
-                            else -> recent.take(5).forEach { item -> RecentRow(item) }
+                        if (historyRows.isEmpty()) {
+                            PreviewEmpty("暂无浏览记录")
+                        } else {
+                            historyRows.forEach { item -> HistoryPreviewRow(item) }
                         }
                     }
                 }
-                item(key = "follow", contentType = "follow") {
-                    PreviewCard(
-                        title = "我的关注",
-                        onClick = { navigator.push(Route.FFFList(FFFListType.Follow)) },
-                    ) {
-                        when {
-                            follows == null -> Unit
-                            follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
-                            else -> follows.take(5).forEach { item -> FollowPreviewRow(item) }
+                if (isLogin) {
+                    item(key = "recent", contentType = "recent") {
+                        PreviewCard(
+                            title = "我的常去",
+                            onClick = { navigator.push(Route.FFFList(FFFListType.Recent)) },
+                        ) {
+                            when {
+                                recent == null -> Unit
+                                recent.isEmpty() -> PreviewEmpty("暂无最近访问")
+                                else -> recent.take(5).forEach { item -> RecentRow(item) }
+                            }
+                        }
+                    }
+                    item(key = "follow", contentType = "follow") {
+                        PreviewCard(
+                            title = "我的关注",
+                            onClick = { navigator.push(Route.FFFList(FFFListType.Follow)) },
+                        ) {
+                            when {
+                                follows == null -> Unit
+                                follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
+                                else -> follows.take(5).forEach { item -> FollowPreviewRow(item) }
+                            }
                         }
                     }
                 }
-            }
-            item(key = "local-follow", contentType = "local-follow") {
-                PreviewCard(
-                    title = localFollowLabel(),
-                    onClick = { navigator.push(Route.LocalFollowList) },
-                ) {
-                    if (localFollows.isEmpty()) {
-                        PreviewEmpty("暂无${localFollowLabel()}")
-                    } else {
-                        localFollows.take(5).forEach { user ->
-                            PreviewRow(
-                                avatar = user.avatar,
-                                title = user.name,
-                                subtitle = localFollowLabel(),
-                                circle = true,
-                            )
+                item(key = "local-follow", contentType = "local-follow") {
+                    PreviewCard(
+                        title = localFollowLabel(),
+                        onClick = { navigator.push(Route.LocalFollowList) },
+                    ) {
+                        if (localFollows.isEmpty()) {
+                            PreviewEmpty("暂无${localFollowLabel()}")
+                        } else {
+                            localFollows.take(5).forEach { user ->
+                                PreviewRow(
+                                    avatar = user.avatar,
+                                    title = user.name,
+                                    subtitle = localFollowLabel(),
+                                    circle = true,
+                                )
+                            }
                         }
                     }
                 }
@@ -521,22 +530,30 @@ private class HistoryPreview(
     val title: String,
     val snippet: String,
     val time: Long,
+    val feed: Entity,
 )
 
 @Composable
 private fun HistoryPreviewRow(item: HistoryPreview) {
     val navigator = LocalNavigator.current
+    val listState = LocalFeedListState.current
     // The row is transparent on the card, so its frame starts in the card's colour with square
     // corners; the post then grows out of the line the user actually tapped.
     val origin = rememberExpandOrigin(0.dp, CardDefaults.defaultColors().color)
+    // This row lives in a page-level list too, so a return can move it clear of the bar.
+    SideEffect {
+        origin.listState = listState
+        origin.rowKey = item.id
+    }
     PreviewRow(
         avatar = item.avatar,
         title = item.title,
         subtitle = item.snippet,
         trailing = fromToday(item.time / 1000),
         // A preview row is the post itself: opening it should not require going through the full
-        // history list first.
-        onClick = { navigator.push(Route.Feed(item.id), origin) },
+        // history list first. The card preview keeps the page from having to load before it can
+        // draw the row it grows out of.
+        onClick = { navigator.push(Route.Feed(item.id, preview = item.feed), origin) },
         origin = origin,
     )
 }

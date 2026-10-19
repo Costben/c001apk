@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.awavenue.c001apk.model.Entity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -50,6 +51,19 @@ data class FavHistoryItem(
 }
 
 enum class HistoryType(val label: String) { Fav("本地收藏"), History("浏览历史") }
+
+/** The row's stored fields, as the entity a feed card and a feed page expect. */
+internal fun FavHistoryItem.asEntity() = Entity(
+    buildJsonObject {
+        put("id", JsonPrimitive(id))
+        put("uid", JsonPrimitive(uid))
+        put("userInfo", buildJsonObject { put("username", JsonPrimitive(username)) })
+        put("userAvatar", JsonPrimitive(userAvatar))
+        put("message", JsonPrimitive(message))
+        put("device_title", JsonPrimitive(device))
+        put("dateline", JsonPrimitive(dateline))
+    },
+)
 
 /**
  * Locally kept favourites and browse history, newest first. The Flutter client keeps these in

@@ -33,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,8 @@ import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -118,6 +122,7 @@ private fun TopicPage(tag: String?, id: String?) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val appBarBounds = LocalAppBarBounds.current
     val scope = rememberCoroutineScope()
 
     val decodedTag = tag?.let { runCatching { Uri.decode(it) }.getOrDefault(it) }
@@ -309,6 +314,12 @@ private fun TopicPage(tag: String?, id: String?) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = title,
+                    modifier = Modifier.onGloballyPositioned {
+                        appBarBounds.reportPage(
+                            if (isTopic) Route.Topic(tag.orEmpty()) else Route.Product(id.orEmpty()),
+                            it.positionInRoot().y + it.size.height,
+                        )
+                    },
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = { BackIcon(navigator) },
@@ -647,39 +658,41 @@ private fun TopicFeedList(
         contentPadding = contentPadding,
         topAppBarScrollBehavior = scrollBehavior,
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item(contentType = "header") { header() }
-            when (val status = viewModel.status) {
-                ListStatus.Loading -> item(contentType = "state") { StateBox { InfiniteProgressIndicator() } }
-                ListStatus.Empty -> item(contentType = "state") {
-                    StateBox {
-                        EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+        CompositionLocalProvider(LocalFeedListState provides listState) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item(contentType = "header") { header() }
+                when (val status = viewModel.status) {
+                    ListStatus.Loading -> item(contentType = "state") { StateBox { InfiniteProgressIndicator() } }
+                    ListStatus.Empty -> item(contentType = "state") {
+                        StateBox {
+                            EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+                        }
                     }
-                }
-                is ListStatus.Error -> item(contentType = "state") {
-                    StateBox {
-                        EmptyState(
-                            title = "加载失败",
-                            subtitle = status.message,
-                            actionText = "重试",
-                            onActionClick = viewModel::refresh,
-                        )
+                    is ListStatus.Error -> item(contentType = "state") {
+                        StateBox {
+                            EmptyState(
+                                title = "加载失败",
+                                subtitle = status.message,
+                                actionText = "重试",
+                                onActionClick = viewModel::refresh,
+                            )
+                        }
                     }
-                }
-                ListStatus.Content -> {
-                    itemsIndexed(
-                        viewModel.items.filterNot(FeedActions::isHidden),
-                        contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
-                    ) { _, item -> EntityItem(item) }
-                    item(contentType = "footer") { TopicFooter(viewModel) }
+                    ListStatus.Content -> {
+                        itemsIndexed(
+                            viewModel.items.filterNot(FeedActions::isHidden),
+                            contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
+                        ) { _, item -> EntityItem(item) }
+                        item(contentType = "footer") { TopicFooter(viewModel) }
+                    }
                 }
             }
         }
