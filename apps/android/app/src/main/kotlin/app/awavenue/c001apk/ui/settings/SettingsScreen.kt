@@ -86,9 +86,9 @@ import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.OverlayDropdownPreference
 import io.github.suqi8.coui.kmp.preference.SliderPreference
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
-import io.github.suqi8.coui.kmp.preference.WindowDropdownPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.Dispatchers
@@ -173,234 +173,236 @@ fun SettingsScreen() {
             }
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .glassSource(backdrop)
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + 12.dp,
-            ),
-        ) {
-            item {
-                SmallTitle("c001apk")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    ArrowPreference(
-                        title = "协议参数",
-                        summary = "${settings.deviceParams.brand} ${settings.deviceParams.model}",
-                        startAction = { PreferenceStartIcon(COUIIcons.Settings) },
-                        onClick = rememberHapticClick { navigator.push(Route.Params) },
-                    )
-                }
-            }
-            item {
-                SmallTitle("主题")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    SwitchPreference(
-                        title = "动态取色",
-                        checked = settings.dynamicColor,
-                        onCheckedChange = settings::updateDynamicColor,
-                        startAction = { PreferenceStartIcon(COUIIcons.Background) },
-                        enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                    )
-                    WindowDropdownPreference(
-                        title = "主题颜色",
-                        items = SeedColors.labels,
-                        selectedIndex = settings.seedColor,
-                        onSelectedIndexChange = settings::updateSeedColor,
-                        startAction = { PreferenceStartIcon(COUIIcons.Photos) },
-                        enabled = !settings.dynamicColor,
-                        maxHeight = 380.dp,
-                    )
-                    WindowDropdownPreference(
-                        title = "深色模式",
-                        items = darkModes.map { it.label },
-                        selectedIndex = darkModes.indexOf(settings.darkMode),
-                        onSelectedIndexChange = { settings.updateDarkMode(darkModes[it]) },
-                        startAction = { PreferenceStartIcon(COUIIcons.Theme) },
-                    )
-                }
-            }
-            item {
-                SmallTitle("显示")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    ArrowPreference(
-                        title = "用户黑名单",
-                        startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
-                        onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.User)) },
-                    )
-                    ArrowPreference(
-                        title = "话题黑名单",
-                        startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
-                        onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
-                    )
-                    ArrowPreference(
-                        title = "字体大小",
-                        summary = "${scaleText(settings.fontScale)}x",
-                        startAction = { PreferenceStartIcon(COUIIcons.Tune) },
-                        onClick = rememberHapticClick { showFontScale = true },
-                    )
-                    SwitchPreference(
-                        title = "在浏览器中打开",
-                        checked = settings.openInBrowser,
-                        onCheckedChange = settings::updateOpenInBrowser,
-                        startAction = { PreferenceStartIcon(COUIIcons.Link) },
-                    )
-                    SwitchPreference(
-                        title = "记录浏览历史",
-                        checked = settings.recordHistory,
-                        onCheckedChange = settings::updateRecordHistory,
-                        startAction = { PreferenceStartIcon(COUIIcons.Recent) },
-                    )
-                    WindowDropdownPreference(
-                        title = "浏览历史卡片",
-                        summary = "缩略展开只显示最近 5 条",
-                        items = HistoryCardMode.entries.map { it.label },
-                        selectedIndex = HistoryCardMode.entries.indexOf(settings.historyCardMode),
-                        onSelectedIndexChange = {
-                            settings.updateHistoryCardMode(HistoryCardMode.entries[it])
-                        },
-                        startAction = { PreferenceStartIcon(COUIIcons.Recent) },
-                    )
-                    SwitchPreference(
-                        title = "显示表情",
-                        checked = settings.showEmoji,
-                        onCheckedChange = settings::updateShowEmoji,
-                        startAction = { PreferenceStartIcon(AppIcons.EmojiEmotions) },
-                    )
-                    SwitchPreference(
-                        title = "检查已安装应用更新",
-                        summary = "在应用列表中显示已安装应用的更新入口",
-                        checked = settings.checkUpdate,
-                        onCheckedChange = settings::updateCheckUpdate,
-                        startAction = { PreferenceStartIcon(COUIIcons.Update) },
-                    )
-                }
-            }
-            item {
-                SmallTitle("交互")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    SwitchPreference(
-                        title = "点击触感",
-                        summary = "点击卡片、按钮时轻微振动",
-                        checked = settings.hapticFeedback,
-                        onCheckedChange = settings::updateHapticFeedback,
-                        startAction = { PreferenceStartIcon(COUIIcons.Tune) },
-                    )
-                    SwitchPreference(
-                        title = "自定义触感",
-                        summary = "用系统振动器代替界面自带的点击反馈",
-                        checked = settings.customHaptics,
-                        onCheckedChange = settings::updateCustomHaptics,
-                        startAction = { PreferenceStartIcon(COUIIcons.Settings) },
-                        enabled = settings.hapticFeedback,
-                    )
-                    SwitchPreference(
-                        title = "反转触感强度",
-                        summary = "把轻和强的振动效果对调",
-                        checked = settings.reverseHapticEffects,
-                        onCheckedChange = settings::updateReverseHapticEffects,
-                        startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
-                        enabled = settings.hapticFeedback && settings.customHaptics,
-                    )
-                    WindowDropdownPreference(
-                        title = "触感强度",
-                        items = HapticStrength.entries.map { it.label },
-                        selectedIndex = HapticStrength.entries.indexOf(settings.hapticStrength),
-                        onSelectedIndexChange = {
-                            settings.updateHapticStrength(HapticStrength.entries[it])
-                        },
-                        startAction = { PreferenceStartIcon(COUIIcons.ListView) },
-                        enabled = settings.hapticFeedback,
-                    )
-                }
-            }
-            item {
-                val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
-                SmallTitle("关注")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    if (app.session.isLogin) {
-                        SwitchPreference(
-                            title = "悄悄关注",
-                            summary = "开启后，长按用户主页的关注按钮添加或取消。仅保存在本机，不会同步到账号",
-                            checked = app.localFollow.secretEnabled,
-                            onCheckedChange = app.localFollow::updateSecretEnabled,
-                            startAction = { PreferenceStartIcon(COUIIcons.Hide) },
-                        )
-                    } else {
-                        BasicComponent(
-                            title = "本地关注",
-                            summary = "游客可在用户主页直接关注，并在底栏“关注”查看内容。名单仅保存在本机",
-                            startAction = { PreferenceStartIcon(COUIIcons.Contacts) },
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .glassSource(backdrop)
+                    .overScrollVertical()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                ),
+            ) {
+                item {
+                    SmallTitle("c001apk")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        ArrowPreference(
+                            title = "协议参数",
+                            summary = "${settings.deviceParams.brand} ${settings.deviceParams.model}",
+                            startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                            onClick = rememberHapticClick { navigator.push(Route.Params) },
                         )
                     }
-                    ArrowPreference(
-                        title = "管理$label",
-                        summary = "查看本机关注名单、进入用户主页或取消关注",
-                        startAction = { PreferenceStartIcon(COUIIcons.ContactsBook) },
-                        onClick = rememberHapticClick { navigator.push(Route.LocalFollowList) },
-                    )
                 }
-            }
-            item {
-                SmallTitle("更新")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    SwitchPreference(
-                        title = "自动检查 c001apk 更新",
-                        summary = "每次启动时检查一次最新正式版本",
-                        checked = settings.autoCheckAppUpdate,
-                        onCheckedChange = settings::updateAutoCheckAppUpdate,
-                        startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
-                    )
-                    ArrowPreference(
-                        title = if (checkingUpdate) "正在检查更新…" else "检查更新",
-                        summary = "查看 c001apk 的最新正式版本",
-                        startAction = { PreferenceStartIcon(COUIIcons.Download) },
-                        enabled = !checkingUpdate,
-                        onClick = rememberHapticClick {
-                            scope.launch {
-                                checkingUpdate = true
-                                when (val result = app.updates.check()) {
-                                    is UpdateResult.Available -> update = result
-                                    UpdateResult.UpToDate -> context.toast("已是最新版本")
-                                    is UpdateResult.Failed -> context.toast(result.message)
-                                    UpdateResult.Busy -> context.toast("正在检查更新，请稍候")
-                                    UpdateResult.Suppressed -> Unit
+                item {
+                    SmallTitle("主题")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        SwitchPreference(
+                            title = "动态取色",
+                            checked = settings.dynamicColor,
+                            onCheckedChange = settings::updateDynamicColor,
+                            startAction = { PreferenceStartIcon(COUIIcons.Background) },
+                            enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                        )
+                        OverlayDropdownPreference(
+                            title = "主题颜色",
+                            items = SeedColors.labels,
+                            selectedIndex = settings.seedColor,
+                            onSelectedIndexChange = settings::updateSeedColor,
+                            startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            enabled = !settings.dynamicColor,
+                            maxHeight = 380.dp,
+                        )
+                        OverlayDropdownPreference(
+                            title = "深色模式",
+                            items = darkModes.map { it.label },
+                            selectedIndex = darkModes.indexOf(settings.darkMode),
+                            onSelectedIndexChange = { settings.updateDarkMode(darkModes[it]) },
+                            startAction = { PreferenceStartIcon(COUIIcons.Theme) },
+                        )
+                    }
+                }
+                item {
+                    SmallTitle("显示")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        ArrowPreference(
+                            title = "用户黑名单",
+                            startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
+                            onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.User)) },
+                        )
+                        ArrowPreference(
+                            title = "话题黑名单",
+                            startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
+                            onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
+                        )
+                        ArrowPreference(
+                            title = "字体大小",
+                            summary = "${scaleText(settings.fontScale)}x",
+                            startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                            onClick = rememberHapticClick { showFontScale = true },
+                        )
+                        SwitchPreference(
+                            title = "在浏览器中打开",
+                            checked = settings.openInBrowser,
+                            onCheckedChange = settings::updateOpenInBrowser,
+                            startAction = { PreferenceStartIcon(COUIIcons.Link) },
+                        )
+                        SwitchPreference(
+                            title = "记录浏览历史",
+                            checked = settings.recordHistory,
+                            onCheckedChange = settings::updateRecordHistory,
+                            startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                        )
+                        OverlayDropdownPreference(
+                            title = "浏览历史卡片",
+                            summary = "缩略展开只显示最近 5 条",
+                            items = HistoryCardMode.entries.map { it.label },
+                            selectedIndex = HistoryCardMode.entries.indexOf(settings.historyCardMode),
+                            onSelectedIndexChange = {
+                                settings.updateHistoryCardMode(HistoryCardMode.entries[it])
+                            },
+                            startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                        )
+                        SwitchPreference(
+                            title = "显示表情",
+                            checked = settings.showEmoji,
+                            onCheckedChange = settings::updateShowEmoji,
+                            startAction = { PreferenceStartIcon(AppIcons.EmojiEmotions) },
+                        )
+                        SwitchPreference(
+                            title = "检查已安装应用更新",
+                            summary = "在应用列表中显示已安装应用的更新入口",
+                            checked = settings.checkUpdate,
+                            onCheckedChange = settings::updateCheckUpdate,
+                            startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                        )
+                    }
+                }
+                item {
+                    SmallTitle("交互")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        SwitchPreference(
+                            title = "点击触感",
+                            summary = "点击卡片、按钮时轻微振动",
+                            checked = settings.hapticFeedback,
+                            onCheckedChange = settings::updateHapticFeedback,
+                            startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                        )
+                        SwitchPreference(
+                            title = "自定义触感",
+                            summary = "用系统振动器代替界面自带的点击反馈",
+                            checked = settings.customHaptics,
+                            onCheckedChange = settings::updateCustomHaptics,
+                            startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                            enabled = settings.hapticFeedback,
+                        )
+                        SwitchPreference(
+                            title = "反转触感强度",
+                            summary = "把轻和强的振动效果对调",
+                            checked = settings.reverseHapticEffects,
+                            onCheckedChange = settings::updateReverseHapticEffects,
+                            startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                            enabled = settings.hapticFeedback && settings.customHaptics,
+                        )
+                        OverlayDropdownPreference(
+                            title = "触感强度",
+                            items = HapticStrength.entries.map { it.label },
+                            selectedIndex = HapticStrength.entries.indexOf(settings.hapticStrength),
+                            onSelectedIndexChange = {
+                                settings.updateHapticStrength(HapticStrength.entries[it])
+                            },
+                            startAction = { PreferenceStartIcon(COUIIcons.ListView) },
+                            enabled = settings.hapticFeedback,
+                        )
+                    }
+                }
+                item {
+                    val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
+                    SmallTitle("关注")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        if (app.session.isLogin) {
+                            SwitchPreference(
+                                title = "悄悄关注",
+                                summary = "开启后，长按用户主页的关注按钮添加或取消。仅保存在本机，不会同步到账号",
+                                checked = app.localFollow.secretEnabled,
+                                onCheckedChange = app.localFollow::updateSecretEnabled,
+                                startAction = { PreferenceStartIcon(COUIIcons.Hide) },
+                            )
+                        } else {
+                            BasicComponent(
+                                title = "本地关注",
+                                summary = "游客可在用户主页直接关注，并在底栏“关注”查看内容。名单仅保存在本机",
+                                startAction = { PreferenceStartIcon(COUIIcons.Contacts) },
+                            )
+                        }
+                        ArrowPreference(
+                            title = "管理$label",
+                            summary = "查看本机关注名单、进入用户主页或取消关注",
+                            startAction = { PreferenceStartIcon(COUIIcons.ContactsBook) },
+                            onClick = rememberHapticClick { navigator.push(Route.LocalFollowList) },
+                        )
+                    }
+                }
+                item {
+                    SmallTitle("更新")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        SwitchPreference(
+                            title = "自动检查 c001apk 更新",
+                            summary = "每次启动时检查一次最新正式版本",
+                            checked = settings.autoCheckAppUpdate,
+                            onCheckedChange = settings::updateAutoCheckAppUpdate,
+                            startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                        )
+                        ArrowPreference(
+                            title = if (checkingUpdate) "正在检查更新…" else "检查更新",
+                            summary = "查看 c001apk 的最新正式版本",
+                            startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                            enabled = !checkingUpdate,
+                            onClick = rememberHapticClick {
+                                scope.launch {
+                                    checkingUpdate = true
+                                    when (val result = app.updates.check()) {
+                                        is UpdateResult.Available -> update = result
+                                        UpdateResult.UpToDate -> context.toast("已是最新版本")
+                                        is UpdateResult.Failed -> context.toast(result.message)
+                                        UpdateResult.Busy -> context.toast("正在检查更新，请稍候")
+                                        UpdateResult.Suppressed -> Unit
+                                    }
+                                    checkingUpdate = false
                                 }
-                                checkingUpdate = false
-                            }
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
-            }
-            item {
-                SmallTitle("其他")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    ArrowPreference(
-                        title = "账号管理",
-                        summary = "已保存 ${app.accounts.accounts.size} 个账号 · 切换、添加或移除",
-                        startAction = { PreferenceStartIcon(COUIIcons.ContactsCircle) },
-                        onClick = rememberHapticClick { navigator.push(Route.Accounts) },
-                    )
-                    ArrowPreference(
-                        title = "关于",
-                        summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
-                        startAction = { PreferenceStartIcon(COUIIcons.Info) },
-                        onClick = rememberHapticClick { navigator.push(Route.About) },
-                    )
-                    ArrowPreference(
-                        title = "清理缓存",
-                        summary = cacheSize?.let(::formatSize),
-                        startAction = { PreferenceStartIcon(COUIIcons.Clear) },
-                        onClick = rememberHapticClick {
-                            scope.launch {
-                                cacheSize = runCatching { cacheBytes(context) }.getOrNull()
-                                askClearCache = true
-                            }
-                        },
-                    )
+                item {
+                    SmallTitle("其他")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        ArrowPreference(
+                            title = "账号管理",
+                            summary = "已保存 ${app.accounts.accounts.size} 个账号 · 切换、添加或移除",
+                            startAction = { PreferenceStartIcon(COUIIcons.ContactsCircle) },
+                            onClick = rememberHapticClick { navigator.push(Route.Accounts) },
+                        )
+                        ArrowPreference(
+                            title = "关于",
+                            summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
+                            startAction = { PreferenceStartIcon(COUIIcons.Info) },
+                            onClick = rememberHapticClick { navigator.push(Route.About) },
+                        )
+                        ArrowPreference(
+                            title = "清理缓存",
+                            summary = cacheSize?.let(::formatSize),
+                            startAction = { PreferenceStartIcon(COUIIcons.Clear) },
+                            onClick = rememberHapticClick {
+                                scope.launch {
+                                    cacheSize = runCatching { cacheBytes(context) }.getOrNull()
+                                    askClearCache = true
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
