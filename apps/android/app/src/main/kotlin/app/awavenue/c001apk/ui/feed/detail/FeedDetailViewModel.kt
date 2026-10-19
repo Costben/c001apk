@@ -115,6 +115,9 @@ class FeedDetailViewModel(
     /** The first row is the pinned reply only while the default ordering is active. */
     val showsPinnedReply: Boolean get() = topReply != null && replySort == ReplySortType.Def
 
+    /** Id of the pinned reply while it is on display, so its menu can offer to unpin it. */
+    val pinnedReplyId: String? get() = if (showsPinnedReply) topReply?.id else null
+
     init {
         loadFeed(verify = false)
     }
@@ -395,6 +398,25 @@ class FeedDetailViewModel(
                     replies = replies.filterNot { it.id == id }
                 }
                 if (result.count.isNotEmpty()) notice = result.count
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notice = ApiFailure.from(e).message
+            }
+        }
+    }
+
+    /** Pins [replyId] as the feed's single top reply, or clears the current pin. */
+    fun onTogglePinReply(replyId: String, pinned: Boolean) {
+        viewModelScope.launch {
+            try {
+                val result = repository.pinReply(id, replyId, pinned)
+                if (result.message.isNotEmpty()) {
+                    notice = result.message
+                    return@launch
+                }
+                topReply = if (pinned) replies.firstOrNull { it.id == replyId } else null
+                refreshReplies()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

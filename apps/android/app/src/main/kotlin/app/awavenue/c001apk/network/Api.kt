@@ -24,6 +24,8 @@ object Api {
     const val FEED_CREATE = "$API/v6/feed/createFeed"
     const val FEED_DELETE = "$API/v6/feed/deleteFeed"
     const val FEED_DELETE_REPLY = "$API/v6/feed/deleteReply"
+    const val FEED_ADD_REPLY_TOP = "$API/v6/feed/addReplyTopToFeed"
+    const val FEED_CANCEL_REPLY_TOP = "$API/v6/feed/cancelReplyTopFromFeed"
     const val FEED_FOLLOW_TAG = "$API/v6/feed/followTag"
     const val FEED_UNFOLLOW_TAG = "$API/v6/feed/unFollowTag"
 

@@ -364,6 +364,21 @@ class CoolapkRepository(
 
     suspend fun deleteReply(id: String): ActionResult = actionResult(readActionObject(api.post(Api.FEED_DELETE_REPLY, mapOf("id" to id))))
 
+    /**
+     * Pins [replyId] on top of [feedId], or clears the feed's pinned reply. Only the feed author
+     * may do this; the server enforces it. The cancel call keys off the feed alone because a feed
+     * keeps at most one pinned reply.
+     */
+    suspend fun pinReply(feedId: String, replyId: String, pinned: Boolean): ActionResult {
+        val fields = if (pinned) {
+            listOf("replyId" to replyId, "feedId" to feedId)
+        } else {
+            listOf("feedId" to feedId)
+        }
+        val path = if (pinned) Api.FEED_ADD_REPLY_TOP else Api.FEED_CANCEL_REPLY_TOP
+        return actionResult(readActionObject(api.post(path, body = Body.Form(fields))))
+    }
+
     suspend fun deleteNotification(id: String): ActionResult =
         actionResult(readActionObject(api.post(Api.NOTIFICATION_DELETE, mapOf("id" to id))))
 

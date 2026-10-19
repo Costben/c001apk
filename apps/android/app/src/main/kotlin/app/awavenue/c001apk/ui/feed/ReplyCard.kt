@@ -95,6 +95,8 @@ fun ReplyCard(
     modifier: Modifier = Modifier,
     isReply2Reply: Boolean = false,
     isTopReply: Boolean = false,
+    canPin: Boolean = false,
+    onTogglePin: (() -> Unit)? = null,
     uid: String? = null,
     onBlock: ((uid: String, id: String?) -> Unit)? = null,
     onReply: ((id: String, username: String, fid: String?) -> Unit)? = null,
@@ -206,6 +208,8 @@ fun ReplyCard(
                     onDelete = { onDelete?.invoke(reply.id, null) },
                     onReport = { navigator.push(Route.Web(Protocol.reportLink(reply.id, isReply = true))) },
                     onShowReplies = { onShowReplies?.invoke(reply) },
+                    isPinned = isTopReply,
+                    onTogglePin = onTogglePin?.takeIf { canPin },
                 ),
             )
         }
@@ -220,8 +224,11 @@ private fun replyMenuEntries(
     onDelete: () -> Unit,
     onReport: () -> Unit,
     onShowReplies: () -> Unit,
+    isPinned: Boolean = false,
+    onTogglePin: (() -> Unit)? = null,
 ): List<Pair<String, () -> Unit>> = buildList {
     if (reply.message.isNotEmpty()) add("复制" to onCopy)
+    if (onTogglePin != null) add((if (isPinned) "取消置顶" else "置顶") to onTogglePin)
     add("屏蔽" to onBlock)
     if (isOwn) add("删除" to onDelete)
     add("举报" to onReport)

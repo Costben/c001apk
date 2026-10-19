@@ -310,6 +310,12 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                                         navigator.push(Route.Web(url))
                                                     },
                                                     isTopReply = viewModel.showsPinnedReply && index == 0,
+                                                    canPin = viewModel.feedUid.isNotEmpty() &&
+                                                        viewModel.feedUid == app.session.uid,
+                                                    onTogglePin = {
+                                                        val pinned = viewModel.pinnedReplyId == reply.id
+                                                        viewModel.onTogglePinReply(reply.id, !pinned)
+                                                    },
                                                     onBlock = viewModel::onBlockReply,
                                                     onReply = { replyId, username, _ ->
                                                         replyTarget = ReplyTarget(
