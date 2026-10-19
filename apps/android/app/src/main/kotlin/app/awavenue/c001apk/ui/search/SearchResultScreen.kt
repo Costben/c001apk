@@ -31,11 +31,10 @@ import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
-import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
-import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -46,7 +45,7 @@ import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
+import io.github.suqi8.coui.kmp.overlay.OverlayCascadingListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
@@ -79,14 +78,6 @@ private enum class SearchSortType(val label: String, val sort: String, val isStr
     Strict("精确匹配", "", 1),
 }
 
-private enum class SearchMenuType(val label: String) {
-    Type("内容类型"),
-    Sort("排序方式"),
-}
-
-/** Which list the overflow menu currently shows: its two entries, or one entry's options. */
-private enum class SearchMenuPage { Root, Type, Sort }
-
 @Composable
 fun SearchResultScreen(keyword: String, title: String, pageType: String?, pageParam: String?) {
     val app = LocalApp.current
@@ -99,7 +90,37 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
 
     var searchType by remember { mutableStateOf(SearchType.All) }
     var sortType by remember { mutableStateOf(SearchSortType.Dateline) }
-    var menu by remember { mutableStateOf<SearchMenuPage?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    // Each overflow row owns its options as `children`, so the library shrinks the primary panel
+    // and morphs a second panel out of the row, matching the native ColorOS cascade.
+    val menuEntries = remember(searchType, sortType) {
+        listOf(
+            DropdownEntry(
+                items = listOf(
+                    DropdownItem(
+                        text = "内容类型",
+                        children = SearchType.entries.map { type ->
+                            DropdownItem(
+                                text = type.label,
+                                selected = searchType == type,
+                                onClick = { searchType = type },
+                            )
+                        },
+                    ),
+                    DropdownItem(
+                        text = "排序方式",
+                        children = SearchSortType.entries.map { sort ->
+                            DropdownItem(
+                                text = sort.label,
+                                selected = sortType == sort,
+                                onClick = { sortType = sort },
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -117,62 +138,15 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                     actions = {
                         if (pagerState.currentPage == 0) {
                             Box {
-                                TopBarIconButton(onClick = { menu = SearchMenuPage.Root }) {
+                                TopBarIconButton(onClick = { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "菜单")
                                 }
-                                // One popup whose rows swap in place. Opening a submenu in a second
-                                // popup raced with the first one's dismiss callback, which cleared
-                                // the state and closed the menu instead of showing the options.
-                                OverlayListPopup(
-                                    show = menu != null,
+                                OverlayCascadingListPopup(
+                                    show = menuOpen,
+                                    entries = menuEntries,
                                     alignment = PopupPositionProvider.Align.BottomEnd,
-                                    onDismissRequest = { menu = null },
-                                ) {
-                                    ListPopupColumn {
-                                        when (menu) {
-                                            SearchMenuPage.Root -> SearchMenuType.entries.forEachIndexed { index, item ->
-                                                DropdownImpl(
-                                                    item = DropdownItem(text = item.label),
-                                                    optionSize = SearchMenuType.entries.size,
-                                                    isSelected = false,
-                                                    index = index,
-                                                    groupKey = "search-menu",
-                                                    hasSubmenu = true,
-                                                    onSelectedIndexChange = {
-                                                        menu = if (it == 0) SearchMenuPage.Type else SearchMenuPage.Sort
-                                                    },
-                                                )
-                                            }
-                                            SearchMenuPage.Type -> SearchType.entries.forEachIndexed { index, item ->
-                                                DropdownImpl(
-                                                    item = DropdownItem(text = item.label),
-                                                    optionSize = SearchType.entries.size,
-                                                    isSelected = searchType == item,
-                                                    index = index,
-                                                    groupKey = "search-content-type",
-                                                    onSelectedIndexChange = {
-                                                        searchType = SearchType.entries[it]
-                                                        menu = null
-                                                    },
-                                                )
-                                            }
-                                            SearchMenuPage.Sort -> SearchSortType.entries.forEachIndexed { index, item ->
-                                                DropdownImpl(
-                                                    item = DropdownItem(text = item.label),
-                                                    optionSize = SearchSortType.entries.size,
-                                                    isSelected = sortType == item,
-                                                    index = index,
-                                                    groupKey = "search-sort",
-                                                    onSelectedIndexChange = {
-                                                        sortType = SearchSortType.entries[it]
-                                                        menu = null
-                                                    },
-                                                )
-                                            }
-                                            null -> Unit
-                                        }
-                                    }
-                                }
+                                    onDismissRequest = { menuOpen = false },
+                                )
                             }
                         }
                     },
