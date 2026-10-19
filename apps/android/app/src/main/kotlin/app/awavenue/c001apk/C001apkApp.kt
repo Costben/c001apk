@@ -20,6 +20,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.util.DebugLogger
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class C001apkApp : Application(), SingletonImageLoader.Factory {
     lateinit var settings: AppSettings
@@ -70,6 +71,11 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
     // same CoolMarket agent as API calls.
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         val imageClient = httpClient.newBuilder()
+            // The API client's 5s read timeout is tuned for JSON; a picture on a weak network
+            // needs longer, and cutting it off left the thumbnail slot permanently blank.
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 chain.proceed(chain.request().newBuilder().header("User-Agent", settings.deviceParams.userAgent).build())
             }
