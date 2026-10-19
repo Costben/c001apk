@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.data.FavHistoryItem
@@ -25,6 +26,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedCard
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalRouteReveal
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -48,29 +50,50 @@ fun HistoryScreen(type: HistoryType) {
     val navigator = LocalNavigator.current
     val scrollBehavior = COUIScrollBehavior()
     val backdrop = rememberGlassBackdrop()
+    val routeReveal = LocalRouteReveal.current
     var confirmClear by remember(type) { mutableStateOf(false) }
     val entries = app.history.list(type)
 
     Scaffold(
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
-                    title = type.label,
-                    gradientGlass = true,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        TopBarIconButton(onClick = { navigator.pop() }) {
-                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                        }
-                    },
-                    actions = {
-                        if (entries.isNotEmpty()) {
-                            TopBarIconButton(onClick = { confirmClear = true }) {
-                                Icon(COUIIcons.Delete, contentDescription = "清除全部")
+                Box(
+                    Modifier
+                        .graphicsLayer {
+                            alpha = when {
+                                // The page is covered and its snapshot is being taken for a back
+                                // gesture: leave the bar out of that picture, so the gesture does
+                                // not bring it back before the card has shrunk away.
+                                routeReveal.snapshotWithoutBar -> 0f
+                                routeReveal.gesturing -> 0f
+                                routeReveal.barAlpha < 1f -> routeReveal.barAlpha
+                                // The card shrinking back may uncover the bar within the first
+                                // frames. Keep it faint until the card is most of the way in, then
+                                // let it fade up.
+                                routeReveal.active ->
+                                    ((0.6f - routeReveal.progress) / 0.4f).coerceIn(0f, 1f)
+                                else -> 1f
                             }
-                        }
-                    },
-                )
+                        },
+                ) {
+                    TopAppBar(
+                        title = type.label,
+                        gradientGlass = true,
+                        scrollBehavior = scrollBehavior,
+                        navigationIcon = {
+                            TopBarIconButton(onClick = { navigator.pop() }) {
+                                Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                            }
+                        },
+                        actions = {
+                            if (entries.isNotEmpty()) {
+                                TopBarIconButton(onClick = { confirmClear = true }) {
+                                    Icon(COUIIcons.Delete, contentDescription = "清除全部")
+                                }
+                            }
+                        },
+                    )
+                }
             }
         },
     ) { innerPadding ->

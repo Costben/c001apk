@@ -32,19 +32,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -81,6 +86,7 @@ import app.awavenue.c001apk.ui.settings.SettingsScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
 import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
@@ -107,12 +113,23 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     val openInBrowser = LocalApp.current.settings.openInBrowser
     val scope = rememberCoroutineScope()
     val imageOrigins = remember { ImageOrigins() }
+    // Reported by the main tab that is on screen; an exiting shrink keeps the bar visible while
+    // the card passes under it instead of painting over it.
+    val appBarBounds = remember { AppBarBounds() }
+    // Tells the page being returned to how far the route in front has travelled, so its app bar can
+    // wait instead of snapping in as soon as the shrinking card uncovers it.
+    val routeReveal = remember { RouteReveal() }
+    // The bar's material reaches this far past its layout box; a shrinking route fades in across
+    // that band instead of ending on a hard line under the bar.
+    val density = LocalDensity.current
+    val appBarFadePx = with(density) { AppBarBlurOverlayDefaults.ExtraHeight.toPx() }
 
     // How far the back gesture has pulled the top page: 1 at rest, 0 once it is fully away. It is
     // read in layer blocks, so a running gesture never recomposes the page.
     var gestureProgress by remember { mutableFloatStateOf(1f) }
     var gestureEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
+    var barFadeJob by remember { mutableStateOf<Job?>(null) }
     // Bumped by every back callback, so the ease-back started by one callback can tell that a later
     // one has taken the gesture over and stand down instead of fighting it.
     var gestureRun by remember { mutableStateOf(0) }
@@ -121,7 +138,12 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     // pulled away. Derived so a running gesture does not recompose the host on every event.
     val revealing by remember { derivedStateOf { gestureProgress < 1f } }
 
-    CompositionLocalProvider(LocalNavigator provides navigator, LocalImageOrigins provides imageOrigins) {
+    CompositionLocalProvider(
+        LocalNavigator provides navigator,
+        LocalImageOrigins provides imageOrigins,
+        LocalAppBarBounds provides appBarBounds,
+        LocalRouteReveal provides routeReveal,
+    ) {
         // One collector for the host's lifetime: a link is opened against whichever page is on top
         // when it arrives, and recomposition does not restart the collection and replay it.
         LaunchedEffect(deepLinks, navigator, context, openInBrowser) {
@@ -131,9 +153,15 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
         PredictiveBackHandler(enabled = true) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
+            barFadeJob?.cancel()
+            barFadeJob = null
             if (navigator.stack.size <= 1) {
                 gestureEntry = null
                 gestureProgress = 1f
+                routeReveal.active = false
+                routeReveal.progress = 1f
+                routeReveal.gesturing = false
+                routeReveal.barAlpha = 1f
                 // Nothing to preview: back either returns the main screen to its first tab or
                 // backgrounds the app, and neither happens until the gesture is released.
                 progress.collect { }
@@ -143,8 +171,17 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
             val run = ++gestureRun
             val top = navigator.stack.last()
             gestureEntry = top
+            routeReveal.active = top.shrinksToOrigin()
+            routeReveal.progress = 1f
+            // A shrink's app bar stays out of the way for the whole drag. The gesture commits with
+            // the card already at rest, so the bar can fade in on the live page afterwards.
+            routeReveal.gesturing = routeReveal.active
+            if (routeReveal.gesturing) routeReveal.barAlpha = 0f
             try {
-                progress.collect { event -> gestureProgress = 1f - event.progress }
+                progress.collect { event ->
+                    gestureProgress = 1f - event.progress
+                    if (routeReveal.active) routeReveal.progress = 1f - event.progress
+                }
                 // Released past the threshold: the page finishes leaving from wherever the finger
                 // left it, then goes. Popping it while it is still only part way out would make it
                 // disappear from mid-air.
@@ -154,7 +191,16 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                     }
                     top.previewed = true
                 }
+                routeReveal.gesturing = false
                 navigator.pop()
+                if (routeReveal.barAlpha < 1f) {
+                    barFadeJob = scope.launch {
+                        animate(routeReveal.barAlpha, 1f, animationSpec = tween(BarRevealMillis)) { value, _ ->
+                            routeReveal.barAlpha = value
+                        }
+                        routeReveal.barAlpha = 1f
+                    }
+                }
             } catch (e: CancellationException) {
                 // Released early: the page eases back under the finger — unless a later callback
                 // has already taken the gesture over, in which case easing back would fight it.
@@ -163,10 +209,17 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                     if (run != gestureRun) return@launch
                     animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
                         gestureProgress = value
+                        if (routeReveal.active) routeReveal.progress = value
                     }
                     if (gestureEntry === top) {
                         gestureEntry = null
                         gestureProgress = 1f
+                        routeReveal.gesturing = false
+                        routeReveal.barAlpha = 1f
+                        if (routeReveal.active) {
+                            routeReveal.active = false
+                            routeReveal.progress = 1f
+                        }
                     }
                 }
                 return@PredictiveBackHandler
@@ -191,6 +244,20 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                 targetState = overlay,
                 transitionSpec = {
                     val popped = initialState?.takeIf { it.popped }
+                    // A page revealed by a card shrinking back is uncovered from the card outward;
+                    // tell it the exit has begun so its app bar can fade in over the last stretch
+                    // instead of already sitting there when the card clears it.
+                    if (popped?.shrinksToOrigin() == true) {
+                        if (popped.previewed) {
+                            // The gesture already drove the reveal; keep where it left the bar.
+                            routeReveal.active = true
+                        } else {
+                            // A button pop starts its own reveal from the top of the exit.
+                            if (!routeReveal.active) routeReveal.progress = 1f
+                            routeReveal.active = true
+                            routeReveal.barAlpha = 1f
+                        }
+                    }
                     val pushed = targetState?.takeIf { popped == null }
                     val transform = when {
                         // A gesture already carried this page away; animating it again would double it.
@@ -224,7 +291,15 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                 if (entry != null) key(entry) {
                     DisposableEffect(entry) {
                         entry.attach()
-                        onDispose { entry.detach() }
+                        onDispose {
+                            entry.detach()
+                            // The reveal is over once the shrinking route is gone; a later pop
+                            // starts its own run from the top.
+                            if (entry.popped && entry.shrinksToOrigin()) {
+                                routeReveal.active = false
+                                routeReveal.progress = 1f
+                            }
+                        }
                     }
                     val grows = remember(entry) { entry.growsFromOrigin() }
                     SideEffect { entry.shown = true }
@@ -257,6 +332,18 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                     val pageFade: () -> Float = remember(fade, entryGesture) {
                         { if (entry.previewed) 0f else minOf(fade.value, entryGesture()) }
                     }
+                    // Hand the exit's progress to the page underneath while this one shrinks away.
+                    // Only the pop path is animated here; a gesture updates the same holder from
+                    // the handler, so a held-back bar follows the finger too.
+                    LaunchedEffect(transition.targetState) {
+                        if (
+                            transition.targetState == EnterExitState.PostExit &&
+                            entry.popped &&
+                            entry.shrinksToOrigin()
+                        ) {
+                            snapshotFlow { pageProgress() }.collect { routeReveal.progress = it }
+                        }
+                    }
                     val routeTransition = remember(transition, pageProgress, entryGesture) {
                         RouteTransition(
                             progress = pageProgress,
@@ -284,7 +371,48 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                                 }
                                 translationX = p * size.width
                                 alpha = 1f
-                            },
+                            }
+                                // A card shrinking back to the list must pass under the app bar,
+                                // not over it: the card is under the bar in the list, and the bar
+                                // is part of the page below. Hide the route under the bar and fade
+                                // it back in across the material's band, so the cut is not a hard
+                                // line. Only the shrink exit is affected; a slide still covers the
+                                // bar while it leaves.
+                                .drawWithContent {
+                                    val stack = navigator.stack
+                                    val covered = if (entry.popped) {
+                                        stack.lastOrNull()
+                                    } else {
+                                        stack.getOrNull(stack.lastIndex - 1)
+                                    }
+                                    val barBottom = if (
+                                        (entry.popped || entryGesture() < 1f) &&
+                                        entry.shrinksToOrigin() &&
+                                        covered?.route == Route.Main
+                                    ) {
+                                        appBarBounds.bottom
+                                    } else {
+                                        0f
+                                    }
+                                    if (barBottom <= 0f || size.height <= 0f) {
+                                        this@drawWithContent.drawContent()
+                                        return@drawWithContent
+                                    }
+                                    val start = (barBottom / size.height).coerceIn(0f, 1f)
+                                    val end = ((barBottom + appBarFadePx) / size.height).coerceIn(start, 1f)
+                                    drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
+                                    this@drawWithContent.drawContent()
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            0f to Color.Transparent,
+                                            start to Color.Transparent,
+                                            end to Color.Black,
+                                            1f to Color.Black,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                    drawContext.canvas.restore()
+                                },
                         ) {
                             ExpandFrame(
                                 origin = entry.origin,
@@ -334,6 +462,9 @@ private const val GestureSettleMillis = 200
 
 /** How long the page takes to finish leaving once the gesture has committed. */
 private const val GestureCommitMillis = 150
+
+/** How long the app bar takes to fade in once a committed gesture has handed the page back. */
+private const val BarRevealMillis = 180
 
 /**
  * How long the press state layer takes to fade out. COUI animates it with a critically damped spring
@@ -401,6 +532,7 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
     val leaving = !navigator.stack.contains(entry)
     val covered = !leaving && navigator.stack.lastOrNull() !== entry
     val picture = rememberGraphicsLayer()
+    val routeReveal = LocalRouteReveal.current
     // The page stays composed while the one above it enters; taking a picture of it for the entry
     // is what lets a back gesture reveal exactly where the user left it.
     //
@@ -411,9 +543,20 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
     LaunchedEffect(covered) {
         if (covered) {
             withFrameNanos { }
+            // The page above may shrink back into a card, and that card covers this page's app bar
+            // for most of its trip. Leave the bar out of the picture so a back gesture does not
+            // bring it back before the card is at rest; the live page fades it in afterwards.
+            val hideBar = navigator.stack.lastOrNull()?.shrinksToOrigin() == true
+            if (hideBar) {
+                routeReveal.snapshotWithoutBar = true
+                // One frame for the bar's alpha to reach the draw, one for the picture to record it.
+                withFrameNanos { }
+                withFrameNanos { }
+            }
             if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
             delay(SnapshotSettleMillis)
             if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            if (hideBar) routeReveal.snapshotWithoutBar = false
         } else {
             entry.snapshot = null
         }

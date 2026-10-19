@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
@@ -235,13 +234,11 @@ internal fun ExpandFrame(
                 } else {
                     1f
                 }
-                // The frame stays solid while the page is on it. A dark card is a translucent white,
-                // and fading it into the page let the list — the card itself included — show through
-                // the frame as a bright ghost.
-                drawRect(
-                    color = lerp(source.color.compositeOver(pageColor), pageColor, f),
-                    alpha = handover,
-                )
+                // The frame fills with the page's own colour, not the card's: in light mode a card is
+                // white and the page grey, so a card-coloured fill read as a white flash for the
+                // first frames. The card is still there under the tapped element below. The frame
+                // stays opaque, so a dark card's translucent white cannot let the list show through.
+                drawRect(color = pageColor, alpha = handover)
                 drawContent()
                 // The tapped element rides on top at the frame's width and fades out early, so the
                 // page appears to grow out of it rather than replace it. It is drawn over the page
@@ -261,7 +258,9 @@ internal fun ExpandFrame(
                     withTransform({ scale(k, k, pivot = Offset.Zero) }) {
                         drawIntoCanvas { canvas ->
                             canvas.saveLayer(Rect(Offset.Zero, bounds.size), Paint().apply { this.alpha = alpha })
-                            drawRect(pageColor, size = bounds.size)
+                            // The tapped row is transparent on its card; keep the card's own tone
+                            // behind it so the strip still reads as that card, not as the page.
+                            drawRect(source.color.compositeOver(pageColor), size = bounds.size)
                             if (source.isAvailable) {
                                 drawLayer(source.layer)
                             } else if (picture != null) {

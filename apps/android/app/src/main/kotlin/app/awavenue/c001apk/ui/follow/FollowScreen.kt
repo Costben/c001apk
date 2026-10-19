@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.common.glassSource
@@ -90,7 +92,7 @@ internal fun localFollowLabel(): String = if (LocalApp.current.session.isLogin) 
  * its follow streams or its local list from the title menu; a guest only has the local list.
  */
 @Composable
-fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
+fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, barSlot: Int) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val isLogin = app.session.isLogin
@@ -103,6 +105,7 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
     val backdrop = rememberGlassBackdrop()
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val density = LocalDensity.current
+    val appBarBounds = LocalAppBarBounds.current
     val materialScrollFraction = remember(scrollBehavior, density) {
         {
             AppBarBlurOverlayDefaults.scrollAlpha(abs(scrollBehavior.state.contentOffset), density)
@@ -112,7 +115,11 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController) {
     Scaffold(
         topBar = {
             AppBarBlurOverlay(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned {
+                        appBarBounds.report(barSlot, it.size.height.toFloat())
+                    },
                 containerColor = COUITheme.colorScheme.surface,
                 backdrop = backdrop,
                 scrollFraction = materialScrollFraction,

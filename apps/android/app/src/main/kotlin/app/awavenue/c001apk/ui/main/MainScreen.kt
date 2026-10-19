@@ -38,6 +38,7 @@ import app.awavenue.c001apk.ui.home.HomeScreen
 import app.awavenue.c001apk.ui.home.HomeTab
 import app.awavenue.c001apk.ui.follow.FollowScreen
 import app.awavenue.c001apk.ui.message.MessageScreen
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.settings.AutomaticUpdateCheck
@@ -108,6 +109,10 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     // A pager without swipe keeps every tab composed, so lists hold their position and data.
     val pagerState = rememberPagerState(initialPage = initialTab) { MainTab.entries.size }
     LaunchedEffect(pagerState.currentPage) { onTabChange(pagerState.currentPage) }
+    // The route host clips a shrinking card at the current tab's bar; the tab pages report their
+    // bar's bottom into their own slot.
+    val appBarBounds = LocalAppBarBounds.current
+    LaunchedEffect(pagerState.currentPage) { appBarBounds.currentTab = pagerState.currentPage }
     val scope = rememberCoroutineScope()
     val backdrop = rememberGlassBackdrop()
     val returnTop = remember { ReturnTopController() }
@@ -241,9 +246,14 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             beyondViewportPageCount = MainTab.entries.size,
         ) { page ->
             when (MainTab.entries[page]) {
-                MainTab.Home -> HomeScreen(outerPadding = padding, pagerState = homePagerState, returnTop = returnTop)
-                MainTab.Follow -> FollowScreen(outerPadding = padding, returnTop = followReturnTop)
-                MainTab.Mine -> MessageScreen(outerPadding = padding)
+                MainTab.Home -> HomeScreen(
+                    outerPadding = padding,
+                    pagerState = homePagerState,
+                    returnTop = returnTop,
+                    barSlot = page,
+                )
+                MainTab.Follow -> FollowScreen(outerPadding = padding, returnTop = followReturnTop, barSlot = page)
+                MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
             }
         }
 
