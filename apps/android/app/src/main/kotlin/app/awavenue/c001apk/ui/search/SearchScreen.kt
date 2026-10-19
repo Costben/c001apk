@@ -52,7 +52,6 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.FlowLayout
-import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -87,8 +86,8 @@ private fun SearchCapsuleField(
     Row(
         modifier = modifier
             .height(SearchBarDefaults.InputFieldMinHeight)
-            // The header's divider sits right under the field; the drop shadow would smear across
-            // it, so this capsule keeps the rim and inner shadow only.
+            // No divider under the header: the capsule sits straight on the page, with the rim and
+            // inner shadow carrying its edge instead of an outer shadow that would read as a line.
             .couiSearchMaterial(CircleShape, dropShadow = false)
             .pointerInput(Unit) { detectTapGestures { focusRequester.requestFocus() } }
             .padding(start = 12.dp, end = 4.dp),
@@ -203,7 +202,6 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
                         modifier = Modifier.weight(1f).padding(start = 10.dp),
                     )
                 }
-                HorizontalDivider()
             }
         },
     ) { innerPadding ->

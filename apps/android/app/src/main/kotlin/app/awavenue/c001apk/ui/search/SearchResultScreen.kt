@@ -4,20 +4,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -30,8 +36,10 @@ import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
+import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.TopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -39,6 +47,7 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
 private enum class SearchContentType(val label: String, val type: String) {
@@ -75,6 +84,9 @@ private enum class SearchMenuType(val label: String) {
     Sort("排序方式"),
 }
 
+/** Which list the overflow menu currently shows: its two entries, or one entry's options. */
+private enum class SearchMenuPage { Root, Type, Sort }
+
 @Composable
 fun SearchResultScreen(keyword: String, title: String, pageType: String?, pageParam: String?) {
     val app = LocalApp.current
@@ -87,7 +99,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
 
     var searchType by remember { mutableStateOf(SearchType.All) }
     var sortType by remember { mutableStateOf(SearchSortType.Dateline) }
-    var menu by remember { mutableStateOf<SearchMenuType?>(null) }
+    var menu by remember { mutableStateOf<SearchMenuPage?>(null) }
 
     Scaffold(
         topBar = {
@@ -105,46 +117,59 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                     actions = {
                         if (pagerState.currentPage == 0) {
                             Box {
-                                TopBarIconButton(onClick = { menu = SearchMenuType.Type }) {
+                                TopBarIconButton(onClick = { menu = SearchMenuPage.Root }) {
                                     Icon(COUIIcons.More, contentDescription = "菜单")
                                 }
+                                // One popup whose rows swap in place. Opening a submenu in a second
+                                // popup raced with the first one's dismiss callback, which cleared
+                                // the state and closed the menu instead of showing the options.
                                 OverlayListPopup(
-                                    show = menu == SearchMenuType.Type,
+                                    show = menu != null,
                                     alignment = PopupPositionProvider.Align.BottomEnd,
                                     onDismissRequest = { menu = null },
                                 ) {
                                     ListPopupColumn {
-                                        SearchMenuType.entries.forEachIndexed { index, item ->
-                                            DropdownImpl(
-                                                item = DropdownItem(text = item.label),
-                                                optionSize = SearchMenuType.entries.size,
-                                                isSelected = false,
-                                                index = index,
-                                                groupKey = "search-type",
-                                                // The entry with a submenu swaps this popup for the next.
-                                                onSelectedIndexChange = { menu = SearchMenuType.entries[it] },
-                                            )
-                                        }
-                                    }
-                                }
-                                OverlayListPopup(
-                                    show = menu == SearchMenuType.Sort,
-                                    alignment = PopupPositionProvider.Align.BottomEnd,
-                                    onDismissRequest = { menu = null },
-                                ) {
-                                    ListPopupColumn {
-                                        SearchSortType.entries.forEachIndexed { index, item ->
-                                            DropdownImpl(
-                                                item = DropdownItem(text = item.label),
-                                                optionSize = SearchSortType.entries.size,
-                                                isSelected = sortType == item,
-                                                index = index,
-                                                groupKey = "search-sort",
-                                                onSelectedIndexChange = {
-                                                    sortType = SearchSortType.entries[it]
-                                                    menu = null
-                                                },
-                                            )
+                                        when (menu) {
+                                            SearchMenuPage.Root -> SearchMenuType.entries.forEachIndexed { index, item ->
+                                                DropdownImpl(
+                                                    item = DropdownItem(text = item.label),
+                                                    optionSize = SearchMenuType.entries.size,
+                                                    isSelected = false,
+                                                    index = index,
+                                                    groupKey = "search-menu",
+                                                    hasSubmenu = true,
+                                                    onSelectedIndexChange = {
+                                                        menu = if (it == 0) SearchMenuPage.Type else SearchMenuPage.Sort
+                                                    },
+                                                )
+                                            }
+                                            SearchMenuPage.Type -> SearchType.entries.forEachIndexed { index, item ->
+                                                DropdownImpl(
+                                                    item = DropdownItem(text = item.label),
+                                                    optionSize = SearchType.entries.size,
+                                                    isSelected = searchType == item,
+                                                    index = index,
+                                                    groupKey = "search-content-type",
+                                                    onSelectedIndexChange = {
+                                                        searchType = SearchType.entries[it]
+                                                        menu = null
+                                                    },
+                                                )
+                                            }
+                                            SearchMenuPage.Sort -> SearchSortType.entries.forEachIndexed { index, item ->
+                                                DropdownImpl(
+                                                    item = DropdownItem(text = item.label),
+                                                    optionSize = SearchSortType.entries.size,
+                                                    isSelected = sortType == item,
+                                                    index = index,
+                                                    groupKey = "search-sort",
+                                                    onSelectedIndexChange = {
+                                                        sortType = SearchSortType.entries[it]
+                                                        menu = null
+                                                    },
+                                                )
+                                            }
+                                            null -> Unit
                                         }
                                     }
                                 }
@@ -153,12 +178,33 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                     },
                     bottomContent = {
                         if (title.isEmpty()) {
-                            TabRowWithContour(
-                                tabs = tabs.map { it.label },
-                                selectedTabIndex = pagerState.currentPage,
-                                onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                            )
+                            // The same capsule as the home tab row: the shared search material, a
+                            // transparent tab container and the framed indicator inside it.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    .height(TabRowDefaults.TabRowWithContourHeight)
+                                    .couiSearchMaterial(
+                                        RoundedCornerShape(50),
+                                        dropShadow = false,
+                                        fillAlpha = 0.8f,
+                                    ),
+                            ) {
+                                TabRowWithContour(
+                                    tabs = tabs.map { it.label },
+                                    selectedTabIndex = pagerState.currentPage,
+                                    onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = TabRowDefaults.tabRowColors(backgroundColor = Color.Transparent),
+                                    // Six labels share the narrower capsule, as on the home bar.
+                                    minWidth = 44.dp,
+                                    segmentPadding = 8.dp,
+                                    indicatorMaterial = MaterialStrokeParams.frameworkCapsule13(
+                                        COUITheme.colorScheme.background.luminance() < 0.5f,
+                                    ),
+                                )
+                            }
                         }
                     },
                 )
@@ -193,14 +239,18 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                         },
                     )
                 }
-                FeedList(
-                    viewModel = viewModel,
-                    scrollBehavior = scrollBehavior,
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding() + 12.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                    ),
-                )
+                // A new view model means a new search: start the list from the top instead of
+                // keeping the previous filter's scroll position.
+                key(viewModel) {
+                    FeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding() + 12.dp,
+                            bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                        ),
+                    )
+                }
             }
         }
     }
