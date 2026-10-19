@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +51,7 @@ import app.awavenue.c001apk.ui.common.openCoolapkLink
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -124,7 +127,23 @@ fun FeedCard(
     val scope = rememberCoroutineScope()
     val origin = rememberExpandOrigin(CardDefaults.CornerRadius, CardDefaults.defaultColors().color)
     val listState = LocalFeedListState.current
-    SideEffect { origin.listState = listState }
+    val appBarBounds = LocalAppBarBounds.current
+    SideEffect {
+        origin.listState = listState
+        origin.rowKey = feed.id
+    }
+    // The page this row lives on is disposed while another one covers it; when it comes back its
+    // rows are new, so the row the host wants below the bar has to move itself.
+    LaunchedEffect(feed.id, listState) {
+        if (listState == null) return@LaunchedEffect
+        repeat(6) {
+            withFrameNanos { }
+            if (appBarBounds.pendingReturnFor(feed.id) == null) return@repeat
+            appBarBounds.alignReturnedRow(feed.id, origin, listState)
+            appBarBounds.clearReturn(feed.id)
+            return@LaunchedEffect
+        }
+    }
     val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
 

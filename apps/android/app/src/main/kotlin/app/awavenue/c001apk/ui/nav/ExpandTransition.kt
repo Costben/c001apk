@@ -67,6 +67,9 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
      */
     internal var listState: LazyListState? = null
 
+    /** Identifies the row across compositions, so a rebuilt page can find the one that returned. */
+    internal var rowKey: Any? = null
+
     /** False once the element is gone, e.g. its list item was recycled or its screen disposed. */
     internal val isAvailable: Boolean
         get() = coordinates?.isAttached == true && !layer.isReleased

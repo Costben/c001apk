@@ -164,7 +164,10 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                 if (gestureProgress < 1f) {
                     // The row is about to come back; lift the list so its header clears the bar.
                     val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
-                    if (below?.route == Route.Main && !top.returnScrolled) {
+                    // The main tabs stay composed under the gesture, so their list can move right
+                    // away. A page with its own bar only comes back after the pop and is aligned
+                    // from the transition below instead.
+                    if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
                         top.returnScrolled = true
                         alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
                     }
@@ -215,10 +218,23 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                     if (popped?.shrinksToOrigin() == true && !popped.returnScrolled) {
                         val covered = navigator.stack.lastOrNull()
                         val origin = popped.origin
-                        if (covered?.route == Route.Main && origin != null && appBarBounds.bottom > 0f) {
+                        val barBottom = covered?.let { appBarBounds.bottomFor(it.route) } ?: 0f
+                        if (covered != null && origin != null && barBottom > 0f) {
                             popped.returnScrolled = true
-                            scope.launch {
-                                alignCardBelowBar(origin) { appBarBounds.bottom + appBarFadePx }
+                            if (covered.route == Route.Main) {
+                                // The main tabs stay composed under the pop, so their list is
+                                // right there to be moved.
+                                scope.launch {
+                                    alignCardBelowBar(origin) { appBarBounds.bottom + appBarFadePx }
+                                }
+                            } else {
+                                // A page with its own bar is rebuilt for this return; its row
+                                // brings itself down once it is composed again.
+                                origin.rowKey?.let { rowKey ->
+                                    appBarBounds.requestReturn(rowKey) {
+                                        appBarBounds.bottomFor(covered.route) + appBarFadePx
+                                    }
+                                }
                             }
                         }
                     }
@@ -266,14 +282,31 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                             EnterExitState.PostExit -> if (entry.popped && entry.shrinksToOrigin()) 0f else 1f
                         }
                     val progress = transition.animateFloat(
-                        transitionSpec = { tween(ExpandDurationMillis, easing = ExpandEasing) },
+                        transitionSpec = {
+                            // A gesture already handed the page back under the finger. Replaying
+                            // that last frame as a shrinking card would park its picture over the
+                            // list for the whole exit, so a previewed page goes at once.
+                            val duration = when {
+                                targetState != EnterExitState.PostExit -> ExpandDurationMillis
+                                entry.previewed -> 0
+                                else -> ExitDurationMillis
+                            }
+                            tween(duration, easing = ExpandEasing)
+                        },
                         label = "expand",
                     ) { target(it) }
                     val fade = transition.animateFloat(
                         // Linear both ways: the page rides the shrinking frame instead of vanishing
                         // early. A fast exit curve left a blank card-coloured rectangle shrinking
                         // over the list, which read as the list failing to draw after the pop.
-                        transitionSpec = { tween(ExpandDurationMillis, easing = LinearEasing) },
+                        transitionSpec = {
+                            val duration = when {
+                                targetState != EnterExitState.PostExit -> ExpandDurationMillis
+                                entry.previewed -> 0
+                                else -> ExitDurationMillis
+                            }
+                            tween(duration, easing = LinearEasing)
+                        },
                         label = "expand-fade",
                     ) { target(it) }
                     // While a gesture is pulling this page away it drives both curves, so the page
@@ -363,10 +396,16 @@ private val SettledGesture: () -> Float = { 1f }
 private suspend fun alignCardBelowBar(origin: ExpandOrigin?, barBottom: () -> Float) {
     if (origin == null) return
     val state = origin.listState ?: return
-    repeat(3) {
+    repeat(4) {
         val target = barBottom()
         if (target <= 0f) return
-        val coordinates = origin.coordinates?.takeIf { it.isAttached } ?: return
+        // A covered page is composed again only after the pop; its row gets coordinates back
+        // once the list has been laid out, so give it a frame instead of giving up.
+        val coordinates = origin.coordinates?.takeIf { it.isAttached }
+        if (coordinates == null) {
+            withFrameNanos { }
+            return@repeat
+        }
         val delta = target - coordinates.positionInRoot().y
         if (delta <= 0.5f) return
         state.scrollBy(-delta)
@@ -387,6 +426,13 @@ private const val GestureSettleMillis = 200
 
 /** How long the page takes to finish leaving once the gesture has committed. */
 private const val GestureCommitMillis = 150
+
+/**
+ * How long a page takes to shrink back into its card. Shorter than the way in: the frame still
+ * carries the leaving page, and once the list starts moving under it that picture reads as an
+ * afterimage, so the return has to be over before the user's own scroll gets going.
+ */
+private const val ExitDurationMillis = 220
 
 /**
  * How long the press state layer takes to fade out. COUI animates it with a critically damped spring

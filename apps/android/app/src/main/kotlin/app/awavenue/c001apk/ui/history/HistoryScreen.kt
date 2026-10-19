@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -16,6 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.data.FavHistoryItem
 import app.awavenue.c001apk.data.HistoryType
@@ -24,7 +27,10 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedCard
+import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
+import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -48,6 +54,8 @@ fun HistoryScreen(type: HistoryType) {
     val navigator = LocalNavigator.current
     val scrollBehavior = COUIScrollBehavior()
     val backdrop = rememberGlassBackdrop()
+    val appBarBounds = LocalAppBarBounds.current
+    val listState = rememberLazyListState()
     var confirmClear by remember(type) { mutableStateOf(false) }
     val entries = app.history.list(type)
 
@@ -56,6 +64,12 @@ fun HistoryScreen(type: HistoryType) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
                     title = type.label,
+                    modifier = Modifier.onGloballyPositioned {
+                        appBarBounds.reportPage(
+                            Route.History(type),
+                            it.positionInRoot().y + it.size.height,
+                        )
+                    },
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
@@ -74,7 +88,10 @@ fun HistoryScreen(type: HistoryType) {
             }
         },
     ) { innerPadding ->
-        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+        CompositionLocalProvider(
+            LocalBackdrop provides backdrop,
+            LocalFeedListState provides listState,
+        ) {
             if (entries.isEmpty()) {
                 Box(
                     Modifier
@@ -87,6 +104,7 @@ fun HistoryScreen(type: HistoryType) {
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .glassSource(backdrop)
