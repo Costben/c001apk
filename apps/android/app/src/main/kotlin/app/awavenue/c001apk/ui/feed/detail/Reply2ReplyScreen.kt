@@ -43,7 +43,6 @@ import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.EmptyState
-import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -53,7 +52,6 @@ import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
-import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -143,7 +141,11 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                             key = { index, reply -> reply.entityId.ifEmpty { "reply2reply-$index" } },
                             contentType = { _, _ -> "reply" },
                         ) { index, reply ->
-                            Column(Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                            ) {
                                 ReplyCard(
                                     reply = reply,
                                     onOpenFeed = {
@@ -166,7 +168,6 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                                         )
                                     },
                                 )
-                                HorizontalDivider(color = COUITheme.colorScheme.dividerLine)
                             }
                         }
                         item(contentType = "footer") {
