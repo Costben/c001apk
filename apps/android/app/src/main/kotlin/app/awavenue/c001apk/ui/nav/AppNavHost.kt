@@ -93,8 +93,9 @@ import kotlin.math.roundToInt
 
 /**
  * Hosts the back stack. The main screen stays composed underneath so its tabs keep their lists;
- * pushed routes slide in over it as whole opaque pages and back slides them out. Only the image
- * viewer draws its own growth from the tapped thumbnail.
+ * a route pushed with an [ExpandOrigin] grows out of that element — a post row does this, and the
+ * image viewer draws its own growth from the tapped thumbnail — while every other route slides in
+ * over the page as a whole opaque card and back slides it out the same way.
  *
  * The back gesture is predictive: while it runs, the top page follows the finger and the page under
  * it is revealed; releasing early puts the page back where it was.
