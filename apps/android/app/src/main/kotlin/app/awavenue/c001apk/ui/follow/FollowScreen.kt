@@ -1,6 +1,11 @@
 package app.awavenue.c001apk.ui.follow
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -22,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -133,30 +140,54 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                     ) {
                         Box(Modifier.weight(1f)) {
                             if (isLogin) {
-                                Row(
+                                val interaction = remember { MutableInteractionSource() }
+                                val pressed by interaction.collectIsPressedAsState()
+                                val pressAlpha by animateFloatAsState(
+                                    targetValue = if (pressed) 1f else 0f,
+                                    animationSpec = tween(160),
+                                    label = "followTitlePress",
+                                )
+                                Box(
                                     modifier = Modifier
                                         .heightIn(min = 48.dp)
-                                        .clickable { menu = true }
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                        .clickable(
+                                            interactionSource = interaction,
+                                            indication = null,
+                                            onClick = { menu = true },
+                                        ),
+                                    contentAlignment = Alignment.CenterStart,
                                 ) {
-                                    Text(
-                                        selection.label,
-                                        style = COUITheme.textStyles.title3,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Icon(COUIIcons.ExpandMore, contentDescription = "切换关注内容")
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(
+                                                COUITheme.colorScheme.onSurface.copy(alpha = 0.08f * pressAlpha),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            selection.label,
+                                            style = COUITheme.textStyles.title3,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Icon(COUIIcons.ExpandMore, contentDescription = "切换关注内容")
+                                    }
                                 }
-                                SelectionMenu(
-                                    show = menu,
-                                    selected = selection,
-                                    onSelect = {
-                                        menu = false
-                                        app.settings.updateFollowSelection(it.value)
-                                    },
-                                    onDismiss = { menu = false },
-                                )
+                                // The popup composes in the root Scaffold's overlay, so the backdrop
+                                // has to be published here for its glass and material edge.
+                                CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                                    SelectionMenu(
+                                        show = menu,
+                                        selected = selection,
+                                        onSelect = {
+                                            menu = false
+                                            app.settings.updateFollowSelection(it.value)
+                                        },
+                                        onDismiss = { menu = false },
+                                    )
+                                }
                             } else {
                                 Text(
                                     "本地关注",

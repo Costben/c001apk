@@ -349,7 +349,11 @@ private fun UserMenu(
     onDismiss: () -> Unit,
     onSelect: (UserMenuItem) -> Unit,
 ) {
-    val items = UserMenuItem.entries.map { if (it == UserMenuItem.Block && blocked) UserMenuItem.Unblock else it }
+    // The menu carries one block row: 屏蔽 flips to 取消屏蔽 while the user is blocked. The enum's
+    // Unblock entry is only the label that row switches to, not a second item.
+    val items = UserMenuItem.entries
+        .filterNot { it == UserMenuItem.Unblock }
+        .map { if (it == UserMenuItem.Block && blocked) UserMenuItem.Unblock else it }
     OverlayListPopup(
         show = show,
         onDismissRequest = onDismiss,

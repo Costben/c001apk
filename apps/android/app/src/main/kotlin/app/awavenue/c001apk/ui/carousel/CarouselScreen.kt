@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.model.Entity
@@ -25,6 +26,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
+import app.awavenue.c001apk.ui.feed.ItemPadding
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -100,6 +102,7 @@ fun CarouselContent(
     contentPadding: PaddingValues = PaddingValues(vertical = 12.dp),
     scrollBehavior: ScrollBehavior = COUIScrollBehavior(),
     onPageTitle: (String) -> Unit = {},
+    itemPadding: Dp = ItemPadding,
 ) = CarouselBody(
     url = url,
     title = title,
@@ -108,6 +111,7 @@ fun CarouselContent(
     contentPadding = contentPadding,
     scrollBehavior = scrollBehavior,
     onPageTitle = onPageTitle,
+    itemPadding = itemPadding,
 )
 
 @Composable
@@ -119,6 +123,7 @@ private fun CarouselBody(
     contentPadding: PaddingValues = PaddingValues(vertical = 12.dp),
     scrollBehavior: ScrollBehavior = COUIScrollBehavior(),
     onPageTitle: (String) -> Unit = {},
+    itemPadding: Dp = ItemPadding,
 ) {
     val app = LocalApp.current
     val viewModel = viewModel(key = "carousel-$isInit-$url-$title") {
@@ -152,7 +157,12 @@ private fun CarouselBody(
 
     Box(modifier) {
         if (nested == null) {
-            FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = contentPadding)
+            FeedList(
+                viewModel = viewModel,
+                scrollBehavior = scrollBehavior,
+                contentPadding = contentPadding,
+                itemPadding = itemPadding,
+            )
         } else {
             NestedTabs(nested, contentPadding, scrollBehavior)
         }

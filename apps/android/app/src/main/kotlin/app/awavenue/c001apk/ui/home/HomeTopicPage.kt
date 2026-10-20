@@ -1,9 +1,12 @@
 package app.awavenue.c001apk.ui.home
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,15 +29,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
+import app.awavenue.c001apk.ui.common.rememberHapticClick
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
@@ -43,11 +49,20 @@ import kotlinx.coroutines.launch
 
 private const val TOPIC_LIST_URL = "/v6/page/dataList?url=V11_VERTICAL_TOPIC&title=话题&page=1"
 
+private val RailWidth = 84.dp
+private val RailItemHeight = 42.dp
+private val RailLabelInset = 22.dp
+private val RailIndicatorInset = 10.dp
+
+/** Trailing space the rail needs so its last rows can clear the floating bottom bar. */
+private val RailBottomInset = 96.dp
+
 enum class HomeTopicTab { Topic, Product }
 
 /**
- * The home tabs whose body is a category rail next to a vertical page of carousels. The rail and the
- * carousels are one unit: the phone only shows the selected category, so there is no pager to fling.
+ * The home tabs whose body is a category selector above a vertical page of carousels. The selector
+ * and the carousels are one unit: the phone only shows the selected category, so there is no pager
+ * to fling.
  */
 @Composable
 fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, contentPadding: PaddingValues) {
@@ -93,75 +108,116 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
             Row(
                 Modifier
                     .fillMaxSize()
-                    // Only the top inset is padding here: the bottom one rides inside the two
-                    // scroll areas, so the panel reaches the screen edge behind the floating bar
-                    // instead of being cut off above it.
+                    // Only the top inset is padding here: the bottom one rides inside the list, so
+                    // the content reaches the screen edge behind the floating bar.
                     .padding(top = contentPadding.calculateTopPadding()),
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(0.22f)
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
-                    contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-                ) {
-                    itemsIndexed(list) { index, entry ->
-                        CategoryRow(
-                            title = entry.title,
-                            selected = index == selectedIndex,
-                            onClick = { selected = index },
-                        )
-                    }
-                }
-                Box(Modifier.fillMaxHeight().weight(0.78f).background(COUITheme.colorScheme.surfaceContainerHighest)) {
-                    CarouselContent(
-                        url = current.url,
-                        title = current.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            top = 12.dp,
-                            bottom = contentPadding.calculateBottomPadding() + 12.dp,
-                        ),
-                        scrollBehavior = scrollBehavior,
-                    )
-                }
+                CategoryRail(
+                    titles = list.map { it.title },
+                    selectedIndex = selectedIndex,
+                    onSelected = { selected = it },
+                    scrollBehavior = scrollBehavior,
+                )
+                CarouselContent(
+                    url = current.url,
+                    title = current.title,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentPadding = PaddingValues(
+                        top = 4.dp,
+                        bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                    ),
+                    scrollBehavior = scrollBehavior,
+                    // The rail already supplies the left margin, so the cards take less inset than
+                    // a full-width stream does and read wider beside it.
+                    itemPadding = 6.dp,
+                )
             }
         }
     }
 }
 
+/**
+ * The vertical category list on the left. The home bar above already carries the tab row, so this
+ * is the page's only navigator: a second row of tabs would just repeat it.
+ */
 @Composable
-private fun CategoryRow(title: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = COUITheme.colorScheme
-    Row(
+private fun CategoryRail(
+    titles: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    scrollBehavior: ScrollBehavior,
+) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex in titles.indices) listState.animateScrollToItem(selectedIndex)
+    }
+    LazyColumn(
+        state = listState,
         modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
+            .width(RailWidth)
+            .fillMaxHeight()
+            // The rail scrolls the page header like the list beside it, so a drag that starts on
+            // the categories collapses the bar exactly the way the home feed does.
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        // The rail runs to the bottom edge, so its tail rides behind the floating bar and needs
+        // the bar's height as trailing space to stay reachable.
+        contentPadding = PaddingValues(bottom = RailBottomInset),
     ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .width(3.dp)
-                .background(if (selected) colors.primary else Color.Transparent),
-        )
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .background(if (selected) colors.surfaceContainerHighest else Color.Transparent)
-                .padding(horizontal = 4.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = title,
-                color = if (selected) colors.primary else colors.onSurface,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        itemsIndexed(titles) { index, title ->
+            RailItem(
+                title = title,
+                selected = index == selectedIndex,
+                onClick = { onSelected(index) },
             )
         }
+    }
+}
+
+@Composable
+private fun RailItem(title: String, selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressAlpha by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = tween(160),
+        label = "railPress",
+    )
+    val accent = COUITheme.colorScheme.primary
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(RailItemHeight)
+            .clip(RoundedCornerShape(topEnd = 13.dp, bottomEnd = 13.dp))
+            // A ripple would paint a square over the row, so the press feedback is the same
+            // translucent pill the rest of the app uses.
+            .background(COUITheme.colorScheme.onSurface.copy(alpha = 0.08f * pressAlpha))
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = rememberHapticClick(onClick = onClick),
+            ),
+    ) {
+        if (selected) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = RailIndicatorInset)
+                    .width(3.dp)
+                    .height(18.dp)
+                    .background(accent, RoundedCornerShape(2.dp)),
+            )
+        }
+        Text(
+            text = title,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = RailLabelInset, end = 8.dp),
+            style = COUITheme.textStyles.footnote1,
+            fontWeight = if (selected) FontWeight.SemiBold else null,
+            color = if (selected) accent else COUITheme.colorScheme.onSurfaceSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

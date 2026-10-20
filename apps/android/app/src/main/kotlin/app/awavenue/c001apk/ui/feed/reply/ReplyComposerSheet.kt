@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -39,10 +40,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
@@ -55,10 +57,10 @@ import app.awavenue.c001apk.ui.text.EmojiEditText
 import app.awavenue.c001apk.ui.text.EmojiFiles
 import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
-import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.LoadingButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
@@ -66,7 +68,6 @@ import io.github.suqi8.coui.kmp.basic.TextField
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Close
 import io.github.suqi8.coui.kmp.icon.extended.Photos
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
@@ -196,110 +197,146 @@ fun ReplyComposerSheet(
         }
     }
 
-    OverlayBottomSheet(
+    // A floating composer window rather than a bottom sheet: it rides just above the keyboard
+    // (8dp clear of it) and has no drag handle.
+    OverlayDialog(
         show = true,
-        onDismissRequest = onDismiss,
-        allowDismiss = !publishing,
+        outsideMargin = DpSize(16.dp, 8.dp),
+        onDismissRequest = { if (!publishing) onDismiss() },
     ) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 15.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                hint,
+                modifier = Modifier.fillMaxWidth(),
+                style = COUITheme.textStyles.title4,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(12.dp))
+            // Only the middle scrolls when the keyboard and the emoji panel leave little room; the
+            // title and the tool row stay put.
+            Column(
+                Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
             ) {
-                EmojiEditText(
-                    state = input,
-                    modifier = Modifier.weight(1f),
-                    hint = hint,
-                    maxCount = 500,
-                    minLines = 4,
-                    maxLines = 8,
-                    textStyle = COUITheme.textStyles.body1,
-                    onFocused = { emojiPanel = false },
-                )
-                Text(
-                    "${input.text.length}/500",
-                    fontSize = 10.sp,
-                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-            HorizontalDivider(color = COUITheme.colorScheme.dividerLine.copy(alpha = 0.1f))
-            Row(
-                Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ToolbarIcon(AppIcons.Keyboard, selected = !emojiPanel) {
-                    emojiPanel = false
-                    input.focus()
-                }
-                Spacer(Modifier.width(6.dp))
-                ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
-                    emojiPanel = true
-                    input.clearFocus()
-                    focusManager.clearFocus()
-                }
-                Spacer(Modifier.width(6.dp))
-                ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
-                Row(
+                Column(
                     Modifier
-                        .weight(1f)
-                        .combinedClickable(onClick = { onlySelf = !onlySelf }),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(COUITheme.colorScheme.surfaceContainerHigh),
                 ) {
-                    Checkbox(
-                        state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
-                        onClick = null,
+                    EmojiEditText(
+                        state = input,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        hint = "说点什么…",
+                        maxCount = 500,
+                        minLines = 4,
+                        maxLines = 6,
+                        textStyle = COUITheme.textStyles.body1,
+                        onFocused = { emojiPanel = false },
                     )
                     Text(
-                        if (target.id.isEmpty()) "仅自己可见" else "回复并转发",
-                        color = if (onlySelf) {
-                            COUITheme.colorScheme.onSurface
-                        } else {
-                            COUITheme.colorScheme.onSurfaceVariantSummary
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        "${input.text.length}/500",
+                        style = COUITheme.textStyles.footnote2,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(end = 12.dp)
+                            .padding(bottom = 8.dp),
                     )
+                }
+                if (images.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        images.forEach { image ->
+                            Box(Modifier.size(64.dp)) {
+                                AsyncImage(
+                                    model = java.io.File(image.path),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                                )
+                                IconButton(
+                                    onClick = { images = images - image },
+                                    modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
+                                ) {
+                                    Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+                if (emojiPanel) {
+                    EmojiPanel(
+                        modifier = Modifier.height(180.dp).padding(top = 8.dp),
+                        onPick = { emoji -> input.insert(emoji) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    // The reply-and-forward toggle sits above the tools, at the window's bottom left.
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onlySelf = !onlySelf }
+                            .padding(start = 4.dp, end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
+                            onClick = null,
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            if (target.id.isEmpty()) "仅自己可见" else "回复并转发",
+                            style = COUITheme.textStyles.body2,
+                            color = if (onlySelf) {
+                                COUITheme.colorScheme.onSurface
+                            } else {
+                                COUITheme.colorScheme.onSurfaceVariantSummary
+                            },
+                            maxLines = 1,
+                        )
+                    }
+                    Row(
+                        Modifier.height(40.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
+                        Spacer(Modifier.width(8.dp))
+                        ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
+                            emojiPanel = !emojiPanel
+                            if (emojiPanel) {
+                                input.clearFocus()
+                                focusManager.clearFocus()
+                            } else {
+                                input.focus()
+                            }
+                        }
+                    }
                 }
                 LoadingButton(
                     text = "发布",
                     onClick = { scope.launch { publish() } },
                     enabled = canPublish,
                     isLoading = publishing,
-                )
-            }
-            if (images.isNotEmpty()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(85.dp)
-                        .background(COUITheme.colorScheme.surface)
-                        .padding(horizontal = 15.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    images.forEach { image ->
-                        Box(Modifier.size(65.dp)) {
-                            AsyncImage(
-                                model = java.io.File(image.path),
-                                contentDescription = null,
-                                modifier = Modifier.size(65.dp).clip(RoundedCornerShape(8.dp)),
-                            )
-                            IconButton(
-                                onClick = { images = images - image },
-                                modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
-                            ) {
-                                Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
-                            }
-                        }
-                    }
-                }
-            }
-            if (emojiPanel) {
-                EmojiPanel(
-                    modifier = Modifier.height(200.dp).background(COUITheme.colorScheme.surface),
-                    onPick = { emoji -> input.insert(emoji) },
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    minWidth = 64.dp,
+                    minHeight = 32.dp,
+                    cornerRadius = 10.dp,
                 )
             }
         }

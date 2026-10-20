@@ -5,7 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.SeedColors
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -46,6 +49,14 @@ private fun Colors.withColorOsSurfaces(dark: Boolean): Colors =
     )
 
 /**
+ * ColorOS system apps keep the phone's default layout width even after 显示大小 is raised: 相册 on
+ * this 620-dpi override still measures 360dp across, so its 56dp bar, 52dp header and 24dp icons
+ * come out about a tenth smaller than this app's. Compose otherwise takes the override as is.
+ * Capping the density at the value that keeps the window this wide restores the system-app scale.
+ */
+private const val DefaultLogicalWidthDp = 360f
+
+/**
  * COUI theme driven by the user's settings: dynamic colour follows the wallpaper, a static
  * palette follows the chosen seed, and the font scale applies above every screen.
  */
@@ -57,14 +68,17 @@ fun AppTheme(
     fontScale: Float,
     content: @Composable () -> Unit,
 ) {
+    // 默认 keeps COUI's own blue-and-grey scheme; only the other seeds tint the palette. A seed
+    // only reaches the palette through the Monet modes, because ThemeController ignores keyColor
+    // in the plain Light/Dark/System schemes. Monet modes without a keyColor fall back to the
+    // wallpaper palette, which is what dynamic colour wants.
+    val keyColor = SeedColors.colorAt(seedColor).takeUnless { dynamicColor || seedColor == 0 }
+    val monet = dynamicColor || keyColor != null
     val mode = when (darkMode) {
-        DarkMode.System -> if (dynamicColor) ColorSchemeMode.MonetSystem else ColorSchemeMode.System
-        DarkMode.Off -> if (dynamicColor) ColorSchemeMode.MonetLight else ColorSchemeMode.Light
-        DarkMode.On -> if (dynamicColor) ColorSchemeMode.MonetDark else ColorSchemeMode.Dark
+        DarkMode.System -> if (monet) ColorSchemeMode.MonetSystem else ColorSchemeMode.System
+        DarkMode.Off -> if (monet) ColorSchemeMode.MonetLight else ColorSchemeMode.Light
+        DarkMode.On -> if (monet) ColorSchemeMode.MonetDark else ColorSchemeMode.Dark
     }
-    // Without dynamic colour the seed drives the palette, the way the Flutter client seeds
-    // Material from Constants.seedColors.
-    val keyColor = SeedColors.colorAt(seedColor).takeUnless { dynamicColor }
     val controller = remember(mode, keyColor) {
         ThemeController(colorSchemeMode = mode, keyColor = keyColor)
     }
@@ -85,6 +99,40 @@ fun AppTheme(
     ) {
         COUITheme(controller = controller) {
             COUITheme(colors = colors, content = content)
+        }
+    }
+}
+
+/**
+ * The density the floating bottom bar is measured in.
+ *
+ * ColorOS system apps keep the phone's default layout width even after 显示大小 is raised: 相册 on
+ * a 620-dpi override still measures 360dp across, so its 56dp bar stays 198px while an app's own
+ * pages grow with the setting. The bar therefore opts out of the override on its own — capping its
+ * density at the value that keeps the window [DefaultLogicalWidthDp] wide — and leaves every page
+ * around it following the display-size setting.
+ */
+@Composable
+fun rememberChromeDensity(): Density {
+    val system = LocalDensity.current
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val overridden = remember(context, configuration.screenWidthDp) {
+        android.provider.Settings.Secure.getInt(
+            context.contentResolver,
+            "display_density_forced",
+            0,
+        ) > 0
+    }
+    return remember(system, configuration.screenWidthDp, overridden) {
+        if (!overridden) {
+            system
+        } else {
+            val widthPx = configuration.screenWidthDp * system.density
+            Density(
+                density = minOf(system.density, widthPx / DefaultLogicalWidthDp),
+                fontScale = system.fontScale,
+            )
         }
     }
 }

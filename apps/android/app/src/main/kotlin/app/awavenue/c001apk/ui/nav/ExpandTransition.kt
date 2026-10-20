@@ -115,7 +115,7 @@ fun Modifier.expandOrigin(origin: ExpandOrigin): Modifier =
 
 /** The display's own corner radius, or zero on a square display or below Android 12. */
 @Composable
-private fun rememberScreenCornerRadius(): Dp {
+internal fun rememberScreenCornerRadius(): Dp {
     val context = LocalContext.current
     val density = LocalDensity.current
     return remember(context, density) {

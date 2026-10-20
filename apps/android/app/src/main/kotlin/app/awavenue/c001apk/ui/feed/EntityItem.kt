@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.model.Entity
@@ -52,7 +53,7 @@ import io.github.suqi8.coui.kmp.icon.extended.ChevronForward
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.delay
 
-private val ItemPadding = 12.dp
+internal val ItemPadding = 12.dp
 private val appCardTypes = setOf("apk", "product", "topic")
 private const val ICON_GRID_COLUMNS = 5
 private const val INFINITE_LOOP_RESET_DELAY = 500L
@@ -64,18 +65,21 @@ fun EntityItem(
     onBlock: ((uid: String, id: String?) -> Unit)? = null,
     onDelete: ((id: String, fid: String?) -> Unit)? = null,
     onLike: ((id: String, liked: Boolean) -> Unit)? = null,
+    horizontalPadding: Dp = ItemPadding,
 ) {
-    val padded = Modifier.padding(horizontal = ItemPadding)
+    val padded = Modifier.padding(horizontal = horizontalPadding)
     when {
         item.entityType == "feed" -> if (!FeedActions.isHidden(item)) FeedCard(item, padded)
         item.entityTemplate == "imageCarouselCard_1" -> CarouselCard(item, padded)
         item.entityTemplate == "iconLinkGridCard" -> IconGridCard(item, padded)
         item.entityTemplate == "iconMiniGridCard" -> MiniGridCard(item, padded)
-        item.entityTemplate == "iconMiniScrollCard" -> MiniScrollCard(item)
-        item.entityTemplate == "imageSquareScrollCard" -> ImageSquareScrollCard(item)
+        item.entityTemplate == "iconMiniScrollCard" -> MiniScrollCard(item, horizontalPadding)
+        item.entityTemplate == "imageSquareScrollCard" -> ImageSquareScrollCard(item, horizontalPadding)
         item.entityTemplate == "imageTextScrollCard" -> ImageTextScrollCard(item, padded)
         item.entityTemplate == "iconScrollCard" -> IconScrollCard(item, padded)
         item.entityTemplate == "titleCard" -> TitleCard(item, padded)
+        // Page metadata: the carousel reads its title and tabs from this card, it has no body.
+        item.entityTemplate == "configCard" -> Unit
         item.entityTemplate in setOf("noMoreDataCard", "refreshCard", "messageCard") -> Text(
             item.title.ifEmpty { item.string("description") },
             modifier = padded.fillMaxWidth().padding(vertical = 8.dp),
@@ -331,14 +335,14 @@ private fun IconGridCard(item: Entity, modifier: Modifier) {
 }
 
 @Composable
-private fun ImageSquareScrollCard(item: Entity) {
+private fun ImageSquareScrollCard(item: Entity, horizontalPadding: Dp = ItemPadding) {
     val entries = item.entities
     if (entries.isEmpty()) return
     val openLink = rememberLinkOpener()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val cell = (maxWidth - ItemPadding * 2 - 40.dp) / 5
+        val cell = (maxWidth - horizontalPadding * 2 - 40.dp) / 5
         LazyRow(
-            contentPadding = PaddingValues(horizontal = ItemPadding),
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(entries) { entry ->
@@ -468,11 +472,11 @@ private fun MiniGridCard(item: Entity, modifier: Modifier) {
 }
 
 @Composable
-private fun MiniScrollCard(item: Entity) {
+private fun MiniScrollCard(item: Entity, horizontalPadding: Dp = ItemPadding) {
     val entries = item.entities
     if (entries.isEmpty()) return
     LazyRow(
-        contentPadding = PaddingValues(horizontal = ItemPadding),
+        contentPadding = PaddingValues(horizontal = horizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(entries) { entry ->

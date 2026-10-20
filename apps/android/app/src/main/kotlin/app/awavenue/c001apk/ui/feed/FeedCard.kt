@@ -111,7 +111,8 @@ internal object FeedActions {
      * Whether [EntityItem] draws nothing for [item]. A list built on it drops such rows from its data,
      * otherwise the empty slot keeps the list's item spacing as a gap.
      */
-    fun isHidden(item: Entity): Boolean = item.entityType == "feed" && isRemoved(item)
+    fun isHidden(item: Entity): Boolean =
+        item.entityTemplate == "configCard" || (item.entityType == "feed" && isRemoved(item))
 }
 
 @Composable

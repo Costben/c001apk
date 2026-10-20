@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.pager.HorizontalPager
@@ -37,7 +36,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -58,7 +56,6 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.TopBarIconButton
-import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -311,6 +308,13 @@ fun HomeScreen(
     val backdrop = rememberGlassBackdrop()
     val density = LocalDensity.current
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Same profile as the Settings homepage's scroll-driven overlay: the blur is at full strength
+    // at the bar's top edge and fades to clear over the bar plus the native extra band below it.
+    // The gradient starts below the status bar, because the bar's own rows sit there.
+    val barHeightDp = statusBar + TOP_BAR_ROW_HEIGHT +
+        TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2
+    val materialExtra = AppBarBlurOverlayDefaults.ExtraHeight
+    val blurStartFraction = statusBar.value / (barHeightDp + materialExtra).value
     // Where the bar ends, so a return can scroll the list enough to bring the row below it.
     val appBarBounds = LocalAppBarBounds.current
     // The material never goes fully dark: at rest the bar keeps a translucent floor so the top row
@@ -328,8 +332,8 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             // COUI's own app bar material: progressive blur plus the gradient surface ramp. The
-            // overlay measures the bar and draws the material 24dp past it without adding that
-            // band to the Scaffold's content padding.
+            // overlay measures the bar and draws the material past it without adding that band to
+            // the Scaffold's content padding.
             AppBarBlurOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -339,6 +343,13 @@ fun HomeScreen(
                 containerColor = COUITheme.colorScheme.surface,
                 backdrop = backdrop,
                 scrollFraction = materialScrollFraction,
+                // The bar carries a second row (the segment row) below the top row. The native
+                // gradient is at full strength only at the top edge and fades to clear at the
+                // node's bottom, so once the bar grew the content under the segments was left
+                // sharp. The blur now stays full down to the bar's bottom edge and fades over the
+                // extra band below it.
+                extraHeight = materialExtra,
+                blurStartFraction = blurStartFraction,
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Spacer(modifier = Modifier.height(statusBar))
@@ -400,21 +411,14 @@ fun HomeScreen(
                             .longPressAnywhere(openTabEditor),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // The container wears the search-capsule material, so the tabs read as one surface
-                        // with the search field above. The contour form keeps the sliding indicator inside
-                        // that capsule; the transparent container lets the shared fill show through. No
-                        // outer drop shadow: its ~8dp halo pushed the visible edge outside the avatar and
-                        // bell the capsule is aligned to, making the bar read wider than the top row.
+                        // ColorOS 17's segment control (COUISegmentButtonLayout) paints its own flat
+                        // translucent container — #0F000000 light / #1FFFFFFF dark — with no glass,
+                        // rim or shadow, so the tabs sit straight on the app bar material.
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(vertical = TAB_ROW_VERTICAL_PADDING)
-                                .height(TabRowDefaults.TabRowWithContourHeight)
-                                .couiSearchMaterial(
-                                    RoundedCornerShape(50),
-                                    dropShadow = false,
-                                    fillAlpha = 0.8f,
-                                ),
+                                .height(TabRowDefaults.TabRowWithContourHeight),
                         ) {
                             TabRowWithContour(
                                 tabs = tabs.map { it.label },
@@ -424,7 +428,6 @@ fun HomeScreen(
                                     scope.launch { pagerState.animateScrollToPage(it) }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = TabRowDefaults.tabRowColors(backgroundColor = Color.Transparent),
                                 // Six labels have to share the narrower capsule: COUI's 52dp floor and
                                 // 12dp segment padding overflow it, so the segments give up some of
                                 // both instead of the capsule growing.

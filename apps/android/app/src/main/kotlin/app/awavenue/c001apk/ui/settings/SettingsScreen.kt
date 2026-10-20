@@ -2,6 +2,7 @@ package app.awavenue.c001apk.ui.settings
 
 import android.content.Context
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +25,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -32,13 +37,11 @@ import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.HapticStrength
 import app.awavenue.c001apk.data.HistoryCardMode
-import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.glassSource
-import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
@@ -48,6 +51,7 @@ import coil3.SingletonImageLoader
 import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -102,6 +106,9 @@ private val fontScaleSteps = listOf(0.8f, 0.85f, 0.9f, 0.95f, 1f, 1.05f, 1.1f, 1
 /** The 深色模式 options in the order the Flutter dropdown lists them. */
 private val darkModes = listOf(DarkMode.Off, DarkMode.On, DarkMode.System)
 
+/** 默认 keeps COUI's own blue instead of the first seed, so its dot shows that blue. */
+private val defaultAccent = Color(0xFF0080FF)
+
 @Composable
 fun SettingsScreen() {
     val app = LocalApp.current
@@ -119,6 +126,23 @@ fun SettingsScreen() {
     var checkingUpdate by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateResult.Available?>(null) }
     var menu by remember { mutableStateOf(false) }
+
+    // Each 主题颜色 option carries a dot in the seed it applies, so the list reads as swatches.
+    val seedColorEntry = remember(settings.seedColor) {
+        DropdownEntry(
+            items = SeedColors.labels.mapIndexed { index, label ->
+                DropdownItem(
+                    text = label,
+                    selected = index == settings.seedColor,
+                    onClick = { settings.updateSeedColor(index) },
+                    icon = { iconModifier ->
+                        val color = if (index == 0) defaultAccent else SeedColors.colorAt(index)
+                        SeedColorSwatch(color, iconModifier)
+                    },
+                )
+            },
+        )
+    }
 
     // Upstream reads the cache size when the page opens, so the row shows it before any tap.
     LaunchedEffect(Unit) {
@@ -149,7 +173,6 @@ fun SettingsScreen() {
                             ) {
                                 ListPopupColumn {
                                     val entries = listOf(
-                                        "意见反馈" to { context.openBrowser(Protocol.URL_SOURCE_CODE) },
                                         "关于" to { navigator.push(Route.About) },
                                     )
                                     entries.forEachIndexed { index, entry ->
@@ -207,10 +230,8 @@ fun SettingsScreen() {
                             enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
                         )
                         OverlayDropdownPreference(
+                            entry = seedColorEntry,
                             title = "主题颜色",
-                            items = SeedColors.labels,
-                            selectedIndex = settings.seedColor,
-                            onSelectedIndexChange = settings::updateSeedColor,
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
                             enabled = !settings.dynamicColor,
                             maxHeight = 380.dp,
@@ -441,6 +462,19 @@ fun SettingsScreen() {
 internal fun PreferenceStartIcon(icon: ImageVector) {
     Box(Modifier.padding(end = 8.dp)) {
         Icon(imageVector = icon, contentDescription = null, tint = COUITheme.colorScheme.onBackground)
+    }
+}
+
+/** A filled dot in [color], used as the leading slot of a 主题颜色 option. */
+@Composable
+private fun SeedColorSwatch(color: Color, modifier: Modifier = Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
     }
 }
 

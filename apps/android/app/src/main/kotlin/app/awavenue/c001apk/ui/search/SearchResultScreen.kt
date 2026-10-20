@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -18,12 +17,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
-import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -152,25 +149,19 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                     },
                     bottomContent = {
                         if (title.isEmpty()) {
-                            // The same capsule as the home tab row: the shared search material, a
-                            // transparent tab container and the framed indicator inside it.
+                            // ColorOS 17's segment control paints its own flat translucent container,
+                            // so the tabs sit straight on the page with no glass capsule behind them.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 6.dp)
-                                    .height(TabRowDefaults.TabRowWithContourHeight)
-                                    .couiSearchMaterial(
-                                        RoundedCornerShape(50),
-                                        dropShadow = false,
-                                        fillAlpha = 0.8f,
-                                    ),
+                                    .height(TabRowDefaults.TabRowWithContourHeight),
                             ) {
                                 TabRowWithContour(
                                     tabs = tabs.map { it.label },
                                     selectedTabIndex = pagerState.currentPage,
                                     onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = TabRowDefaults.tabRowColors(backgroundColor = Color.Transparent),
                                     // Six labels share the narrower capsule, as on the home bar.
                                     minWidth = 44.dp,
                                     segmentPadding = 8.dp,

@@ -1,10 +1,14 @@
 package app.awavenue.c001apk.ui.main
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -22,12 +26,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.app.AppFilterBall
+import app.awavenue.c001apk.ui.app.AppFilterSearchPanel
+import app.awavenue.c001apk.ui.app.AppFilterState
+import app.awavenue.c001apk.ui.app.LocalAppFilter
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
@@ -42,7 +53,8 @@ import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.settings.AutomaticUpdateCheck
-import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBar
+import app.awavenue.c001apk.ui.theme.rememberChromeDensity
+import io.github.suqi8.coui.kmp.basic.BottomFloatingAccessoryNavigationBar
 import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarItem
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -54,8 +66,13 @@ import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.icon.extended.NotesFill
 import io.github.suqi8.coui.kmp.icon.extended.Update
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** Tapping a bottom tab fades the page out, jumps, and fades the new page in. */
+private const val TabFadeOutMillis = 60
+private const val TabFadeInMillis = 100
 
 private enum class MainTab(
     val label: String,
@@ -113,6 +130,19 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val appBarBounds = LocalAppBarBounds.current
     LaunchedEffect(pagerState.currentPage) { appBarBounds.currentTab = pagerState.currentPage }
     val scope = rememberCoroutineScope()
+    // The pager itself keeps every tab composed; only its layer fades, so lists keep their state.
+    val fade = remember { Animatable(1f) }
+    val switchJob = remember { mutableStateOf<Job?>(null) }
+    val switchTo: (Int) -> Unit = { index ->
+        if (pagerState.currentPage != index) {
+            switchJob.value?.cancel()
+            switchJob.value = scope.launch {
+                fade.animateTo(0f, tween(TabFadeOutMillis, easing = LinearEasing))
+                pagerState.scrollToPage(index)
+                fade.animateTo(1f, tween(TabFadeInMillis, easing = LinearEasing))
+            }
+        }
+    }
     val backdrop = rememberGlassBackdrop()
     val returnTop = remember { ReturnTopController() }
     val followReturnTop = remember { ReturnTopController() }
@@ -153,6 +183,16 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
         }
     }
     var compose by remember { mutableStateOf(false) }
+    // Shared with the 应用 tab: the ball that edits this sits in the bar, the list one page deeper.
+    val appFilter = remember { AppFilterState() }
+    // The menu and the field belong to the 应用 page, so leaving it must not leave them armed.
+    LaunchedEffect(homePagerState.currentPage, homeTabs, onHome) {
+        val onApp = onHome && homeTabs.getOrNull(homePagerState.currentPage) == HomeTab.App
+        if (!onApp) {
+            appFilter.menuOpen = false
+            appFilter.searchOpen = false
+        }
+    }
 
     // Back returns to the first tab; on it the host backgrounds the app, as upstream does.
     DisposableEffect(navigator, onHome, pagerState) {
@@ -160,7 +200,7 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             if (onHome) {
                 false
             } else {
-                scope.launch { pagerState.scrollToPage(MainTab.Home.ordinal) }
+                switchTo(MainTab.Home.ordinal)
                 true
             }
         }
@@ -171,19 +211,28 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             // The floating capsule paints its own glass; the Scaffold only reserves its height.
-            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            // It is measured in the system-app density so 显示大小 leaves the bar the size 相册's
+            // is, while every page inside keeps following that setting.
+            val barDensity = rememberChromeDensity()
+            CompositionLocalProvider(
+                LocalBackdrop provides backdrop,
+                LocalDensity provides barDensity,
+            ) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
-                    // One ball melts out of the capsule's trailing end at a time: 发布动态 on 动态
-                    // (signed in) and 更新 on 应用 (when the update check is on). The page index is
-                    // an index into the visible tabs, not the HomeTab enum ordinal.
+                    // Both side slots stay configured, so the capsule keeps its width and stays in
+                    // the middle whether a ball is out or not; a ball only melts out of the capsule
+                    // into its slot, the way 相册's five-slot bar behaves. 筛选 takes the slot before
+                    // the capsule on 应用, 发布动态 / 更新 the one after it.
                     val currentHomeTab = homeTabs.getOrNull(homePagerState.currentPage)
                     val onFeed = onHome && currentHomeTab == HomeTab.Feed
                     val onApp = onHome && currentHomeTab == HomeTab.App
                     val composeBall = onFeed && session.isLogin
                     val updateBall = onApp && settings.checkUpdate
-                    BottomFloatingNavigationBar(
-                        expanded = composeBall || updateBall,
-                        expansion = {
+                    BottomFloatingAccessoryNavigationBar(
+                        startAccessoryVisible = onApp,
+                        startAccessory = { AppFilterBall(filter = appFilter) },
+                        endAccessoryVisible = composeBall || updateBall,
+                        endAccessory = {
                             // The bar already gives the ball its round press feedback; a ripple here
                             // would paint a square over it.
                             val action: () -> Unit = if (updateBall) {
@@ -225,7 +274,7 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                                             MainTab.Mine -> Unit
                                         }
                                     } else {
-                                        scope.launch { pagerState.scrollToPage(index) }
+                                        switchTo(index)
                                     }
                                 },
                                 icon = tab.icon,
@@ -238,32 +287,44 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             }
         },
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().glassSource(backdrop),
-            userScrollEnabled = false,
-            beyondViewportPageCount = MainTab.entries.size,
-        ) { page ->
-            when (MainTab.entries[page]) {
-                MainTab.Home -> HomeScreen(
-                    outerPadding = padding,
-                    pagerState = homePagerState,
-                    returnTop = returnTop,
-                    barSlot = page,
-                )
-                MainTab.Follow -> FollowScreen(outerPadding = padding, returnTop = followReturnTop, barSlot = page)
-                MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
+        CompositionLocalProvider(LocalAppFilter provides appFilter) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    // Outside the glass source, so the bar's backdrop keeps the page while it fades.
+                    .graphicsLayer { alpha = fade.value }
+                    .glassSource(backdrop),
+                userScrollEnabled = false,
+                beyondViewportPageCount = MainTab.entries.size,
+            ) { page ->
+                when (MainTab.entries[page]) {
+                    MainTab.Home -> HomeScreen(
+                        outerPadding = padding,
+                        pagerState = homePagerState,
+                        returnTop = returnTop,
+                        barSlot = page,
+                    )
+                    MainTab.Follow -> FollowScreen(outerPadding = padding, returnTop = followReturnTop, barSlot = page)
+                    MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
+                }
             }
-        }
 
-        // Inside the Scaffold: COUI overlays only draw in a Scaffold that encloses them.
-        AutomaticUpdateCheck()
-        if (compose) {
-            ReplyComposerSheet(
-                target = ReplyTarget(),
-                onDismiss = { compose = false },
-                onPosted = { compose = false },
+            AppFilterSearchPanel(
+                filter = appFilter,
+                bottomPadding = padding.calculateBottomPadding(),
+                modifier = Modifier.fillMaxSize(),
             )
+
+            // Inside the Scaffold: COUI overlays only draw in a Scaffold that encloses them.
+            AutomaticUpdateCheck()
+            if (compose) {
+                ReplyComposerSheet(
+                    target = ReplyTarget(),
+                    onDismiss = { compose = false },
+                    onPosted = { compose = false },
+                )
+            }
         }
     }
 }

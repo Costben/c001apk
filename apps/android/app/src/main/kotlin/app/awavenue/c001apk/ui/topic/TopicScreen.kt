@@ -93,7 +93,6 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.icon.extended.Ok
 import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -161,6 +160,8 @@ private fun TopicPage(tag: String?, id: String?) {
     val scrollBehavior = COUIScrollBehavior()
     val backdrop = rememberGlassBackdrop()
     val pagerState = rememberPagerState(initialPage = selected.coerceAtLeast(0)) { tabList.size }
+    // The follow/block card belongs to the discussion list, not whichever tab happens to be first.
+    val headerPage = tabList.indexOfFirst { it.title == "讨论" }.takeIf { it >= 0 } ?: 0
 
     var isFollow by remember(topic) { mutableStateOf(topic.obj("userAction")?.string("follow") == "1") }
     var followPending by remember(topic) { mutableStateOf(false) }
@@ -325,15 +326,6 @@ private fun TopicPage(tag: String?, id: String?) {
                     navigationIcon = { BackIcon(navigator) },
                     actions = {
                         if (!isBlocked) {
-                            HighlightedIconButton(
-                                onClick = { onFollowClick() },
-                                enabled = !followPending,
-                            ) {
-                                Icon(
-                                    if (isFollow) COUIIcons.Ok else COUIIcons.Add,
-                                    contentDescription = if (isFollow) "已关注" else "关注",
-                                )
-                            }
                             HighlightedIconButton(onClick = {
                                 navigator.push(
                                     Route.Search(
@@ -465,7 +457,7 @@ private fun TopicPage(tag: String?, id: String?) {
                     top = innerPadding.calculateTopPadding() + 12.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp,
                 )
-                if (page == 0) {
+                if (page == headerPage) {
                     TopicFeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding) {
                         TopicHeader(
                             topic = topic,
@@ -572,7 +564,10 @@ private fun TopicHeader(
     onProductConfigs: (() -> Unit)? = null,
     onProductComparison: (() -> Unit)? = null,
 ) {
-    Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        insideMargin = PaddingValues(12.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
                 topic.logo.ifEmpty { topic.pic },

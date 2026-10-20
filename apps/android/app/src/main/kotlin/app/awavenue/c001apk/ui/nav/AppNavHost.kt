@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
@@ -116,6 +117,10 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
     val appBarBounds = remember { AppBarBounds() }
     val density = LocalDensity.current
     val appBarFadePx = with(density) { AppBarBlurOverlayDefaults.ExtraHeight.toPx() }
+    // Sliding pages wear the display's own corner radius: rounded while they travel, and exactly
+    // the display's cut once they land, so the clip never shows at rest.
+    val screenCornerRadius = rememberScreenCornerRadius()
+    val slideShape = remember(screenCornerRadius) { RoundedCornerShape(screenCornerRadius) }
 
     // How far the back gesture has pulled the top page: 1 at rest, 0 once it is fully away. It is
     // read in layer blocks, so a running gesture never recomposes the page.
@@ -274,6 +279,9 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         onDispose { entry.detach() }
                     }
                     val grows = remember(entry) { entry.growsFromOrigin() }
+                    // A page that grows out of a row draws its own frame shape; every other page
+                    // slides as a rounded card.
+                    val slides = !grows
                     SideEffect { entry.shown = true }
                     fun target(state: EnterExitState): Float =
                         when (state) {
@@ -348,6 +356,10 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                                 }
                                 translationX = p * size.width
                                 alpha = 1f
+                                if (slides) {
+                                    shape = slideShape
+                                    clip = true
+                                }
                             },
                         ) {
                             ExpandFrame(

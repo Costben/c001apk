@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
@@ -53,6 +54,7 @@ fun FeedList(
     scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
     returnTop: ReturnTopController? = null,
+    itemPadding: Dp = ItemPadding,
 ) {
     val context = LocalContext.current
     val app = LocalApp.current
@@ -162,10 +164,16 @@ fun FeedList(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         itemsIndexed(
-                            viewModel.items.filterNot { FeedActions.isRemoved(it) },
+                            viewModel.items.filterNot { FeedActions.isHidden(it) },
                             contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
                         ) { _, item ->
-                            EntityItem(item, onBlock = onBlock, onDelete = onDelete, onLike = onLike)
+                            EntityItem(
+                                item,
+                                onBlock = onBlock,
+                                onDelete = onDelete,
+                                onLike = onLike,
+                                horizontalPadding = itemPadding,
+                            )
                         }
                         item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
                     }
