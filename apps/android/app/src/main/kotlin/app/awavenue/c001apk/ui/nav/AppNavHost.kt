@@ -373,23 +373,39 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         LocalRouteTransition provides routeTransition,
                     ) {
                         Box(
-                            Modifier.fillMaxSize().graphicsLayer {
-                                // A page that shrinks back into something draws its own exit; every
-                                // other one leaves as a whole opaque page, the way the pop
-                                // transition does. One a gesture already carried away stays fully
-                                // away for as long as the pop keeps it composed.
-                                val p = when {
-                                    entry.previewed -> 1f
-                                    previewing && !entry.shrinksToOrigin() -> 1f - entryGesture()
-                                    else -> 0f
+                            Modifier
+                                .fillMaxSize()
+                                // A page rebuilt after being covered paints over its own last
+                                // picture, so the frame it needs to compose cannot blink before
+                                // the list is drawn.
+                                .drawBehind {
+                                    val snap = entry.snapshot ?: return@drawBehind
+                                    if (snap.width == 0 || snap.height == 0) return@drawBehind
+                                    drawImage(
+                                        snap,
+                                        dstSize = IntSize(
+                                            size.width.roundToInt(),
+                                            size.height.roundToInt(),
+                                        ),
+                                    )
                                 }
-                                translationX = p * size.width
-                                alpha = 1f
-                                if (slides) {
-                                    shape = slideShape
-                                    clip = true
-                                }
-                            },
+                                .graphicsLayer {
+                                    // A page that shrinks back into something draws its own exit; every
+                                    // other one leaves as a whole opaque page, the way the pop
+                                    // transition does. One a gesture already carried away stays fully
+                                    // away for as long as the pop keeps it composed.
+                                    val p = when {
+                                        entry.previewed -> 1f
+                                        previewing && !entry.shrinksToOrigin() -> 1f - entryGesture()
+                                        else -> 0f
+                                    }
+                                    translationX = p * size.width
+                                    alpha = 1f
+                                    if (slides) {
+                                        shape = slideShape
+                                        clip = true
+                                    }
+                                },
                         ) {
                             ExpandFrame(
                                 origin = entry.origin,
@@ -437,22 +453,32 @@ private val SettledGesture: () -> Float = { 1f }
 private suspend fun alignCardBelowBar(origin: ExpandOrigin?, barBottom: () -> Float) {
     if (origin == null) return
     val state = origin.listState ?: return
+    var moved = 0f
     repeat(4) {
         val target = barBottom()
-        if (target <= 0f) return
-        // A covered page is composed again only after the pop; its row gets coordinates back
-        // once the list has been laid out, so give it a frame instead of giving up.
-        val coordinates = origin.coordinates?.takeIf { it.isAttached }
-        if (coordinates == null) {
-            withFrameNanos { }
-            return@repeat
+        if (target > 0f) {
+            // A covered page is composed again only after the pop; its row gets coordinates back
+            // once the list has been laid out, so give it a frame instead of giving up.
+            val coordinates = origin.coordinates?.takeIf { it.isAttached }
+            if (coordinates == null) {
+                withFrameNanos { }
+            } else {
+                val delta = target - coordinates.positionInRoot().y
+                if (delta > 0.5f) {
+                    state.scrollBy(-delta)
+                    moved += delta
+                    // One frame for the list to lay out, one for the bar to report its height.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                }
+            }
         }
-        val delta = target - coordinates.positionInRoot().y
-        if (delta <= 0.5f) return
-        state.scrollBy(-delta)
-        // One frame for the list to lay out, one for the bar to report its new height.
-        withFrameNanos { }
-        withFrameNanos { }
+    }
+    // A page that is disposed before the card can be read again still shrinks into the new spot.
+    if (moved > 0.5f) {
+        origin.lastBounds = origin.lastBounds?.let {
+            Rect(it.left, it.top + moved, it.right, it.bottom + moved)
+        }
     }
 }
 
@@ -467,6 +493,9 @@ private const val GestureSettleMillis = 200
 
 /** How long the page takes to finish leaving once the gesture has committed. */
 private const val GestureCommitMillis = 150
+
+/** Wait after the settle before photographing a covered page again, once its list has been moved. */
+private const val ReturnSnapshotDelayMillis = 160L
 
 /**
  * How long a page takes to shrink back into its card. Shorter than the way in: the frame still
@@ -557,7 +586,14 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
             if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
             delay(SnapshotSettleMillis)
             if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            // The row may have been moved clear of the bar after the settle; the picture has to
+            // match the position the page will come back to.
+            delay(ReturnSnapshotDelayMillis)
+            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
         } else {
+            // Let the rebuilt page paint over its own picture, so its first frame cannot blink.
+            withFrameNanos { }
+            withFrameNanos { }
             entry.snapshot = null
         }
     }

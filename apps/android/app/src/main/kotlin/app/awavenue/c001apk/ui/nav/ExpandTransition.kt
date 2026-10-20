@@ -210,7 +210,7 @@ internal fun ExpandFrame(
             }
             .graphicsLayer {
                 val source = active()
-                val bounds = source?.let { frame.bounds(it) }
+                val bounds = source?.let { frame.bounds(it, freeze = !exiting()) }
                 if (source == null || bounds == null) {
                     translationX = 0f
                     translationY = 0f
@@ -238,7 +238,7 @@ internal fun ExpandFrame(
             }
             .drawWithContent {
                 val source = active()
-                val bounds = source?.let { frame.bounds(it) }
+                val bounds = source?.let { frame.bounds(it, freeze = !exiting()) }
                 if (source == null || bounds == null) {
                     drawContent()
                     return@drawWithContent
@@ -323,13 +323,31 @@ internal fun ExpandFrame(
 private class ExpandGeometry {
     var host: LayoutCoordinates? = null
 
-    /** The element's bounds in the page host, read live so a pop shrinks into where it is now. */
-    fun bounds(origin: ExpandOrigin): Rect? {
+    private var enterBounds: Rect? = null
+    private var enterOrigin: ExpandOrigin? = null
+
+    /**
+     * The element's bounds in the page host, read live so a pop shrinks into where it is now.
+     *
+     * While the page grows, the first reading is kept: the list under it can move a row clear of
+     * the bar behind the open animation, and the frame must keep growing from where the user
+     * tapped instead of chasing the row.
+     */
+    fun bounds(origin: ExpandOrigin, freeze: Boolean): Rect? {
+        if (freeze) {
+            enterBounds?.takeIf { enterOrigin === origin }?.let { return it }
+        }
         val host = host?.takeIf { it.isAttached } ?: return origin.lastBounds
         val element = origin.coordinates?.takeIf { it.isAttached } ?: return origin.lastBounds
-        return host.localBoundingBoxOf(element, clipBounds = false)
+        val rect = host.localBoundingBoxOf(element, clipBounds = false)
             .takeIf { it.width > 0f && it.height > 0f }
-            ?.also { origin.lastBounds = it }
+            ?: return origin.lastBounds
+        origin.lastBounds = rect
+        if (freeze) {
+            enterBounds = rect
+            enterOrigin = origin
+        }
+        return rect
     }
 }
 

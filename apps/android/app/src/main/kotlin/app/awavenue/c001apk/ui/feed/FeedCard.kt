@@ -136,17 +136,24 @@ fun FeedCard(
     // The page this row lives on is disposed while another one covers it; when it comes back its
     // rows are new. The host works out where the list must start while the page is still covered,
     // so the row jumps there on the first measure instead of scrolling after it is on screen.
+    // The page is rebuilt on the way back; the host has already worked out where its list must
+    // start. Ask for that position in a SideEffect, which runs before the first layout, so the
+    // first frame the user sees is already the final one instead of the old position.
+    SideEffect {
+        val state = listState ?: return@SideEffect
+        val pending = appBarBounds.pendingReturnFor(feed.id) ?: return@SideEffect
+        val target = pending.target ?: return@SideEffect
+        state.requestScrollToItem(target.index, target.offset)
+        appBarBounds.clearReturn(feed.id)
+    }
+    // A return without a precomputed target still has to clear the bar; that one has to measure
+    // the rebuilt row, so it runs after the first frames.
     LaunchedEffect(feed.id, listState) {
         if (listState == null) return@LaunchedEffect
         repeat(4) {
             val pending = appBarBounds.pendingReturnFor(feed.id)
             if (pending != null) {
-                val target = pending.target
-                if (target != null) {
-                    listState.requestScrollToItem(target.index, target.offset)
-                } else {
-                    appBarBounds.alignReturnedRow(feed.id, origin, listState)
-                }
+                appBarBounds.alignReturnedRow(feed.id, origin, listState)
                 appBarBounds.clearReturn(feed.id)
                 return@LaunchedEffect
             }
