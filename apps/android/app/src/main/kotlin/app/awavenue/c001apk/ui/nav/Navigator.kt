@@ -28,6 +28,9 @@ class BackStackEntry internal constructor(
     /** Set once the list under a popped entry has been scrolled clear of the app bar. */
     internal var returnScrolled = false
 
+    /** Set once the row that opened this entry has been moved clear of the bar on the way in. */
+    internal var alignScheduled = false
+
     /** Set when a back gesture had already pulled the screen away before it was popped. */
     internal var previewed = false
 

@@ -251,6 +251,23 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         }
                     }
                     val pushed = targetState?.takeIf { popped == null }
+                    // A row opened from under the bar is moved clear while the opening page still
+                    // covers the list. The page that owns the row leaves composition when the open
+                    // animation ends, so waiting for the return would mean scrolling a list the
+                    // user can already see.
+                    if (pushed?.growsFromOrigin() == true && !pushed.alignScheduled) {
+                        pushed.alignScheduled = true
+                        val covered = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+                        val origin = pushed.origin
+                        if (covered != null && origin != null) {
+                            scope.launch {
+                                delay(OpenCoverMillis)
+                                alignCardBelowBar(origin) {
+                                    appBarBounds.bottomFor(covered.route) + appBarFadePx
+                                }
+                            }
+                        }
+                    }
                     val transform = when {
                         // A gesture already carried this page away; animating it again would double it.
                         popped?.previewed == true ->
@@ -452,6 +469,9 @@ private const val GestureCommitMillis = 150
  * afterimage, so the return has to be over before the user's own scroll gets going.
  */
 private const val ExitDurationMillis = 220
+
+/** How long the opening page takes to cover the list it grew from, before the list is aligned. */
+private const val OpenCoverMillis = 260L
 
 /**
  * How long the press state layer takes to fade out. COUI animates it with a critically damped spring
