@@ -375,20 +375,6 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                // A page rebuilt after being covered paints over its own last
-                                // picture, so the frame it needs to compose cannot blink before
-                                // the list is drawn.
-                                .drawBehind {
-                                    val snap = entry.snapshot ?: return@drawBehind
-                                    if (snap.width == 0 || snap.height == 0) return@drawBehind
-                                    drawImage(
-                                        snap,
-                                        dstSize = IntSize(
-                                            size.width.roundToInt(),
-                                            size.height.roundToInt(),
-                                        ),
-                                    )
-                                }
                                 .graphicsLayer {
                                     // A page that shrinks back into something draws its own exit; every
                                     // other one leaves as a whole opaque page, the way the pop
