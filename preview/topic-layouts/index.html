@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#131315" />
+<title>话题页布局方案 · COUI 17</title>
+<link rel="stylesheet" href="preview.css" />
+</head>
+<body>
+
+<div class="stage">
+  <div class="frame" id="frame">
+    <div class="phone" id="phone">
+      <div class="punch"></div>
+
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="sys">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="4.5" width="3" height="6.5" rx="1"/><rect x="9" y="2" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 11.2 5.4 8.6a3.7 3.7 0 0 1 5.2 0L8 11.2Zm-4.7-4.9L1.5 4.4a9.2 9.2 0 0 1 13 0l-1.8 1.9a6.6 6.6 0 0 0-9.4 0Z"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.2" stroke="currentColor" opacity=".38"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4.2v3.6a2 2 0 0 0 0-3.6Z" fill="currentColor" opacity=".45"/></svg>
+        </span>
+      </div>
+
+      <div class="topbar">
+        <div class="toprow">
+          <div class="avatar" style="--c1:#7c8bff;--c2:#4b5bd6">E</div>
+          <div class="spacer"></div>
+          <button class="iconbtn" aria-label="搜索">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="9.8" cy="9.8" r="6.3" stroke="currentColor" stroke-width="1.9"/><path d="m14.6 14.6 4 4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+          </button>
+          <button class="iconbtn" aria-label="消息">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3.2a5.6 5.6 0 0 0-5.6 5.6v3l-1.2 2.6c-.3.7.2 1.4.9 1.4h11.8c.7 0 1.2-.7.9-1.4l-1.2-2.6v-3A5.6 5.6 0 0 0 11 3.2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 18.4a2 2 0 0 0 3.6 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <i class="badge"></i>
+          </button>
+        </div>
+
+        <div class="tabcapsule" id="tabcapsule">
+          <button class="seg" data-kind="app">应用</button>
+          <button class="seg" data-kind="feed">动态</button>
+          <button class="seg" data-kind="hot">热门</button>
+          <button class="seg" data-kind="topic">话题</button>
+          <button class="seg" data-kind="product">数码</button>
+          <button class="seg" data-kind="pic">酷图</button>
+        </div>
+      </div>
+
+      <div class="viewport" id="viewport"></div>
+
+      <div class="bottomnav">
+        <button class="navitem on">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3.4 9.3 11 3.2l7.6 6.1v8.1a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6V9.3Z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M8.8 19v-5.2h4.4V19" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          <span>主页</span>
+        </button>
+        <button class="navitem">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 18.4S3.6 14 3.6 8.9A4 4 0 0 1 11 6.7a4 4 0 0 1 7.4 2.2c0 5.1-7.4 9.5-7.4 9.5Z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
+          <span>关注</span>
+        </button>
+        <button class="navitem">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.6" stroke="currentColor" stroke-width="1.9"/><path d="M4.4 19c.5-3.4 3.2-5.6 6.6-5.6s6.1 2.2 6.6 5.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+          <span>我的</span>
+        </button>
+        <button class="fab" aria-label="发布">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 5.2v11.6M5.2 11h11.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="homebar"></div>
+    </div>
+  </div>
+</div>
+
+<aside class="side">
+  <div class="side-title">话题页布局</div>
+  <button class="side-item on" data-v="1"><b>1</b><span>标题即选择器<em>点大标题展开分类，零额外导航</em></span></button>
+  <button class="side-item" data-v="2"><b>2</b><span>横滑胶囊条<em>一行分类，随时可见，一步切换</em></span></button>
+  <button class="side-item" data-v="3"><b>3</b><span>分类卡片<em>默认收起，展开是双列图标网格</em></span></button>
+  <button class="side-item" data-v="4"><b>4</b><span>封面大卡<em>左滑右滑换分类，沉浸式</em></span></button>
+  <button class="side-item" data-v="5"><b>5</b><span>竖排分类栏<em>还原原版左右分栏，蓝色文字 + 竖条</em></span></button>
+  <button class="side-item" data-v="6"><b>6</b><span>悬浮分类卡<em>左栏做成圆角卡，每项带条数</em></span></button>
+  <div class="side-sep"></div>
+  <button class="side-mini" data-theme-toggle>切换深色 / 浅色</button>
+  <button class="side-mini" data-kind-toggle>切到「数码」标签</button>
+</aside>
+
+<div class="dock">
+  <button data-v="1" class="on">1</button>
+  <button data-v="2">2</button>
+  <button data-v="3">3</button>
+  <button data-v="4">4</button>
+  <button data-v="5">5</button>
+  <button data-v="6">6</button>
+  <span class="dsep"></span>
+  <button data-theme-toggle aria-label="主题">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.6v2.2M9 14.2v2.2M1.6 9h2.2M14.2 9h2.2M3.8 3.8l1.6 1.6M12.6 12.6l1.6 1.6M14.2 3.8l-1.6 1.6M5.4 12.6l-1.6 1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="9" r="3.1" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button data-kind-toggle id="dockKind">数码</button>
+</div>
+
+<script src="preview.js"></script>
+</body>
+</html>
