@@ -272,8 +272,13 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         // A gesture already carried this page away; animating it again would double it.
                         popped?.previewed == true ->
                             EnterTransition.None togetherWith ExitTransition.None
-                        // The page draws its own growth and shrink; the page under it stays put.
-                        pushed?.growsFromOrigin() == true || popped?.shrinksToOrigin() == true ->
+                        // The page draws its own growth; the page under it keeps drawing until the
+                        // growth ends, so its row can still be moved while the open page covers it.
+                        pushed?.growsFromOrigin() == true ->
+                            EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished
+                        // The popped page draws its own shrink; the list under it is already in
+                        // place, so nothing has to stay composed for it.
+                        popped?.shrinksToOrigin() == true ->
                             EnterTransition.None togetherWith ExitTransition.None
                         popped == null ->
                             // The whole page slides in from the right edge, fully opaque; the page
