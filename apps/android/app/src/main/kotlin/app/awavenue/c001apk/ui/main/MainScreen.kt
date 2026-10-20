@@ -1,8 +1,14 @@
 package app.awavenue.c001apk.ui.main
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,6 +79,11 @@ import kotlinx.coroutines.launch
 /** Tapping a bottom tab fades the page out, jumps, and fades the new page in. */
 private const val TabFadeOutMillis = 60
 private const val TabFadeInMillis = 100
+
+/** The accessory ball swaps its mark by shrinking the old one, then growing the new one. */
+private const val AccessoryShrinkMillis = 90
+private const val AccessoryGrowMillis = 170
+private const val AccessoryFadeMillis = 70
 
 private enum class MainTab(
     val label: String,
@@ -246,16 +257,34 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                                     .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = action),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                if (updateBall) {
+                                // The ball keeps its place between pages, so ColorOS swaps the mark
+                                // inside it: the old one shrinks to nothing, then the new one grows
+                                // out of the same spot instead of cutting over.
+                                AnimatedContent(
+                                    targetState = updateBall,
+                                    transitionSpec = {
+                                        (
+                                            scaleIn(
+                                                tween(
+                                                    AccessoryGrowMillis,
+                                                    delayMillis = AccessoryShrinkMillis,
+                                                ),
+                                            ) + fadeIn(
+                                                tween(
+                                                    AccessoryFadeMillis,
+                                                    delayMillis = AccessoryShrinkMillis,
+                                                ),
+                                            )
+                                            ).togetherWith(
+                                            scaleOut(tween(AccessoryShrinkMillis)) +
+                                                fadeOut(tween(AccessoryFadeMillis)),
+                                        )
+                                    },
+                                    label = "accessory-mark",
+                                ) { update ->
                                     Icon(
-                                        imageVector = COUIIcons.Update,
-                                        contentDescription = "更新",
-                                        tint = COUITheme.colorScheme.onSurface,
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = COUIIcons.Add,
-                                        contentDescription = "发布动态",
+                                        imageVector = if (update) COUIIcons.Update else COUIIcons.Add,
+                                        contentDescription = if (update) "更新" else "发布动态",
                                         tint = COUITheme.colorScheme.onSurface,
                                     )
                                 }
