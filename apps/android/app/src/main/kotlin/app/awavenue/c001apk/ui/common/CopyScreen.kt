@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -23,6 +22,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -81,7 +81,7 @@ fun CopyScreen(text: String) {
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberPageScrollState("copy")),
         ) {
             SelectionContainer {
                 Text(

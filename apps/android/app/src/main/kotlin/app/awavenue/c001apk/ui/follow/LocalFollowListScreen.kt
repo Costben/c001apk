@@ -23,8 +23,9 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.BasicComponent
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -45,7 +46,7 @@ fun LocalFollowListScreen() {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("follow-list")
     val backdrop = rememberGlassBackdrop()
     val label = localFollowLabel()
     val users = app.localFollow.users
@@ -68,6 +69,7 @@ fun LocalFollowListScreen() {
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
             LazyColumn(
+                state = rememberPageListState("follow-list"),
                 modifier = Modifier
                     .fillMaxSize()
                     .glassSource(backdrop)

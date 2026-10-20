@@ -27,8 +27,9 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.BasicComponent
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -57,7 +58,7 @@ import io.github.suqi8.coui.kmp.utils.overScrollVertical
 fun AccountsScreen() {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("accounts")
     val backdrop = rememberGlassBackdrop()
     val session = app.session
 
@@ -86,6 +87,7 @@ fun AccountsScreen() {
         },
     ) { innerPadding ->
         LazyColumn(
+            state = rememberPageListState("accounts"),
             modifier = Modifier
                 .fillMaxSize()
                 .glassSource(backdrop)

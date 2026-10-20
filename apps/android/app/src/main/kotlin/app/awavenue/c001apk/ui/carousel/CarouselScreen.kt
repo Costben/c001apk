@@ -30,6 +30,9 @@ import app.awavenue.c001apk.ui.feed.ItemPadding
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -58,7 +61,7 @@ fun CarouselScreen(url: String, title: String, isInit: Boolean) {
     }
 
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("carousel")
     val backdrop = rememberGlassBackdrop()
     var pageTitle by remember(url, title) { mutableStateOf("") }
 
@@ -172,7 +175,10 @@ private fun CarouselBody(
 @Composable
 private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavior: ScrollBehavior) {
     val entries = card.entities
-    val pagerState = rememberPagerState { entries.size }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("carousel", fallback = 0),
+    ) { entries.size }
+    rememberPageMemoryRecorder("carousel", pagerState.currentPage)
     val scope = rememberCoroutineScope()
 
     // The pager fills the screen behind the caller's bar, so the tab row takes the top inset and

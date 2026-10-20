@@ -27,7 +27,9 @@ import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -80,9 +82,12 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val tabs = if (title.isEmpty()) SearchContentType.entries else listOf(SearchContentType.Feed)
-    val pagerState = rememberPagerState { tabs.size }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("search-result", fallback = 0),
+    ) { tabs.size }
+    rememberPageMemoryRecorder("search-result", pagerState.currentPage)
     val scope = rememberCoroutineScope()
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("search-result")
     val backdrop = rememberGlassBackdrop()
 
     var searchType by remember { mutableStateOf(SearchType.All) }

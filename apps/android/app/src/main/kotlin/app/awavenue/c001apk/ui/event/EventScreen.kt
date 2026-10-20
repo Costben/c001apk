@@ -53,10 +53,13 @@ import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.HtmlText
 import io.github.suqi8.coui.kmp.basic.Button
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
@@ -155,9 +158,12 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
     val titles = remember(tabs) {
         if (tabs.isEmpty()) emptyList() else listOf("详情") + tabs.map { it.string("title").ifEmpty { "内容" } }
     }
-    val pagerState = rememberPagerState { titles.size.coerceAtLeast(1) }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("event", fallback = 0),
+    ) { titles.size.coerceAtLeast(1) }
+    rememberPageMemoryRecorder("event", pagerState.currentPage)
     val scope = rememberCoroutineScope()
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("event")
 
     Column(modifier) {
         if (titles.isNotEmpty()) {
@@ -207,6 +213,7 @@ private fun EventHeaderPage(
     val prizes = event.list("sponsorPrize")
 
     LazyColumn(
+        state = rememberPageListState("event-header"),
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),

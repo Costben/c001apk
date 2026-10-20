@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -32,7 +31,8 @@ import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -51,10 +51,10 @@ import io.github.suqi8.coui.kmp.utils.overScrollVertical
 fun HistoryScreen(type: HistoryType) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("history")
     val backdrop = rememberGlassBackdrop()
     val appBarBounds = LocalAppBarBounds.current
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState("history")
     var confirmClear by remember(type) { mutableStateOf(false) }
     val entries = app.history.list(type)
 

@@ -371,6 +371,7 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                         LocalViewModelStoreOwner provides entry,
                         LocalSaveableStateRegistry provides saveableState,
                         LocalRouteTransition provides routeTransition,
+                        LocalPageMemory provides entry.memory,
                     ) {
                         Box(
                             Modifier
@@ -520,6 +521,9 @@ private fun ComposedRevealedRoute(entry: BackStackEntry) {
         LocalViewModelStoreOwner provides entry,
         LocalSaveableStateRegistry provides saveableState,
         LocalRouteTransition provides settled,
+        // The page is composed outside the slot it was saved from, so its saved state cannot be
+        // found here; the entry's own memory is what puts it back where the user left it.
+        LocalPageMemory provides entry.memory,
     ) {
         Scaffold(
             containerColor = Color.Transparent,

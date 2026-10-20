@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,8 +77,12 @@ import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalPageMemory
 import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Card
@@ -181,6 +184,8 @@ private fun TopicPage(tag: String?, id: String?) {
     // the status bar once the title has scrolled away, the way the home header behaves.
     val topRowHeightPx = with(density) { TopAppBarDefaults.CollapsedHeight.toPx() }
     val scrolledPx = remember { mutableFloatStateOf(0f) }
+    val pageMemory = LocalPageMemory.current
+    val barRestored = remember { mutableStateOf(false) }
     val scrollBehavior = rememberTopRowScrollBehavior(
         rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
         scrolledPx,
@@ -188,6 +193,25 @@ private fun TopicPage(tag: String?, id: String?) {
     SideEffect {
         // The saved state keeps the limit it was created with, so a density change has to reapply it.
         scrollBehavior.state.heightOffsetLimit = -topRowHeightPx
+        // A page rebuilt for a back gesture gets its saved bar state from nowhere, so the collapse
+        // the user last saw comes from the entry instead. Both are set before the first layout,
+        // otherwise the bar would be drawn expanded and snap shut on the next frame.
+        if (!barRestored.value) {
+            barRestored.value = true
+            pageMemory?.let {
+                scrollBehavior.state.heightOffset = it.barHeightOffset
+                scrollBehavior.state.contentOffset = it.barContentOffset
+            }
+        }
+    }
+    if (pageMemory != null) {
+        LaunchedEffect(scrollBehavior, pageMemory) {
+            snapshotFlow { scrollBehavior.state.heightOffset to scrollBehavior.state.contentOffset }
+                .collect { (height, content) ->
+                    pageMemory.barHeightOffset = height
+                    pageMemory.barContentOffset = content
+                }
+        }
     }
     val collapseFraction: () -> Float = remember(scrollBehavior, topRowHeightPx) {
         {
@@ -199,7 +223,10 @@ private fun TopicPage(tag: String?, id: String?) {
         }
     }
     val backdrop = rememberGlassBackdrop()
-    val pagerState = rememberPagerState(initialPage = selected.coerceAtLeast(0)) { tabList.size }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage(fallback = selected.coerceAtLeast(0)),
+    ) { tabList.size }
+    rememberPageMemoryRecorder(page = pagerState.currentPage)
     // The follow/block card belongs to the discussion list, not whichever tab happens to be first.
     val headerPage = tabList.indexOfFirst { it.title == "讨论" }.takeIf { it >= 0 } ?: 0
 
@@ -752,7 +779,7 @@ private fun TopicFeedList(
     header: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState(viewModel)
 
     LaunchedEffect(viewModel.refreshError) {
         viewModel.refreshError?.let {

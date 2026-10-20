@@ -18,7 +18,8 @@ import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -40,7 +41,7 @@ fun ParamsScreen() {
     val settings = LocalApp.current.settings
     val context = LocalContext.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("params")
     val backdrop = rememberGlassBackdrop()
     val params = settings.deviceParams
 
@@ -61,6 +62,7 @@ fun ParamsScreen() {
         },
     ) { innerPadding ->
         LazyColumn(
+            state = rememberPageListState("params"),
             modifier = Modifier
                 .fillMaxSize()
                 .glassSource(backdrop)

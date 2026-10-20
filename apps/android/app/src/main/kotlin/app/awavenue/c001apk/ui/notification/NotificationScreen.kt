@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -55,8 +54,9 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.NotificationType
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Badge
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -87,7 +87,7 @@ fun NotificationScreen(
 ) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("notification")
     val backdrop = rememberGlassBackdrop()
 
     LaunchedEffect(Unit) {
@@ -163,7 +163,7 @@ private fun NotificationList(
 ) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState("notification")
     // Reading a conversation drops its unread badge, the way the Flutter list clears it on tap.
     var clearedMessages by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(viewModel.refreshError) {

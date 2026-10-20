@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -63,9 +62,10 @@ import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -104,8 +104,8 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
         FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist)
     }
     val backdrop = rememberGlassBackdrop()
-    val scrollBehavior = COUIScrollBehavior()
-    val listState = rememberLazyListState()
+    val scrollBehavior = rememberPageScrollBehavior("feed-detail")
+    val listState = rememberPageListState("feed-detail")
 
     var menuOpen by remember { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }

@@ -86,6 +86,8 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ActionSheetItem
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalRouteTransition
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -137,8 +139,12 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     val transition = LocalRouteTransition.current
     val origins = LocalImageOrigins.current
     val pagerState = rememberPagerState(
-        initialPage = initialPage.coerceIn(0, (images.size - 1).coerceAtLeast(0)),
+        initialPage = pageMemoryPage(
+            "image-view",
+            fallback = initialPage.coerceIn(0, (images.size - 1).coerceAtLeast(0)),
+        ),
     ) { images.size }
+    rememberPageMemoryRecorder("image-view", pagerState.currentPage)
 
     var chromeVisible by remember { mutableStateOf(true) }
     var sheetPage by remember { mutableStateOf<Int?>(null) }

@@ -51,6 +51,13 @@ class BackStackEntry internal constructor(
      */
     internal var savedState: Map<String, List<Any?>>? = null
 
+    /**
+     * The list positions and bar offsets the screen left behind, kept here because the saved state
+     * above only restores in the composition slot it was filed from, and the page under a back
+     * gesture is composed somewhere else.
+     */
+    internal val memory = PageMemory()
+
     private var hosts = 0
     private var removed = false
 

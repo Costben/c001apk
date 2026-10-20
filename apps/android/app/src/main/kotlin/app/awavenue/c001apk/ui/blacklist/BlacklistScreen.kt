@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -35,7 +34,8 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Chip
 import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -70,7 +70,7 @@ fun BlacklistScreen(type: BlacklistType) {
     val app = LocalApp.current
     val context = LocalContext.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("blacklist")
     val backdrop = rememberGlassBackdrop()
 
     var text by rememberSaveable { mutableStateOf("") }
@@ -179,7 +179,7 @@ fun BlacklistScreen(type: BlacklistType) {
                     .glassSource(backdrop)
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberPageScrollState("blacklist")),
             ) {
                 FlowLayout(
                     modifier = Modifier

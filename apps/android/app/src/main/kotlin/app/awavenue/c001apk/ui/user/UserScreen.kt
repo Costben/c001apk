@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +52,8 @@ import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -118,9 +118,9 @@ fun UserScreen(uid: String) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("user")
     val backdrop = rememberGlassBackdrop()
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState("user")
     val appBarBounds = LocalAppBarBounds.current
 
     // Kept in the entry's ViewModel store, so a post stacked on top does not reset the header.

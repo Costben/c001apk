@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +41,7 @@ import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -74,7 +74,7 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
     val viewModel = viewModel(key = "reply2reply-$id") {
         Reply2ReplyViewModel(id, origin, app.repository, app.blacklist)
     }
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState("reply2reply")
     val backdrop = rememberGlassBackdrop()
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
 

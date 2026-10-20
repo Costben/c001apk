@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -64,7 +63,8 @@ import app.awavenue.c001apk.ui.feed.detail.rememberImagePicker
 import app.awavenue.c001apk.ui.feed.reply.EmojiPanel
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -106,8 +106,8 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-    val scrollBehavior = COUIScrollBehavior()
+    val listState = rememberPageListState("chat")
+    val scrollBehavior = rememberPageScrollBehavior("chat")
     val backdrop = rememberGlassBackdrop()
 
     val viewModel: ChatViewModel = viewModel(key = "chat-$ukey") { ChatViewModel(app.repository, ukey) }

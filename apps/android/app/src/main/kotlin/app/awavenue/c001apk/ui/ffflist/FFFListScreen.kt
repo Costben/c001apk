@@ -25,7 +25,9 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.history.HistoryScreen
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -60,7 +62,7 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("fff-list")
     val backdrop = rememberGlassBackdrop()
 
     if (type == FFFListType.Fav || type == FFFListType.History) {
@@ -88,7 +90,10 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
         else -> null
     }
 
-    val pagerState = rememberPagerState { tabs?.size ?: 0 }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("fff-list", fallback = 0),
+    ) { tabs?.size ?: 0 }
+    rememberPageMemoryRecorder("fff-list", pagerState.currentPage)
 
     Scaffold(
         topBar = {

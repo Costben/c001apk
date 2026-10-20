@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -50,6 +49,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.couiSearchMaterial
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -210,7 +210,7 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
             Modifier
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberPageScrollState("search")),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 10.dp),

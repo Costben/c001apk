@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -72,7 +71,8 @@ import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.image.imageOrigin
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
@@ -127,8 +127,8 @@ fun ApkScreen(packageName: String) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val backdrop = rememberGlassBackdrop()
-    val scrollBehavior = COUIScrollBehavior()
-    val listState = rememberLazyListState()
+    val scrollBehavior = rememberPageScrollBehavior("apk")
+    val listState = rememberPageListState("apk")
     val download = rememberApkDownload()
 
     var detail by remember(packageName) { mutableStateOf<Entity?>(null) }

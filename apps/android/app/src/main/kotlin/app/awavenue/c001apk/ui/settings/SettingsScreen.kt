@@ -47,9 +47,10 @@ import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import coil3.SingletonImageLoader
 import io.github.suqi8.coui.kmp.basic.BasicComponent
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
@@ -115,7 +116,7 @@ fun SettingsScreen() {
     val settings = app.settings
     val context = LocalContext.current
     val navigator = LocalNavigator.current
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("settings")
     val scope = rememberCoroutineScope()
 
     val backdrop = rememberGlassBackdrop()
@@ -198,6 +199,7 @@ fun SettingsScreen() {
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
             LazyColumn(
+                state = rememberPageListState("settings"),
                 modifier = Modifier
                     .fillMaxSize()
                     .glassSource(backdrop)

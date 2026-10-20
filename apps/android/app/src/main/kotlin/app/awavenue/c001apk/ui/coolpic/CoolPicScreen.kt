@@ -20,7 +20,9 @@ import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -38,9 +40,12 @@ fun CoolPicScreen(title: String) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val decodedTitle = runCatching { Uri.decode(title) }.getOrDefault(title)
-    val pagerState = rememberPagerState { CoolPicTabs.size }
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("cool-pic", fallback = 0),
+    ) { CoolPicTabs.size }
+    rememberPageMemoryRecorder("cool-pic", pagerState.currentPage)
     val scope = rememberCoroutineScope()
-    val scrollBehavior = COUIScrollBehavior()
+    val scrollBehavior = rememberPageScrollBehavior("cool-pic")
     val backdrop = rememberGlassBackdrop()
 
     Scaffold(

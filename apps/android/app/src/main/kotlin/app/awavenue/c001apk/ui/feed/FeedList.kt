@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +32,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
+import app.awavenue.c001apk.ui.nav.rememberPageListState
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
@@ -59,7 +59,7 @@ fun FeedList(
     val context = LocalContext.current
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    val listState = rememberPageListState(viewModel)
 
     val onBlock: (String, String?) -> Unit = { uid, _ ->
         app.blacklist.blockUser(uid)
