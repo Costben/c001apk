@@ -514,28 +514,16 @@ private const val OpenCoverMillis = 260L
 internal const val SnapshotSettleMillis = 220L
 
 /**
- * The page under the top one, drawn while a back gesture is pulling the top one away. It is drawn
- * from the picture taken when it was covered, so it is exactly as the user left it, lists and all.
- * A page without one is composed instead: it is not composed the rest of the time, so it restores
- * its own saved state on the way in and hands it back on the way out, as it does when a pop
- * animates it back in.
+ * The page under the top one, drawn while a back gesture is pulling the top one away.
+ *
+ * It is composed rather than drawn from the picture taken when it was covered: the picture is a
+ * still, and after a chain of pages it can be a frame behind what the page restores to, which
+ * reads as the gesture previewing the same screen twice. Composing restores the entry's own state,
+ * so the reveal is always the page the pop will actually land on.
  */
 @Composable
 private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
-    val snapshot = entry.snapshot
-    if (snapshot != null) {
-        Box(
-            Modifier.fillMaxSize().drawBehind {
-                if (snapshot.width == 0 || snapshot.height == 0) return@drawBehind
-                drawImage(
-                    snapshot,
-                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                )
-            },
-        )
-    } else {
-        ComposedRevealedRoute(entry)
-    }
+    ComposedRevealedRoute(entry)
 }
 
 @Composable
