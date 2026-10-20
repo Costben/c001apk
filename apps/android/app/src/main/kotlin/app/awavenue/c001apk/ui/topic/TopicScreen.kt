@@ -367,6 +367,9 @@ private fun TopicPage(tag: String?, id: String?) {
                         val scrolled = maxOf(
                             scrolledPx.floatValue,
                             abs(scrollBehavior.state.contentOffset),
+                            // A collapsed bar means content is already under it, so the material must
+                            // stay on even if the scroll counters were reset on the way back.
+                            -scrollBehavior.state.heightOffset,
                         )
                         AppBarBlurOverlayDefaults.scrollAlpha(scrolled, density)
                     }
