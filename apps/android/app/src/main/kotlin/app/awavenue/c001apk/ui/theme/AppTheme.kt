@@ -104,13 +104,13 @@ fun AppTheme(
 }
 
 /**
- * The density the floating bottom bar is measured in.
+ * The density the floating bottom bar and the toolbar keys are measured in.
  *
  * ColorOS system apps keep the phone's default layout width even after 显示大小 is raised: 相册 on
  * a 620-dpi override still measures 360dp across, so its 56dp bar stays 198px while an app's own
- * pages grow with the setting. The bar therefore opts out of the override on its own — capping its
- * density at the value that keeps the window [DefaultLogicalWidthDp] wide — and leaves every page
- * around it following the display-size setting.
+ * pages grow with the setting. The bar and the toolbar keys therefore opt out of the override on
+ * their own — capping their density at the value that keeps the window [DefaultLogicalWidthDp]
+ * wide — and leave every page around them following the display-size setting.
  */
 @Composable
 fun rememberChromeDensity(): Density {
@@ -135,4 +135,14 @@ fun rememberChromeDensity(): Density {
             )
         }
     }
+}
+
+/**
+ * Runs [content] in [rememberChromeDensity], so the dp sizes inside it stay at the system-app
+ * scale while the page around it follows 显示大小.
+ */
+@Composable
+fun ChromeDensity(content: @Composable () -> Unit) {
+    val density = rememberChromeDensity()
+    CompositionLocalProvider(LocalDensity provides density, content = content)
 }

@@ -62,6 +62,7 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -330,14 +331,16 @@ fun HomeScreen(
                                 .padding(start = 16.dp, end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            NetworkImage(
-                                app.session.userAvatar,
-                                Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .clickable(onClick = openProfile),
-                                contentDescription = "我的",
-                            )
+                            ChromeDensity {
+                                NetworkImage(
+                                    app.session.userAvatar,
+                                    Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .clickable(onClick = openProfile),
+                                    contentDescription = "我的",
+                                )
+                            }
                             Spacer(Modifier.weight(1f))
                             TopBarIconButton(onClick = openSearch) {
                                 Icon(COUIIcons.Search, contentDescription = "搜索")

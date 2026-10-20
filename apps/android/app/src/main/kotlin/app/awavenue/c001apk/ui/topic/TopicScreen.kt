@@ -59,6 +59,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -89,7 +90,6 @@ import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.EmptyState
-import io.github.suqi8.coui.kmp.basic.HighlightedIconButton
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
@@ -457,7 +457,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 if (!isBlocked) {
-                                    HighlightedIconButton(onClick = {
+                                    TopBarIconButton(onClick = {
                                         navigator.push(
                                             Route.Search(
                                                 title = title,
@@ -474,7 +474,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                         start = TopAppBarDefaults.ActionMenuItemSpacing,
                                     ),
                                 ) {
-                                    HighlightedIconButton(onClick = { menu = true }) {
+                                    TopBarIconButton(onClick = { menu = true }) {
                                         Icon(COUIIcons.More, contentDescription = "菜单")
                                     }
                                     OverlayListPopup(
@@ -684,7 +684,7 @@ private suspend fun postFollow(
 
 @Composable
 private fun BackIcon(navigator: Navigator) {
-    HighlightedIconButton(onClick = { navigator.pop() }) {
+    TopBarIconButton(onClick = { navigator.pop() }) {
         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
     }
 }
