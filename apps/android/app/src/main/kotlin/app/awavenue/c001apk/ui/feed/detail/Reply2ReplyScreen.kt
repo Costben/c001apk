@@ -144,7 +144,7 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                             Column(
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    .padding(vertical = 5.dp),
                             ) {
                                 ReplyCard(
                                     reply = reply,

@@ -113,6 +113,10 @@ fun ReplyCard(
     Box(
         modifier
             .fillMaxWidth()
+            // Containers keep their own 10dp side margin now that the list rows no longer inset
+            // them; top-level replies go straight to their 16dp content padding so the avatar
+            // lines up with the section badge above.
+            .padding(horizontal = if (isContainer) 10.dp else 0.dp)
             .clip(if (isContainer) RoundedCornerShape(12.dp) else RectangleShape)
             .background(if (isContainer) COUITheme.colorScheme.surfaceContainer else Color.Transparent),
     ) {

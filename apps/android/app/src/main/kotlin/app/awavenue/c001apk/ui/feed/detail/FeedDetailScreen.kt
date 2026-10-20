@@ -302,7 +302,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                             key = { index, reply -> reply.entityId.ifEmpty { "reply-$index" } },
                                             contentType = { _, _ -> "reply" },
                                         ) { index, reply ->
-                                            Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp)) {
+                                            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                                                 ReplyCard(
                                                     reply = reply,
                                                     onOpenFeed = {
