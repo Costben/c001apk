@@ -1,0 +1,61 @@
+package app.awavenue.c001apk.ui.common
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.unit.Velocity
+import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.TopAppBarState
+
+/**
+ * Collapses the top row while scrolling up, but brings it back as soon as the content moves down,
+ * even in the middle of a list. [COUIScrollBehavior] only expands once the content is back at the
+ * top; here the downward scroll the list already consumed counts too.
+ */
+@Composable
+internal fun rememberTopRowScrollBehavior(
+    state: TopAppBarState,
+    scrolledPx: MutableFloatState,
+): ScrollBehavior {
+    val settle = COUIScrollBehavior(state = state)
+    return remember(state, settle, scrolledPx) {
+        object : ScrollBehavior {
+            override val state = state
+            override val isPinned = false
+            override val snapAnimationSpec = settle.snapAnimationSpec
+            override val flingAnimationSpec = settle.flingAnimationSpec
+            override val nestedScrollConnection = object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (available.y >= 0f) return Offset.Zero
+                    val previous = state.heightOffset
+                    state.heightOffset += available.y
+                    return Offset(0f, state.heightOffset - previous)
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    state.contentOffset += consumed.y
+                    scrolledPx.floatValue =
+                        (scrolledPx.floatValue - consumed.y).coerceAtLeast(0f)
+                    val delta = if (consumed.y > 0f) consumed.y else available.y
+                    if (delta <= 0f) return Offset.Zero
+                    val previous = state.heightOffset
+                    state.heightOffset += delta
+                    return Offset(0f, state.heightOffset - previous)
+                }
+
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                    if (available.y > 0f) state.contentOffset = 0f
+                    return settle.nestedScrollConnection.onPostFling(consumed, available)
+                }
+            }
+        }
+    }
+}

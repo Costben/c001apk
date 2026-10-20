@@ -35,18 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.CoolapkRepository
@@ -59,6 +55,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberTopRowScrollBehavior
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
@@ -67,14 +64,11 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.Scaffold
-import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
-import io.github.suqi8.coui.kmp.basic.TopAppBarState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -184,55 +178,6 @@ private fun Modifier.verticalDragWins(onVerticalDrag: (Boolean) -> Unit): Modifi
     }
 }
 
-/**
- * Collapses the top row while scrolling up, but brings it back as soon as the content moves down,
- * even in the middle of a list. [COUIScrollBehavior] only expands once the content is back at the
- * top; here the downward scroll the list already consumed counts too.
- */
-@Composable
-private fun rememberHomeScrollBehavior(
-    state: TopAppBarState,
-    scrolledPx: MutableFloatState,
-): ScrollBehavior {
-    val settle = COUIScrollBehavior(state = state)
-    return remember(state, settle, scrolledPx) {
-        object : ScrollBehavior {
-            override val state = state
-            override val isPinned = false
-            override val snapAnimationSpec = settle.snapAnimationSpec
-            override val flingAnimationSpec = settle.flingAnimationSpec
-            override val nestedScrollConnection = object : NestedScrollConnection {
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (available.y >= 0f) return Offset.Zero
-                    val previous = state.heightOffset
-                    state.heightOffset += available.y
-                    return Offset(0f, state.heightOffset - previous)
-                }
-
-                override fun onPostScroll(
-                    consumed: Offset,
-                    available: Offset,
-                    source: NestedScrollSource,
-                ): Offset {
-                    state.contentOffset += consumed.y
-                    scrolledPx.floatValue =
-                        (scrolledPx.floatValue - consumed.y).coerceAtLeast(0f)
-                    val delta = if (consumed.y > 0f) consumed.y else available.y
-                    if (delta <= 0f) return Offset.Zero
-                    val previous = state.heightOffset
-                    state.heightOffset += delta
-                    return Offset(0f, state.heightOffset - previous)
-                }
-
-                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                    if (available.y > 0f) state.contentOffset = 0f
-                    return settle.nestedScrollConnection.onPostFling(consumed, available)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun HomeScreen(
     outerPadding: PaddingValues,
@@ -266,7 +211,7 @@ fun HomeScreen(
     // How far the list has actually moved below its top. The top row's own collapse is not part of
     // it: pulling the row back down moves nothing in the list, so the material must not fade there.
     val scrolledPx = remember { mutableFloatStateOf(0f) }
-    val scrollBehavior = rememberHomeScrollBehavior(
+    val scrollBehavior = rememberTopRowScrollBehavior(
         rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
         scrolledPx,
     )

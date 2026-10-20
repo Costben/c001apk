@@ -31,8 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
@@ -46,6 +48,7 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private const val TOPIC_LIST_URL = "/v6/page/dataList?url=V11_VERTICAL_TOPIC&title=话题&page=1"
 
@@ -106,24 +109,24 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
             val selectedIndex = if (selected in list.indices) selected else 0
             val current = list[selectedIndex]
             Row(
-                Modifier
-                    .fillMaxSize()
-                    // Only the top inset is padding here: the bottom one rides inside the list, so
-                    // the content reaches the screen edge behind the floating bar.
-                    .padding(top = contentPadding.calculateTopPadding()),
+                Modifier.fillMaxSize(),
             ) {
                 CategoryRail(
                     titles = list.map { it.title },
                     selectedIndex = selectedIndex,
                     onSelected = { selected = it },
                     scrollBehavior = scrollBehavior,
+                    topInset = contentPadding.calculateTopPadding(),
                 )
                 CarouselContent(
                     url = current.url,
                     title = current.title,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     contentPadding = PaddingValues(
-                        top = 4.dp,
+                        // The list keeps the bar's height as leading space so its first card starts
+                        // below the bar, while the list itself runs under the bar and scrolls away
+                        // behind it.
+                        top = contentPadding.calculateTopPadding() + 4.dp,
                         bottom = contentPadding.calculateBottomPadding() + 12.dp,
                     ),
                     scrollBehavior = scrollBehavior,
@@ -146,10 +149,16 @@ private fun CategoryRail(
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
     scrollBehavior: ScrollBehavior,
+    topInset: Dp,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(selectedIndex) {
-        if (selectedIndex in titles.indices) listState.animateScrollToItem(selectedIndex)
+    val topInsetPx = with(LocalDensity.current) { topInset.roundToPx() }
+    LaunchedEffect(selectedIndex, topInsetPx) {
+        if (selectedIndex in titles.indices) {
+            // Keep the selected row clear of the bar: a plain scroll-to-item would park it at the
+            // very top, behind the material.
+            listState.animateScrollToItem(selectedIndex, scrollOffset = -topInsetPx)
+        }
     }
     LazyColumn(
         state = listState,
@@ -159,9 +168,9 @@ private fun CategoryRail(
             // The rail scrolls the page header like the list beside it, so a drag that starts on
             // the categories collapses the bar exactly the way the home feed does.
             .nestedScroll(scrollBehavior.nestedScrollConnection),
-        // The rail runs to the bottom edge, so its tail rides behind the floating bar and needs
-        // the bar's height as trailing space to stay reachable.
-        contentPadding = PaddingValues(bottom = RailBottomInset),
+        // The rail runs under the bar and to the bottom edge, so its tail rides behind the
+        // floating bar and needs the bar's height as trailing space to stay reachable.
+        contentPadding = PaddingValues(top = topInset, bottom = RailBottomInset),
     ) {
         itemsIndexed(titles) { index, title ->
             RailItem(

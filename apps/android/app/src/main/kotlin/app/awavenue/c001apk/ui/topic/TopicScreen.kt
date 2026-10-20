@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,8 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,10 +37,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,6 +63,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberTopRowScrollBehavior
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
@@ -70,7 +80,8 @@ import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
@@ -83,11 +94,14 @@ import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
+import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
@@ -103,6 +117,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private val TAB_ROW_VERTICAL_PADDING = 6.dp
 
 private enum class TopicSortType(val label: String) {
     Default("默认"),
@@ -157,7 +175,29 @@ private fun TopicPage(tag: String?, id: String?) {
     val isTopic = entityType == "topic"
     val tabList = topic.list("tabList")
     val selected = tabList.indexOfFirst { it.string("page_name") == topic.string("selectedTab") }
-    val scrollBehavior = COUIScrollBehavior()
+    val density = LocalDensity.current
+    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // Only the title row collapses. The limit is its own height, so the tab row stays pinned under
+    // the status bar once the title has scrolled away, the way the home header behaves.
+    val topRowHeightPx = with(density) { TopAppBarDefaults.CollapsedHeight.toPx() }
+    val scrolledPx = remember { mutableFloatStateOf(0f) }
+    val scrollBehavior = rememberTopRowScrollBehavior(
+        rememberTopAppBarState(initialHeightOffsetLimit = -topRowHeightPx),
+        scrolledPx,
+    )
+    SideEffect {
+        // The saved state keeps the limit it was created with, so a density change has to reapply it.
+        scrollBehavior.state.heightOffsetLimit = -topRowHeightPx
+    }
+    val collapseFraction: () -> Float = remember(scrollBehavior, topRowHeightPx) {
+        {
+            if (topRowHeightPx > 0f) {
+                (-scrollBehavior.state.heightOffset).coerceIn(0f, topRowHeightPx) / topRowHeightPx
+            } else {
+                0f
+            }
+        }
+    }
     val backdrop = rememberGlassBackdrop()
     val pagerState = rememberPagerState(initialPage = selected.coerceAtLeast(0)) { tabList.size }
     // The follow/block card belongs to the discussion list, not whichever tab happens to be first.
@@ -313,106 +353,185 @@ private fun TopicPage(tag: String?, id: String?) {
     Scaffold(
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
-                    title = title,
-                    modifier = Modifier.onGloballyPositioned {
-                        appBarBounds.reportPage(
-                            if (isTopic) Route.Topic(tag.orEmpty()) else Route.Product(id.orEmpty()),
-                            it.positionInRoot().y + it.size.height,
+                // The material is measured to the bar and draws its fade past it, the way the home
+                // header does; only the title row collapses.
+                val barHeightDp = statusBar + TopAppBarDefaults.CollapsedHeight +
+                    TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2
+                val materialExtra = AppBarBlurOverlayDefaults.ExtraHeight
+                val blurStartFraction = statusBar.value / (barHeightDp + materialExtra).value
+                val materialScrollFraction = remember(scrolledPx, scrollBehavior, density) {
+                    {
+                        // contentOffset lives in the bar's saved state, so a page rebuilt after a
+                        // post detail closes still knows how far its list is scrolled and keeps the
+                        // material on instead of dropping back to a bare tab row.
+                        val scrolled = maxOf(
+                            scrolledPx.floatValue,
+                            abs(scrollBehavior.state.contentOffset),
                         )
-                    },
-                    gradientGlass = true,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = { BackIcon(navigator) },
-                    actions = {
-                        if (!isBlocked) {
-                            HighlightedIconButton(onClick = {
-                                navigator.push(
-                                    Route.Search(
-                                        title = title,
-                                        pageType = if (isTopic) "tag" else "product_phone",
-                                        pageParam = if (isTopic) title else topic.string("id"),
-                                    ),
-                                )
-                            }) {
-                                Icon(COUIIcons.Search, contentDescription = "搜索")
-                            }
-                        }
-                        Box {
-                            HighlightedIconButton(onClick = { menu = true }) {
-                                Icon(COUIIcons.More, contentDescription = "菜单")
-                            }
-                            OverlayListPopup(
-                                show = menu,
-                                alignment = PopupPositionProvider.Align.BottomEnd,
-                                onDismissRequest = { menu = false },
-                            ) {
-                                ListPopupColumn {
-                                    val entries = buildList {
-                                        add("复制" to { context.copyText(shareUrl) })
-                                        add("分享" to { context.shareText(shareUrl) })
-                                        if (sortable) add("排序" to { showSort = true })
-                                        add((if (isFollow) "取消关注" else "关注") to { onFollowClick() })
-                                        add(
-                                            (if (isBlocked) "取消屏蔽" else "屏蔽") to {
-                                                if (isBlocked) {
-                                                    app.blacklist.unblockTopic(title)
-                                                } else {
-                                                    app.blacklist.blockTopic(title)
-                                                }
-                                                isBlocked = !isBlocked
-                                            },
-                                        )
-                                    }
-                                    entries.forEachIndexed { index, entry ->
-                                        DropdownImpl(
-                                            item = DropdownItem(text = entry.first),
-                                            optionSize = entries.size,
-                                            isSelected = false,
-                                            index = index,
-                                            groupKey = "topic-menu",
-                                            onSelectedIndexChange = {
-                                                menu = false
-                                                entry.second()
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                            OverlayListPopup(
-                                show = showSort,
-                                alignment = PopupPositionProvider.Align.BottomEnd,
-                                onDismissRequest = { showSort = false },
-                            ) {
-                                ListPopupColumn {
-                                    TopicSortType.entries.forEachIndexed { index, item ->
-                                        DropdownImpl(
-                                            item = DropdownItem(text = item.label),
-                                            optionSize = TopicSortType.entries.size,
-                                            isSelected = sortType == item,
-                                            index = index,
-                                            groupKey = "topic-sort",
-                                            onSelectedIndexChange = {
-                                                showSort = false
-                                                sortType = TopicSortType.entries[it]
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    bottomContent = {
-                        if (!isBlocked && tabList.size > 1) {
-                            TabRowWithContour(
-                                tabs = tabList.map { it.title },
-                                selectedTabIndex = pagerState.currentPage,
-                                onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        AppBarBlurOverlayDefaults.scrollAlpha(scrolled, density)
+                    }
+                }
+                AppBarBlurOverlay(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned {
+                            appBarBounds.reportPage(
+                                if (isTopic) Route.Topic(tag.orEmpty()) else Route.Product(id.orEmpty()),
+                                it.positionInRoot().y + it.size.height,
                             )
+                        },
+                    containerColor = COUITheme.colorScheme.surface,
+                    backdrop = backdrop,
+                    scrollFraction = materialScrollFraction,
+                    extraHeight = materialExtra,
+                    blurStartFraction = blurStartFraction,
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(statusBar))
+                        // The row keeps its full height and slides out of a box that shrinks with
+                        // the scroll, so the tab row rises into its place instead of leaving a gap.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .layout { measurable, constraints ->
+                                    val full = TopAppBarDefaults.CollapsedHeight.roundToPx()
+                                    val placeable = measurable.measure(
+                                        constraints.copy(minHeight = full, maxHeight = full),
+                                    )
+                                    val visible = (full * (1f - collapseFraction())).roundToInt()
+                                        .coerceIn(0, full)
+                                    layout(placeable.width, visible) { placeable.placeRelative(0, 0) }
+                                }
+                                .graphicsLayer { clip = collapseFraction() > 0f },
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(TopAppBarDefaults.CollapsedHeight)
+                                    .graphicsLayer {
+                                        translationY = -topRowHeightPx * collapseFraction()
+                                        alpha = 1f - collapseFraction()
+                                    }
+                                    .padding(start = 16.dp, end = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                BackIcon(navigator)
+                                Text(
+                                    text = title,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(start = TopAppBarDefaults.NavigationIconGap),
+                                    fontSize = with(density) { 24.dp.toSp() },
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (!isBlocked) {
+                                    HighlightedIconButton(onClick = {
+                                        navigator.push(
+                                            Route.Search(
+                                                title = title,
+                                                pageType = if (isTopic) "tag" else "product_phone",
+                                                pageParam = if (isTopic) title else topic.string("id"),
+                                            ),
+                                        )
+                                    }) {
+                                        Icon(COUIIcons.Search, contentDescription = "搜索")
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier.padding(
+                                        start = TopAppBarDefaults.ActionMenuItemSpacing,
+                                    ),
+                                ) {
+                                    HighlightedIconButton(onClick = { menu = true }) {
+                                        Icon(COUIIcons.More, contentDescription = "菜单")
+                                    }
+                                    OverlayListPopup(
+                                        show = menu,
+                                        alignment = PopupPositionProvider.Align.BottomEnd,
+                                        onDismissRequest = { menu = false },
+                                    ) {
+                                        ListPopupColumn {
+                                            val entries = buildList {
+                                                add("复制" to { context.copyText(shareUrl) })
+                                                add("分享" to { context.shareText(shareUrl) })
+                                                if (sortable) add("排序" to { showSort = true })
+                                                add((if (isFollow) "取消关注" else "关注") to { onFollowClick() })
+                                                add(
+                                                    (if (isBlocked) "取消屏蔽" else "屏蔽") to {
+                                                        if (isBlocked) {
+                                                            app.blacklist.unblockTopic(title)
+                                                        } else {
+                                                            app.blacklist.blockTopic(title)
+                                                        }
+                                                        isBlocked = !isBlocked
+                                                    },
+                                                )
+                                            }
+                                            entries.forEachIndexed { index, entry ->
+                                                DropdownImpl(
+                                                    item = DropdownItem(text = entry.first),
+                                                    optionSize = entries.size,
+                                                    isSelected = false,
+                                                    index = index,
+                                                    groupKey = "topic-menu",
+                                                    onSelectedIndexChange = {
+                                                        menu = false
+                                                        entry.second()
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    OverlayListPopup(
+                                        show = showSort,
+                                        alignment = PopupPositionProvider.Align.BottomEnd,
+                                        onDismissRequest = { showSort = false },
+                                    ) {
+                                        ListPopupColumn {
+                                            TopicSortType.entries.forEachIndexed { index, item ->
+                                                DropdownImpl(
+                                                    item = DropdownItem(text = item.label),
+                                                    optionSize = TopicSortType.entries.size,
+                                                    isSelected = sortType == item,
+                                                    index = index,
+                                                    groupKey = "topic-sort",
+                                                    onSelectedIndexChange = {
+                                                        showSort = false
+                                                        sortType = TopicSortType.entries[it]
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    },
-                )
+                        if (!isBlocked && tabList.size > 1) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(vertical = TAB_ROW_VERTICAL_PADDING)
+                                        .height(TabRowDefaults.TabRowWithContourHeight),
+                                ) {
+                                    TabRowWithContour(
+                                        tabs = tabList.map { it.title },
+                                        selectedTabIndex = pagerState.currentPage,
+                                        onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         floatingActionButton = {
