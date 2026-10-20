@@ -214,6 +214,12 @@ fun SettingsScreen() {
                     SmallTitle("c001apk")
                     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
                         ArrowPreference(
+                            title = "使用教程",
+                            summary = "从官方酷安导入设备标识，减少人机验证",
+                            startAction = { PreferenceStartIcon(COUIIcons.Info) },
+                            onClick = rememberHapticClick { settings.restartOnboarding() },
+                        )
+                        ArrowPreference(
                             title = "协议参数",
                             summary = "${settings.deviceParams.brand} ${settings.deviceParams.model}",
                             startAction = { PreferenceStartIcon(COUIIcons.Settings) },

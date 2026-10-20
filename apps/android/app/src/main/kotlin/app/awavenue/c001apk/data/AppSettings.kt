@@ -107,6 +107,10 @@ class AppSettings(context: Context) {
     var szlmId by mutableStateOf(prefs.getString(KEY_SZLM_ID, "").orEmpty())
         private set
 
+    /** Whether the first-launch guide has been seen and dismissed. */
+    var onboardingDone by mutableStateOf(prefs.getBoolean(KEY_ONBOARDING_DONE, false))
+        private set
+
     val installTime: String
     var deviceParams: DeviceParams
         private set
@@ -172,6 +176,18 @@ class AppSettings(context: Context) {
         szlmId = value
         prefs.edit { putString(KEY_SZLM_ID, value) }
         deviceParams = deviceParams.reissueXAppDevice(value).also(::writeDeviceParams)
+    }
+
+    fun completeOnboarding() {
+        if (onboardingDone) return
+        put { putBoolean(KEY_ONBOARDING_DONE, true) }
+        onboardingDone = true
+    }
+
+    /** Shows the first-launch guide again from 设置, without touching the saved device token. */
+    fun restartOnboarding() {
+        put { putBoolean(KEY_ONBOARDING_DONE, false) }
+        onboardingDone = false
     }
 
     /** Rebuilds the spoofed device profile, and with it the user agent and `X-App-Device`. */
@@ -245,6 +261,7 @@ class AppSettings(context: Context) {
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
         const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"
         const val KEY_SZLM_ID = "szlmId"
+        const val KEY_ONBOARDING_DONE = "onboardingDone"
         const val KEY_INSTALL_TIME = "installTime"
         val DEVICE_KEYS = listOf(
             "versionName", "apiVersion", "versionCode", "manufacturer", "brand", "model",

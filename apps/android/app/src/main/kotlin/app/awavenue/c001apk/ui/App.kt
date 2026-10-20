@@ -10,6 +10,7 @@ import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.platform.MessageNotifier
 import app.awavenue.c001apk.ui.feed.detail.CaptchaVerifierHost
 import app.awavenue.c001apk.ui.nav.AppNavHost
+import app.awavenue.c001apk.ui.onboarding.OnboardingScreen
 import app.awavenue.c001apk.ui.theme.AppTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -28,6 +29,10 @@ fun App(app: C001apkApp, deepLinks: Flow<String> = emptyFlow()) {
             Box(Modifier.fillMaxSize()) {
                 AppNavHost(deepLinks = deepLinks)
                 MessageNotifier.RequestPermission()
+                // The guide covers the app on first launch and returns from 设置, until dismissed.
+                if (!app.settings.onboardingDone) {
+                    OnboardingScreen(onClose = app.settings::completeOnboarding)
+                }
                 // The captcha page mounts as the last child so it draws over the whole app.
                 CaptchaVerifierHost()
             }
