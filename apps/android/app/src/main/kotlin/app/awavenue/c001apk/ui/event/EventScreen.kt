@@ -44,6 +44,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -172,6 +173,7 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
                 selectedTabIndex = pagerState.currentPage,
                 onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = appTabRowColors(),
             )
         }
         HorizontalPager(

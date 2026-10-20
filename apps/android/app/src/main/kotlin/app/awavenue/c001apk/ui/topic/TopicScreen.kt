@@ -59,6 +59,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
@@ -556,6 +557,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                         selectedTabIndex = pagerState.currentPage,
                                         onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
                                         modifier = Modifier.fillMaxWidth(),
+                                        colors = appTabRowColors(),
                                     )
                                 }
                             }

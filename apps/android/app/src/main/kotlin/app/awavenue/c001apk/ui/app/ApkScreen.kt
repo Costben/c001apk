@@ -52,6 +52,7 @@ import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
@@ -373,6 +374,7 @@ fun ApkScreen(packageName: String) {
                                         selectedTabIndex = tab.ordinal,
                                         onTabSelected = { tab = AppCommentTab.entries[it] },
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                        colors = appTabRowColors(),
                                     )
                                 }
                                 HorizontalDivider()

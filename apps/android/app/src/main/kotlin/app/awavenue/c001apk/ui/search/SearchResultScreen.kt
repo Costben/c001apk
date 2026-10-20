@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -154,8 +155,8 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                     },
                     bottomContent = {
                         if (title.isEmpty()) {
-                            // ColorOS 17's segment control paints its own flat translucent container,
-                            // so the tabs sit straight on the page with no glass capsule behind them.
+                            // ColorOS 17's segment control paints an opaque capsule, so the tabs
+                            // sit on their own surface instead of the page showing through.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -167,6 +168,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                     selectedTabIndex = pagerState.currentPage,
                                     onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
                                     modifier = Modifier.fillMaxWidth(),
+                                    colors = appTabRowColors(),
                                     // Six labels share the narrower capsule, as on the home bar.
                                     minWidth = 44.dp,
                                     segmentPadding = 8.dp,

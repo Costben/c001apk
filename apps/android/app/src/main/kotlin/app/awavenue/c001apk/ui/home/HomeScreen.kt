@@ -52,6 +52,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.TopBarIconButton
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -359,9 +360,9 @@ fun HomeScreen(
                             .longPressAnywhere(openTabEditor),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // ColorOS 17's segment control (COUISegmentButtonLayout) paints its own flat
-                        // translucent container — #0F000000 light / #1FFFFFFF dark — with no glass,
-                        // rim or shadow, so the tabs sit straight on the app bar material.
+                        // ColorOS 17's segment control (COUISegmentButtonLayout) paints an opaque
+                        // capsule: the container hides the cards behind it instead of letting the
+                        // app bar material show through, with no glass or rim on top.
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -376,6 +377,7 @@ fun HomeScreen(
                                     scope.launch { pagerState.animateScrollToPage(it) }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
+                                colors = appTabRowColors(),
                                 // Six labels have to share the narrower capsule: COUI's 52dp floor and
                                 // 12dp segment padding overflow it, so the segments give up some of
                                 // both instead of the capsule growing.

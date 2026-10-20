@@ -45,6 +45,7 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
@@ -444,6 +445,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.stickyReplyHeader(vie
                     tabs = ReplySortType.entries.map { it.label },
                     selectedTabIndex = viewModel.replySort.ordinal,
                     onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
+                    colors = appTabRowColors(),
                     height = TabRowDefaults.TabRowWithContourTinyHeight,
                     cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
                     contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,

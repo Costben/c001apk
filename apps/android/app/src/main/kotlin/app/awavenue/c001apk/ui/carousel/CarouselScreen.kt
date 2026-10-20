@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -189,6 +190,7 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
             selectedTabIndex = pagerState.currentPage,
             onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            colors = appTabRowColors(),
         )
         HorizontalPager(
             state = pagerState,

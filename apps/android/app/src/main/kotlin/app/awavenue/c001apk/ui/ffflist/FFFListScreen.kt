@@ -16,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.HistoryType
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -114,6 +115,7 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
                                 selectedTabIndex = pagerState.currentPage,
                                 onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                colors = appTabRowColors(),
                             )
                         }
                     },
