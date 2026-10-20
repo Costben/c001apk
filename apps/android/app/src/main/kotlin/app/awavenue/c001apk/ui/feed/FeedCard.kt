@@ -90,6 +90,19 @@ internal object FeedActions {
     private val removedFeeds = mutableStateMapOf<String, Boolean>()
     private val blockedUsers = mutableStateMapOf<String, Boolean>()
 
+    /**
+     * Feeds whose body overflowed the preview. A page rebuilt after a detail closes lays its
+     * cards out again, and the overflow is only known after that first layout; keeping the last
+     * answer stops 查看更多 from dropping out for the frame in between.
+     */
+    private val truncatedFeeds = mutableSetOf<String>()
+
+    fun wasTruncated(id: String): Boolean = id in truncatedFeeds
+
+    fun rememberTruncated(id: String, truncated: Boolean) {
+        if (truncated) truncatedFeeds.add(id) else truncatedFeeds.remove(id)
+    }
+
     fun like(feed: Entity): FeedLike? = likes[feed.id]?.takeIf { it.source === feed }
 
     fun rememberLike(feed: Entity, liked: Boolean, count: String) {
@@ -240,13 +253,16 @@ fun FeedCard(
         }
         if (feed.message.isNotEmpty()) {
             Spacer(Modifier.height(if (feed.messageTitle.isNotEmpty()) 4.dp else 10.dp))
-            var truncated by remember(feed) { mutableStateOf(false) }
+            var truncated by remember(feed) { mutableStateOf(FeedActions.wasTruncated(feed.id)) }
             HtmlText(
                 feed.message,
                 style = HtmlTextDefaults.style().copy(fontSize = 16.sp),
                 maxLines = PreviewMaxLines,
                 onTextClick = openFeed,
-                onTextLayout = { truncated = it.hasVisualOverflow },
+                onTextLayout = {
+                    truncated = it.hasVisualOverflow
+                    FeedActions.rememberTruncated(feed.id, it.hasVisualOverflow)
+                },
             )
             if (truncated) {
                 Text(
