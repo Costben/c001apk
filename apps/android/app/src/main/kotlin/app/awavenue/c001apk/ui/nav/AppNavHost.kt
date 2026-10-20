@@ -233,10 +233,17 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                                     alignCardBelowBar(origin) { appBarBounds.bottom + appBarFadePx }
                                 }
                             } else {
-                                // A page with its own bar is rebuilt for this return; its row
-                                // brings itself down once it is composed again.
+                                // A page with its own bar is rebuilt for this return. Its list
+                                // restores the position it had when the row was tapped, so work
+                                // out where that list must start to clear the bar and hand the
+                                // row a jump target instead of scrolling after it is on screen.
                                 origin.rowKey?.let { rowKey ->
-                                    appBarBounds.requestReturn(rowKey) {
+                                    val cardTop = origin.lastBounds?.top ?: 0f
+                                    val barBottom = appBarBounds.bottomFor(covered.route) + appBarFadePx
+                                    val target = origin.listState?.let { list ->
+                                        appBarBounds.listScrollTarget(list, cardTop, barBottom)
+                                    }
+                                    appBarBounds.requestReturn(rowKey, target) {
                                         appBarBounds.bottomFor(covered.route) + appBarFadePx
                                     }
                                 }

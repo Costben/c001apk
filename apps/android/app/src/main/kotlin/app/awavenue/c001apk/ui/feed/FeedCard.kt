@@ -134,15 +134,23 @@ fun FeedCard(
         origin.rowKey = feed.id
     }
     // The page this row lives on is disposed while another one covers it; when it comes back its
-    // rows are new, so the row the host wants below the bar has to move itself.
+    // rows are new. The host works out where the list must start while the page is still covered,
+    // so the row jumps there on the first measure instead of scrolling after it is on screen.
     LaunchedEffect(feed.id, listState) {
         if (listState == null) return@LaunchedEffect
-        repeat(6) {
+        repeat(4) {
+            val pending = appBarBounds.pendingReturnFor(feed.id)
+            if (pending != null) {
+                val target = pending.target
+                if (target != null) {
+                    listState.requestScrollToItem(target.index, target.offset)
+                } else {
+                    appBarBounds.alignReturnedRow(feed.id, origin, listState)
+                }
+                appBarBounds.clearReturn(feed.id)
+                return@LaunchedEffect
+            }
             withFrameNanos { }
-            if (appBarBounds.pendingReturnFor(feed.id) == null) return@repeat
-            appBarBounds.alignReturnedRow(feed.id, origin, listState)
-            appBarBounds.clearReturn(feed.id)
-            return@LaunchedEffect
         }
     }
     val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }

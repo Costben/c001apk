@@ -5,11 +5,20 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.layout.positionInRoot
+import kotlin.math.roundToInt
 
 /** A row that must clear its page's bar once the page that owns it is composed again. */
-class ReturnLift(val rowKey: Any, val barBottom: () -> Float) {
+class ReturnLift(
+    val rowKey: Any,
+    val barBottom: () -> Float,
+    /** Where the rebuilt list must start, computed before the covered page was disposed. */
+    val target: ListScrollTarget? = null,
+) {
     internal val at: Long = android.os.SystemClock.uptimeMillis()
 }
+
+/** A scroll position: the first visible item and how much of it sits above the viewport. */
+class ListScrollTarget(val index: Int, val offset: Int)
 
 /** A return left unclaimed this long no longer belongs to the page being composed. */
 private const val ReturnLiftTtlMillis = 1500L
@@ -43,8 +52,25 @@ class AppBarBounds {
     var pendingReturn: ReturnLift? = null
         private set
 
-    fun requestReturn(rowKey: Any, barBottom: () -> Float) {
-        pendingReturn = ReturnLift(rowKey, barBottom)
+    fun requestReturn(rowKey: Any, target: ListScrollTarget?, barBottom: () -> Float) {
+        pendingReturn = ReturnLift(rowKey, barBottom, target)
+    }
+
+    /**
+     * Where [state] must start so a row whose top is [cardTop] ends up below [barBottom].
+     *
+     * Read while the covered page still has its last layout: the rebuilt list restores the same
+     * scroll position, so jumping to this target on its first measure puts the row in place
+     * without the visible scroll the page would otherwise do after it is already on screen.
+     */
+    fun listScrollTarget(state: LazyListState, cardTop: Float, barBottom: Float): ListScrollTarget? {
+        val needed = barBottom - cardTop
+        if (needed <= 0.5f) return null
+        // The item that will sit at the viewport start once the list moves back by [needed].
+        val hit = state.layoutInfo.visibleItemsInfo.firstOrNull {
+            -needed >= it.offset && -needed < it.offset + it.size
+        } ?: return null
+        return ListScrollTarget(hit.index, (-(hit.offset + needed)).roundToInt().coerceAtLeast(0))
     }
 
     fun clearReturn(rowKey: Any) {
