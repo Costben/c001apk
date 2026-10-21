@@ -35,6 +35,9 @@ class PageMemory {
     /** The page a pager was showing, keyed like [lists]. */
     val pages = HashMap<Any, Int>()
 
+    /** Choices the page made (a sort order, a filter), keyed by name, so it reopens with them. */
+    val selections = HashMap<String, Any>()
+
     /** Top bar offsets: the collapse limit, how far it is collapsed, and the content offset. */
     val bars = HashMap<Any, List<Float>>()
 

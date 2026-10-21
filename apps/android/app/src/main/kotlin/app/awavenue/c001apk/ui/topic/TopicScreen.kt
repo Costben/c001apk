@@ -126,6 +126,9 @@ import kotlin.math.roundToInt
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
 
+/** Page-memory key for the discussion sort the user picked on a product page. */
+private const val TOPIC_SORT_KEY = "topic-sort"
+
 private enum class TopicSortType(val label: String) {
     Default("默认"),
     Dateline("最新发布"),
@@ -234,7 +237,16 @@ private fun TopicPage(tag: String?, id: String?) {
     var isFollow by remember(topic) { mutableStateOf(topic.obj("userAction")?.string("follow") == "1") }
     var followPending by remember(topic) { mutableStateOf(false) }
     var isBlocked by remember(topic) { mutableStateOf(app.blacklist.topicBlacklist.any { title.contains(it) }) }
-    var sortType by remember { mutableStateOf(TopicSortType.Default) }
+    // The sort is a choice about this page, not a transient one: a post opened on top of the page
+    // used to bring the discussion list back at its default order.
+    var sortType by remember {
+        mutableStateOf(pageMemory?.selections?.get(TOPIC_SORT_KEY) as? TopicSortType ?: TopicSortType.Default)
+    }
+    // Read here, in the composition, so this page is subscribed to the choice. The discussion list
+    // is the only other reader, and it recomposes in its own scope: without this read the page
+    // never recomposes when the sort changes, and the effect below keeps the old order on the entry.
+    val recordedSort = sortType
+    SideEffect { pageMemory?.selections?.put(TOPIC_SORT_KEY, recordedSort) }
     var menu by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showCompose by remember { mutableStateOf(false) }
