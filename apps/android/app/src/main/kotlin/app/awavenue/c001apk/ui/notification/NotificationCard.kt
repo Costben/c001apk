@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -174,7 +175,12 @@ fun NotificationCard(item: Entity, onOpen: () -> Unit, onDelete: () -> Unit, onB
                     Icon(
                         COUIIcons.More,
                         contentDescription = "更多",
-                        tint = COUITheme.colorScheme.outline,
+                        tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        // The 48dp button keeps the touch target; the glyph stays at the username's
+                        // height instead of towering over the first line. The button centres it
+                        // 16dp below the card's edge, so it is lifted to the row's own 10dp inset
+                        // to sit on the same line as the name.
+                        modifier = Modifier.size(16.dp).offset(y = (-6).dp),
                     )
                 }
                 MoreMenu(
