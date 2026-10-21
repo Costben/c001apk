@@ -44,6 +44,8 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.user.UserRow
 import app.awavenue.c001apk.ui.user.UserRowTypes
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.Chip
+import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.PageIndicator
 import io.github.suqi8.coui.kmp.basic.SmallTitle
@@ -65,11 +67,20 @@ fun EntityItem(
     onBlock: ((uid: String, id: String?) -> Unit)? = null,
     onDelete: ((id: String, fid: String?) -> Unit)? = null,
     onLike: ((id: String, liked: Boolean) -> Unit)? = null,
+    onSortSelected: ((url: String) -> Unit)? = null,
     horizontalPadding: Dp = ItemPadding,
 ) {
     val padded = Modifier.padding(horizontal = horizontalPadding)
     when {
         item.entityType == "feed" -> if (!FeedActions.isHidden(item)) FeedCard(item, padded)
+        // The topic list hands its order to the list itself: `withSortCard=1` makes the server
+        // prepend this card, so the page has no sort entry in its overflow menu.
+        item.entityTemplate == "sortSelectCard" -> {
+            val openLink = rememberLinkOpener()
+            SortSelectCard(item, padded) { option ->
+                if (onSortSelected != null) onSortSelected(option.url) else openLink(option.url, "")
+            }
+        }
         item.entityTemplate == "imageCarouselCard_1" -> CarouselCard(item, padded)
         item.entityTemplate == "iconLinkGridCard" -> IconGridCard(item, padded)
         item.entityTemplate == "iconMiniGridCard" -> MiniGridCard(item, padded)
@@ -127,6 +138,41 @@ fun EntityItem(
         item.entityType == "collection" -> CollectionRow(item, padded)
         item.entityType in appCardTypes -> AppRow(item, padded)
         else -> EntityRowCard(item, padded)
+    }
+}
+
+/**
+ * `sortSelectCard`: the order choices a topic list can reload itself with.
+ *
+ * Every option is a `/page?url=<encoded list>` link; [onSelect] lets the list that owns the card
+ * swap its url in place instead of pushing the page wrapper.
+ */
+@Composable
+internal fun SortSelectCard(
+    item: Entity,
+    modifier: Modifier,
+    selected: String? = item.nested("extraData")?.string("selectedTab"),
+    onSelect: (Entity) -> Unit,
+) {
+    Card(modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
+        Column {
+            Text(
+                item.title.ifEmpty { "排序规则" },
+                style = COUITheme.textStyles.body1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            Spacer(Modifier.height(8.dp))
+            FlowLayout(itemSpacing = 8.dp, lineSpacing = 8.dp) {
+                item.entities.forEach { option ->
+                    Chip(
+                        selected = option.title == selected,
+                        onClick = { onSelect(option) },
+                        label = option.title,
+                        minWidth = 0.dp,
+                    )
+                }
+            }
+        }
     }
 }
 

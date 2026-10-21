@@ -28,6 +28,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,8 +73,10 @@ import app.awavenue.c001apk.ui.feed.FeedActions
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.FooterStatus
+import app.awavenue.c001apk.ui.feed.ItemPadding
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
+import app.awavenue.c001apk.ui.feed.SortSelectCard
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
@@ -250,6 +253,9 @@ private fun TopicPage(tag: String?, id: String?) {
     var menu by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showCompose by remember { mutableStateOf(false) }
+    // A tab can carry a `sortSelectCard` whose options point at the same list with a different
+    // `sortField`. Remember the chosen url per tab so the list reloads in place.
+    val sortUrls = remember(topic) { mutableStateMapOf<Int, String>() }
 
     val sortable = entityType == "product" && tabList.getOrNull(pagerState.currentPage)?.title == "讨论"
     val shareUrl = Protocol.shareLink(if (isTopic) "t" else "product", if (isTopic) title else topic.string("id"))
@@ -609,19 +615,41 @@ private fun TopicPage(tag: String?, id: String?) {
             ) { page ->
                 val tab = tabList[page]
                 val discuss = entityType == "product" && tab.title == "讨论"
-                val url = if (discuss) discussUrl(topic.string("id"), sortType) else tab.url
+                val url = if (discuss) discussUrl(topic.string("id"), sortType) else sortUrls[page] ?: tab.url
                 val listTitle = if (discuss) discussTitle(sortType) else tab.title
-                val viewModel = viewModel(key = "topic-$url-$listTitle") {
+                // A topic tab keeps one view model while the sort card swaps its order, so the card
+                // survives the reload instead of coming back only if the server sends it again.
+                val viewModelKey = if (discuss) "topic-$url-$listTitle" else "topic-tab-$page"
+                val viewModel = viewModel(key = viewModelKey) {
                     FeedListViewModel(
                         PageLoader { p, first, last -> app.repository.dataList(url, listTitle, p, first, last) },
                     )
+                }
+                val onSortSelected: ((Entity) -> Unit)? = if (discuss) {
+                    null
+                } else {
+                    { option ->
+                        val newUrl = sortOptionUrl(option.url)
+                        sortUrls[page] = newUrl
+                        viewModel.selectSort(option.title)
+                        viewModel.switchList(
+                            PageLoader { p, first, last ->
+                                app.repository.dataList(newUrl, listTitle, p, first, last)
+                            },
+                        )
+                    }
                 }
                 val padding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 12.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp,
                 )
                 if (page == headerPage) {
-                    TopicFeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding) {
+                    TopicFeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = padding,
+                        onSortSelected = onSortSelected,
+                    ) {
                         TopicHeader(
                             topic = topic,
                             isFollow = isFollow,
@@ -642,7 +670,12 @@ private fun TopicPage(tag: String?, id: String?) {
                         )
                     }
                 } else {
-                    FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = padding)
+                    FeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = padding,
+                        onSortSelected = onSortSelected,
+                    )
                 }
             }
         }
@@ -701,6 +734,12 @@ private fun BackIcon(navigator: Navigator) {
     TopBarIconButton(onClick = { navigator.pop() }) {
         Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
     }
+}
+
+/** A sort card option wraps its list as `/page?url=<encoded>`; the list wants the inner url. */
+private fun sortOptionUrl(raw: String): String {
+    val prefix = "/page?url="
+    return if (raw.startsWith(prefix)) Uri.decode(raw.removePrefix(prefix)) else raw
 }
 
 private fun discussUrl(id: String, sort: TopicSortType) = when (sort) {
@@ -790,6 +829,7 @@ private fun TopicFeedList(
     viewModel: FeedListViewModel,
     scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
+    onSortSelected: ((Entity) -> Unit)? = null,
     header: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -827,6 +867,15 @@ private fun TopicFeedList(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item(contentType = "header") { header() }
+                viewModel.sortCard?.let { card ->
+                    item(contentType = "sortCard") {
+                        SortSelectCard(
+                            card,
+                            Modifier.padding(horizontal = ItemPadding),
+                            viewModel.selectedSort,
+                        ) { option -> onSortSelected?.invoke(option) }
+                    }
+                }
                 when (val status = viewModel.status) {
                     ListStatus.Loading -> item(contentType = "state") { StateBox { InfiniteProgressIndicator() } }
                     ListStatus.Empty -> item(contentType = "state") {

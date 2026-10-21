@@ -37,7 +37,7 @@ fun interface PageLoader {
  * Cursor paging shared by every Coolapk list: `page` advances on success while `firstItem`
  * and `lastItem` carry the ids the server uses to continue the stream.
  */
-class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
+class FeedListViewModel(private var loader: PageLoader) : ViewModel() {
     var items by mutableStateOf<List<Entity>>(emptyList())
         private set
     var status by mutableStateOf<ListStatus>(ListStatus.Loading)
@@ -45,6 +45,14 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
     var footer by mutableStateOf<FooterStatus>(FooterStatus.Idle)
         private set
     var isRefreshing by mutableStateOf(false)
+        private set
+
+    /** The `sortSelectCard` the list opened with; later orders may omit it. */
+    var sortCard by mutableStateOf<Entity?>(null)
+        private set
+
+    /** The sort option the user picked, or the one the card marked when the list opened. */
+    var selectedSort by mutableStateOf<String?>(null)
         private set
 
     /** Set when a pull-to-refresh fails while older items are still on screen. */
@@ -55,6 +63,7 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
     private var lastItem: String? = null
     private var isEnd = false
     private var isLoading = false
+    private var requestId = 0
 
     init {
         load(isRefresh = true)
@@ -64,6 +73,26 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
         if (isLoading) return
         isRefreshing = items.isNotEmpty()
         load(isRefresh = true)
+    }
+
+    /** Reloads the list with another order of the same page, keeping its sort card. */
+    fun switchList(loader: PageLoader) {
+        this.loader = loader
+        items = emptyList()
+        status = ListStatus.Loading
+        footer = FooterStatus.Idle
+        refreshError = null
+        isRefreshing = false
+        page = 1
+        firstItem = null
+        lastItem = null
+        isEnd = false
+        load(isRefresh = true)
+    }
+
+    /** Marks the chosen option on [sortCard]; the caller reloads the list through [switchList]. */
+    fun selectSort(title: String) {
+        selectedSort = title
     }
 
     fun loadMore() {
@@ -94,6 +123,7 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
     }
 
     private fun load(isRefresh: Boolean) {
+        val id = ++requestId
         isLoading = true
         val requestPage = if (isRefresh) 1 else page
         val requestFirst = if (isRefresh) null else firstItem
@@ -103,13 +133,24 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
         viewModelScope.launch {
             try {
                 val result = loader.load(requestPage, requestFirst, requestLast)
+                // A switched list cancels the answers the previous order still has in flight.
+                if (id != requestId) return@launch
                 if (isRefresh) {
                     page = 1
                     firstItem = null
                     lastItem = null
                     isEnd = false
                 }
-                if (result.isEmpty()) {
+                // The order card only comes with the first order the server sent. Keep it so the
+                // list can still offer the other orders after switching away from that url.
+                result.firstOrNull { it.entityTemplate == "sortSelectCard" }?.let { card ->
+                    sortCard = card
+                    if (selectedSort == null) {
+                        selectedSort = card.nested("extraData")?.string("selectedTab")
+                    }
+                }
+                val content = result.filterNot { it.entityTemplate == "sortSelectCard" }
+                if (content.isEmpty()) {
                     isEnd = true
                     if (isRefresh) {
                         items = emptyList()
@@ -118,9 +159,9 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
                         footer = FooterStatus.End
                     }
                 } else {
-                    firstItem = firstItem ?: result.first().id
-                    lastItem = result.last().id
-                    val merged = if (isRefresh) result else items + result
+                    firstItem = firstItem ?: content.first().id
+                    lastItem = content.last().id
+                    val merged = if (isRefresh) content else items + content
                     val seen = HashSet<String>()
                     // Contact rows share their own entityId (the signed-in account); the followed
                     // side is what tells them apart.
@@ -135,6 +176,7 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (id != requestId) return@launch
                 if (BuildConfig.DEBUG) Log.w("FeedList", "page $requestPage failed", e)
                 val message = ApiFailure.from(e).message
                 when {
@@ -146,8 +188,10 @@ class FeedListViewModel(private val loader: PageLoader) : ViewModel() {
                     }
                 }
             } finally {
-                isLoading = false
-                isRefreshing = false
+                if (id == requestId) {
+                    isLoading = false
+                    isRefreshing = false
+                }
             }
         }
     }

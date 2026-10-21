@@ -547,6 +547,7 @@ class CoolapkRepository(
             "imageCarouselCard_1", "iconLinkGridCard", "iconMiniScrollCard", "iconMiniGridCard",
             "imageSquareScrollCard", "titleCard", "iconScrollCard", "imageTextScrollCard",
             "iconTabLinkGridCard", "verticalColumnsFullPageCard", "noMoreDataCard", "time", "messageCard",
+            "sortSelectCard",
         )
 
         /** `data-request-hash` sits on the login page's `<Body>` element. */

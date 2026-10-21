@@ -27,9 +27,11 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.ReturnTopController
+import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.rememberPageListState
@@ -55,10 +57,12 @@ fun FeedList(
     contentPadding: PaddingValues,
     returnTop: ReturnTopController? = null,
     itemPadding: Dp = ItemPadding,
+    onSortSelected: ((Entity) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
+    val openLink = rememberLinkOpener()
     val listState = rememberPageListState(viewModel)
 
     val onBlock: (String, String?) -> Unit = { uid, _ ->
@@ -163,6 +167,21 @@ fun FeedList(
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+                        viewModel.sortCard?.let { card ->
+                            item(contentType = "sortCard") {
+                                SortSelectCard(
+                                    card,
+                                    Modifier.padding(horizontal = itemPadding),
+                                    viewModel.selectedSort,
+                                ) { option ->
+                                    if (onSortSelected != null) {
+                                        onSortSelected(option)
+                                    } else {
+                                        openLink(option.url, "")
+                                    }
+                                }
+                            }
+                        }
                         itemsIndexed(
                             viewModel.items.filterNot { FeedActions.isHidden(it) },
                             contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
