@@ -44,6 +44,7 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
@@ -576,35 +577,17 @@ private fun FeedCounters(feed: Entity, modifier: Modifier = Modifier, onLike: ((
             overflow = TextOverflow.Ellipsis,
         )
         if (feed.replyNum.isNotEmpty()) {
-            LikeCount(AppIcons.ChatBubbleOutlined, feed.replyNum, highlighted = false, onClick = null)
+            CounterButton(AppIcons.ChatBubbleOutlined, feed.replyNum, highlighted = false, onClick = null)
         }
         if (feed.likeNum.isNotEmpty()) {
             Spacer(Modifier.width(12.dp))
-            LikeCount(
+            CounterButton(
                 if (feed.isLiked) AppIcons.ThumbUp else AppIcons.ThumbUpOutlined,
                 feed.likeNum,
                 feed.isLiked,
                 onLike,
             )
         }
-    }
-}
-
-@Composable
-private fun LikeCount(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    value: String,
-    highlighted: Boolean,
-    onClick: (() -> Unit)?,
-) {
-    val color = if (highlighted) COUITheme.colorScheme.primary else COUITheme.colorScheme.onSurfaceVariantSummary
-    Row(
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = color)
-        Spacer(Modifier.width(4.dp))
-        Text(value, style = COUITheme.textStyles.footnote1, color = color)
     }
 }
 

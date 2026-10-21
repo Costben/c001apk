@@ -42,6 +42,7 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
@@ -393,27 +394,16 @@ private fun ReplyBottomInfo(reply: Entity, onLike: ((id: String, liked: Boolean)
         if (reply.likeNum.isNotEmpty()) {
             Spacer(Modifier.width(12.dp))
             val liked = reply.isLiked
-            Row(
-                modifier = if (app.session.isLogin && onLike != null) {
-                    Modifier.combinedClickable(onClick = { onLike(reply.id, liked) })
+            CounterButton(
+                icon = if (liked) AppIcons.ThumbUp else AppIcons.ThumbUpOutlined,
+                value = reply.likeNum,
+                highlighted = liked,
+                onClick = if (app.session.isLogin && onLike != null) {
+                    { onLike(reply.id, liked) }
                 } else {
-                    Modifier
+                    null
                 },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    if (liked) AppIcons.ThumbUp else AppIcons.ThumbUpOutlined,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (liked) COUITheme.colorScheme.primary else COUITheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    reply.likeNum,
-                    style = COUITheme.textStyles.footnote1,
-                    color = if (liked) COUITheme.colorScheme.primary else COUITheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
+            )
         }
     }
 }

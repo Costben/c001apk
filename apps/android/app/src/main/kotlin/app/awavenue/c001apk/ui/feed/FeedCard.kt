@@ -32,7 +32,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +42,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
@@ -531,25 +531,12 @@ private fun FeedFooter(feed: Entity, liked: Boolean, likeNum: String, onLike: ((
             maxLines = 1,
         )
         if (feed.replyNum.isNotEmpty()) {
-            Counter(AppIcons.ChatBubbleOutlined, feed.replyNum, highlighted = false, onClick = null)
+            CounterButton(AppIcons.ChatBubbleOutlined, feed.replyNum, highlighted = false, onClick = null)
         }
         if (likeNum.isNotEmpty()) {
             Spacer(Modifier.width(16.dp))
-            Counter(if (liked) AppIcons.ThumbUp else AppIcons.ThumbUpOutlined, likeNum, liked, onClick = onLike)
+            CounterButton(if (liked) AppIcons.ThumbUp else AppIcons.ThumbUpOutlined, likeNum, liked, onClick = onLike)
         }
-    }
-}
-
-@Composable
-private fun Counter(icon: ImageVector, value: String, highlighted: Boolean, onClick: (() -> Unit)?) {
-    val color = if (highlighted) COUITheme.colorScheme.primary else COUITheme.colorScheme.onSurfaceVariantSummary
-    Row(
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = color)
-        Spacer(Modifier.width(4.dp))
-        Text(value, style = COUITheme.textStyles.footnote1, color = color)
     }
 }
 
