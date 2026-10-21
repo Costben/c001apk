@@ -19,34 +19,72 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * A semantic version. Releases are always stable; the running build may carry a pre-release
- * suffix such as `-dev`, which sorts below the stable version of the same number.
+ * A semantic version. [preRelease] is null for stable versions; a suffix such as `pre`, `beta.2`
+ * or `rc.1` sorts below the stable version of the same number. `-release` counts as stable.
  */
-data class AppVersion(val major: Int, val minor: Int, val patch: Int, val preRelease: Boolean = false) :
-    Comparable<AppVersion> {
-    override fun compareTo(other: AppVersion): Int =
-        compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch }, { !it.preRelease })
+data class AppVersion(
+    val major: Int,
+    val minor: Int,
+    val patch: Int,
+    val preRelease: String? = null,
+) : Comparable<AppVersion> {
+    override fun compareTo(other: AppVersion): Int {
+        val base = compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch })
+        if (base != 0) return base
+        return when {
+            preRelease == null && other.preRelease == null -> 0
+            preRelease == null -> 1
+            other.preRelease == null -> -1
+            else -> comparePreRelease(preRelease, other.preRelease)
+        }
+    }
 
-    override fun toString() = "$major.$minor.$patch"
+    override fun toString() = buildString {
+        append("$major.$minor.$patch")
+        preRelease?.let { append('-').append(it) }
+    }
 
     companion object {
-        private val RELEASE = Regex("""^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-release)?(?:\+\d+)?$""")
-        private val BUILD = Regex("""^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(?:\+\d+)?$""")
+        private val VERSION =
+            Regex("""^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+\d+)?$""")
+        private val PRE_RELEASE_NAMES = listOf("dev", "pre", "alpha", "beta", "rc")
 
-        /** A published tag: only stable versions take part in update checks. */
-        fun parseRelease(value: String): AppVersion? = RELEASE.matchEntire(value)?.let {
-            AppVersion(it.groupValues[1].toInt(), it.groupValues[2].toInt(), it.groupValues[3].toInt())
-        }
-
-        /** The running build's `versionName`. */
-        fun parseBuild(value: String): AppVersion? = BUILD.matchEntire(value)?.let {
+        /** A published tag, stable or pre-release. */
+        fun parseRelease(value: String): AppVersion? = VERSION.matchEntire(value)?.let {
             val suffix = it.groupValues[4]
             AppVersion(
                 it.groupValues[1].toInt(),
                 it.groupValues[2].toInt(),
                 it.groupValues[3].toInt(),
-                preRelease = suffix.isNotEmpty() && suffix != "-release",
+                preRelease = suffix.takeIf { name -> name.isNotEmpty() && name != "release" },
             )
+        }
+
+        /** The running build's `versionName`. */
+        fun parseBuild(value: String): AppVersion? = parseRelease(value)
+
+        /** `dev < pre < alpha < beta < rc`, with numeric parts compared as numbers. */
+        private fun comparePreRelease(a: String, b: String): Int {
+            val left = a.split('.')
+            val right = b.split('.')
+            for (index in 0 until maxOf(left.size, right.size)) {
+                val x = left.getOrNull(index) ?: return -1
+                val y = right.getOrNull(index) ?: return 1
+                val xn = x.toIntOrNull()
+                val yn = y.toIntOrNull()
+                val result = when {
+                    xn != null && yn != null -> xn.compareTo(yn)
+                    xn != null -> -1
+                    yn != null -> 1
+                    else -> {
+                        val xr = PRE_RELEASE_NAMES.indexOf(x).let { if (it >= 0) it else PRE_RELEASE_NAMES.size }
+                        val yr = PRE_RELEASE_NAMES.indexOf(y).let { if (it >= 0) it else PRE_RELEASE_NAMES.size }
+                        if (xr != yr) xr.compareTo(yr) else x.compareTo(y)
+                    }
+                }
+                if (result != 0) return result
+            }
+            return 0
         }
     }
 }
@@ -96,10 +134,15 @@ class AppRelease private constructor(
             val tag = text(root, "tag_name")
             val htmlUrl = text(root, "html_url")
             val assets = root["assets"] as? JsonArray
-            if (draft != false || prerelease != false || tag == null || htmlUrl == null || assets == null) {
+            if (draft != false || prerelease == null || tag == null || htmlUrl == null || assets == null) {
                 throw IllegalArgumentException("更新信息格式异常")
             }
-            val version = AppVersion.parseRelease(tag) ?: throw IllegalArgumentException("无法识别正式版本")
+            val version = AppVersion.parseRelease(tag) ?: throw IllegalArgumentException("无法识别版本号")
+            // The tag suffix and the GitHub flag must agree, so a stable tag is never listed as a
+            // pre-release or the other way round.
+            if ((version.preRelease != null) != prerelease) {
+                throw IllegalArgumentException("更新信息格式异常")
+            }
             val page = htmlUrl.toHttpUrlOrNull()
             if (page == null || !trusted(page, "tag/") || page.pathSegments.lastOrNull() != tag) {
                 throw IllegalArgumentException("更新来源异常")
@@ -128,6 +171,13 @@ class AppRelease private constructor(
             }
             return AppRelease(version, page.toString(), notes, published, downloads)
         }
+
+        /** Parses a `/releases` array, skipping entries that fail validation (drafts, foreign links). */
+        fun fromJsonList(body: String): List<AppRelease> {
+            val root = runCatching { json.parseToJsonElement(body) as? JsonArray }.getOrNull()
+                ?: throw IllegalArgumentException("更新信息格式异常")
+            return root.mapNotNull { runCatching { fromJson(it.toString()) }.getOrNull() }
+        }
     }
 }
 
@@ -141,8 +191,9 @@ sealed interface UpdateResult {
 }
 
 /**
- * Checks this repository's latest GitHub release. The automatic check runs once per process, so
- * every cold start sees releases published since the last one.
+ * Checks this repository's latest GitHub release, or the highest release including pre-releases
+ * when the setting asks for them. The automatic check runs once per process, so every cold start
+ * sees releases published since the last one.
  */
 class UpdateService(
     private val settings: AppSettings,
@@ -163,9 +214,16 @@ class UpdateService(
         try {
             val current = AppVersion.parseBuild(currentVersion)
                 ?: return UpdateResult.Failed("无法识别当前版本，请查看发布页面")
+            val includePrerelease = settings.acceptPrereleaseUpdates
             val (code, body) = withContext(Dispatchers.IO) {
+                // `/releases/latest` only returns stable releases; the list is needed to see pre-releases.
+                val endpoint = if (includePrerelease) {
+                    "https://api.github.com/repos/${Protocol.REPOSITORY}/releases?per_page=30"
+                } else {
+                    "https://api.github.com/repos/${Protocol.REPOSITORY}/releases/latest"
+                }
                 val request = Request.Builder()
-                    .url("https://api.github.com/repos/${Protocol.REPOSITORY}/releases/latest")
+                    .url(endpoint)
                     .header("Accept", "application/vnd.github+json")
                     .header("User-Agent", "c001apk-update")
                     .build()
@@ -173,14 +231,21 @@ class UpdateService(
             }
             when (code) {
                 403, 429 -> return UpdateResult.Failed("检查更新请求过于频繁，请稍后重试或查看发布页面")
-                404 -> return UpdateResult.Failed("暂未找到正式版本，请稍后重试或查看发布页面")
+                404 -> return UpdateResult.Failed(
+                    if (includePrerelease) "暂未找到可用版本，请稍后重试或查看发布页面"
+                    else "暂未找到正式版本，请稍后重试或查看发布页面",
+                )
                 !in 200..299 -> return UpdateResult.Failed("检查更新失败，请检查网络后重试")
             }
             val release = try {
-                AppRelease.fromJson(body)
+                if (includePrerelease) {
+                    AppRelease.fromJsonList(body).maxByOrNull { it.version }
+                } else {
+                    AppRelease.fromJson(body)
+                }
             } catch (_: IllegalArgumentException) {
                 return UpdateResult.Failed("更新信息格式异常，请稍后重试或查看发布页面")
-            }
+            } ?: return UpdateResult.Failed("暂未找到可用版本，请稍后重试或查看发布页面")
             if (automatic && (!settings.autoCheckAppUpdate || settings.skippedAppUpdateVersion == release.version.toString())) {
                 return UpdateResult.Suppressed
             }

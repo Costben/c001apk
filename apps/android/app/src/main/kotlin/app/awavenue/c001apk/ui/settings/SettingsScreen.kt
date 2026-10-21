@@ -379,14 +379,25 @@ fun SettingsScreen() {
                     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
                         SwitchPreference(
                             title = "自动检查 c001apk 更新",
-                            summary = "每次启动时检查一次最新正式版本",
+                            summary = "每次启动时检查一次最新版本",
                             checked = settings.autoCheckAppUpdate,
                             onCheckedChange = settings::updateAutoCheckAppUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
                         )
+                        SwitchPreference(
+                            title = "接收预发布更新",
+                            summary = "包含预发布版本；关闭时只接收正式版",
+                            checked = settings.acceptPrereleaseUpdates,
+                            onCheckedChange = settings::updateAcceptPrereleaseUpdates,
+                            startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                        )
                         ArrowPreference(
                             title = if (checkingUpdate) "正在检查更新…" else "检查更新",
-                            summary = "查看 c001apk 的最新正式版本",
+                            summary = if (settings.acceptPrereleaseUpdates) {
+                                "查看 c001apk 的最新版本（含预发布）"
+                            } else {
+                                "查看 c001apk 的最新正式版本"
+                            },
                             startAction = { PreferenceStartIcon(COUIIcons.Download) },
                             enabled = !checkingUpdate,
                             onClick = rememberHapticClick {

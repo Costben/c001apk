@@ -23,9 +23,9 @@ class AppUpdateTest {
         "body":"notes","published_at":"2026-10-16T08:00:00Z","assets":[${assets.joinToString(",")}]}"""
 
     @Test
-    fun devBuildSortsBelowItsRelease() {
+    fun prereleaseSortsBelowItsStableVersion() {
         val dev = AppVersion.parseBuild("2.0.0-dev")!!
-        assertTrue(dev.preRelease)
+        assertEquals("dev", dev.preRelease)
         assertTrue(AppVersion.parseRelease("2.0.0-release")!! > dev)
         assertTrue(AppVersion.parseRelease("1.2.6")!! < dev)
         assertTrue(AppVersion.parseRelease("v2.0.1+20261016")!! > AppVersion.parseBuild("2.0.0")!!)
@@ -33,8 +33,24 @@ class AppUpdateTest {
     }
 
     @Test
-    fun onlyStableTagsAreReleases() {
-        assertNull(AppVersion.parseRelease("2.0.0-dev"))
+    fun prereleaseNamesAndNumbersSortInOrder() {
+        val ordered = listOf(
+            "2.0.0-dev",
+            "2.0.0-pre",
+            "2.0.0-alpha",
+            "2.0.0-beta.1",
+            "2.0.0-beta.2",
+            "2.0.0-rc.1",
+            "2.0.0",
+            "2.0.1-pre",
+        ).map { AppVersion.parseRelease(it)!! }
+        assertEquals(ordered, ordered.sorted())
+        assertTrue(AppVersion.parseRelease("2.0.14-pre")!! > AppVersion.parseRelease("2.0.13")!!)
+        assertTrue(AppVersion.parseRelease("2.0.14")!! > AppVersion.parseRelease("2.0.14-pre")!!)
+    }
+
+    @Test
+    fun malformedVersionsAreRejected() {
         assertNull(AppVersion.parseRelease("2.0"))
         assertNull(AppVersion.parseRelease("02.0.0"))
     }
@@ -58,6 +74,58 @@ class AppUpdateTest {
     }
 
     @Test
+    fun acceptsAPrereleaseRelease() {
+        val preTag = "2.0.14-pre"
+        val parsed = AppRelease.fromJson(
+            release(
+                assets = listOf(
+                    asset(
+                        "c001apk-coui-2.0.14-pre.apk",
+                        url = "$base/download/$preTag/c001apk-coui-2.0.14-pre.apk",
+                    ),
+                ),
+                prerelease = true,
+                page = "$base/tag/$preTag",
+                tagName = preTag,
+            ),
+        )
+        assertEquals("2.0.14-pre", parsed.version.toString())
+        assertEquals(
+            "$base/download/$preTag/c001apk-coui-2.0.14-pre.apk",
+            parsed.downloadFor(listOf("arm64-v8a")),
+        )
+    }
+
+    @Test
+    fun listPicksTheHighestVersion() {
+        val stable = release(
+            assets = listOf(
+                asset(
+                    "c001apk-coui-2.0.13.apk",
+                    url = "$base/download/2.0.13-release/c001apk-coui-2.0.13.apk",
+                ),
+            ),
+            page = "$base/tag/2.0.13-release",
+            tagName = "2.0.13-release",
+        )
+        val preTag = "2.0.14-pre"
+        val pre = release(
+            assets = listOf(
+                asset(
+                    "c001apk-coui-2.0.14-pre.apk",
+                    url = "$base/download/$preTag/c001apk-coui-2.0.14-pre.apk",
+                ),
+            ),
+            prerelease = true,
+            page = "$base/tag/$preTag",
+            tagName = preTag,
+        )
+        val parsed = AppRelease.fromJsonList("[$stable,$pre]")
+        assertEquals(2, parsed.size)
+        assertEquals("2.0.14-pre", parsed.maxByOrNull { it.version }!!.version.toString())
+    }
+
+    @Test
     fun fallsBackToTheReleasePage() {
         val parsed = AppRelease.fromJson(
             release(
@@ -77,8 +145,9 @@ class AppUpdateTest {
     @Test
     fun rejectsUnpublishedOrForeignReleases() {
         assertThrows(IllegalArgumentException::class.java) { AppRelease.fromJson(release(draft = true)) }
+        // The tag suffix and the GitHub flag must agree.
         assertThrows(IllegalArgumentException::class.java) { AppRelease.fromJson(release(prerelease = true)) }
-        assertThrows(IllegalArgumentException::class.java) { AppRelease.fromJson(release(tagName = "2.0.0-dev")) }
+        assertThrows(IllegalArgumentException::class.java) { AppRelease.fromJson(release(tagName = "2.0.0-pre")) }
         assertThrows(IllegalArgumentException::class.java) {
             AppRelease.fromJson(release(page = "https://github.com/TG-Twilight/c001apk/releases/tag/$tag"))
         }

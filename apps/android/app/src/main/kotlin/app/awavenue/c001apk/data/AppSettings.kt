@@ -101,6 +101,10 @@ class AppSettings(context: Context) {
     var autoCheckAppUpdate by mutableStateOf(prefs.getBoolean(KEY_AUTO_CHECK_APP_UPDATE, true))
         private set
 
+    /** Whether update checks may offer pre-release builds. Stable only by default. */
+    var acceptPrereleaseUpdates by mutableStateOf(prefs.getBoolean(KEY_ACCEPT_PRERELEASE_UPDATES, false))
+        private set
+
     var skippedAppUpdateVersion by mutableStateOf(prefs.getString(KEY_SKIPPED_APP_UPDATE, "").orEmpty())
         private set
 
@@ -168,6 +172,9 @@ class AppSettings(context: Context) {
 
     fun updateAutoCheckAppUpdate(value: Boolean) =
         put { putBoolean(KEY_AUTO_CHECK_APP_UPDATE, value) }.also { autoCheckAppUpdate = value }
+
+    fun updateAcceptPrereleaseUpdates(value: Boolean) =
+        put { putBoolean(KEY_ACCEPT_PRERELEASE_UPDATES, value) }.also { acceptPrereleaseUpdates = value }
 
     fun skipAppUpdate(version: String) =
         put { putString(KEY_SKIPPED_APP_UPDATE, version) }.also { skippedAppUpdateVersion = version }
@@ -259,6 +266,7 @@ class AppSettings(context: Context) {
         const val KEY_HAPTIC_STRENGTH = "hapticStrength"
         const val KEY_CHECK_UPDATE = "checkUpdate"
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
+        const val KEY_ACCEPT_PRERELEASE_UPDATES = "acceptPrereleaseUpdates"
         const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"
         const val KEY_SZLM_ID = "szlmId"
         const val KEY_ONBOARDING_DONE = "onboardingDone"
