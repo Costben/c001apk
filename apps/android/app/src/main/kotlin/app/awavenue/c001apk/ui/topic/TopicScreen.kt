@@ -118,6 +118,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -766,22 +767,49 @@ private fun TopicHeader(
     onProductConfigs: (() -> Unit)? = null,
     onProductComparison: (() -> Unit)? = null,
 ) {
+    // The API scores products out of 10; the header shows the five-star scale.
+    val score = if (topic.entityType == "product") {
+        topic.double("star_average_score")
+            ?.takeIf { it > 0.0 }
+            ?.div(2.0)
+            ?.let { String.format(Locale.US, "%.1f/5.0", it) }
+    } else {
+        null
+    }
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         insideMargin = PaddingValues(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = if (score != null) Alignment.Top else Alignment.CenterVertically) {
             NetworkImage(
                 topic.logo.ifEmpty { topic.pic },
                 Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)),
                 contentDescription = topic.title,
             )
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(topic.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (topic.followNum.isNotEmpty()) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .then(if (score != null) Modifier.height(56.dp) else Modifier),
+                verticalArrangement = if (score != null) Arrangement.SpaceBetween else Arrangement.Top,
+            ) {
+                Column {
                     Text(
-                        "${topic.followNum}人关注",
+                        topic.title,
+                        maxLines = if (score != null) 1 else 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (topic.followNum.isNotEmpty()) {
+                        Text(
+                            "${topic.followNum}人关注",
+                            style = COUITheme.textStyles.footnote1,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+                if (score != null) {
+                    Text(
+                        score,
                         style = COUITheme.textStyles.footnote1,
                         color = COUITheme.colorScheme.onSurfaceVariantSummary,
                     )
