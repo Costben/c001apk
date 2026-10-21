@@ -1,7 +1,6 @@
 package app.awavenue.c001apk.ui.app
 
 import android.text.format.Formatter
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +51,7 @@ import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.PinnedHeader
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
@@ -120,7 +120,6 @@ private enum class AppCommentTab(val label: String) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ApkScreen(packageName: String) {
     val app = LocalApp.current
@@ -365,20 +364,12 @@ fun ApkScreen(packageName: String) {
                                 onDownload = rememberHapticClick { onDownloadClick() },
                             )
                         }
-                        stickyHeader(key = "comments") {
-                            Column(Modifier.fillMaxWidth().background(COUITheme.colorScheme.surface)) {
-                                HorizontalDivider()
-                                if (commentsOpen) {
-                                    TabRowWithContour(
-                                        tabs = AppCommentTab.entries.map { it.label },
-                                        selectedTabIndex = tab.ordinal,
-                                        onTabSelected = { tab = AppCommentTab.entries[it] },
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                                        colors = appTabRowColors(),
-                                    )
-                                }
-                                HorizontalDivider()
-                            }
+                        item(key = "comments", contentType = "comments") {
+                            CommentHeader(
+                                commentsOpen = commentsOpen,
+                                tab = tab,
+                                onTabSelected = { tab = it },
+                            )
                         }
                         when {
                             isBlocked -> item(contentType = "state") {
@@ -418,6 +409,13 @@ fun ApkScreen(packageName: String) {
                         }
                     }
                 }
+                PinnedHeader(
+                    listState = listState,
+                    headerIndex = 1,
+                    topInset = innerPadding.calculateTopPadding(),
+                ) {
+                    CommentHeader(commentsOpen = commentsOpen, tab = tab, onTabSelected = { tab = it })
+                }
             }
         }
     }
@@ -435,6 +433,28 @@ fun ApkScreen(packageName: String) {
                 listViewModel?.refresh()
             },
         )
+    }
+}
+
+/** The divider-and-tabs header above the comment list; drawn in the list and again pinned under the bar. */
+@Composable
+private fun CommentHeader(
+    commentsOpen: Boolean,
+    tab: AppCommentTab,
+    onTabSelected: (AppCommentTab) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().background(COUITheme.colorScheme.surface)) {
+        HorizontalDivider()
+        if (commentsOpen) {
+            TabRowWithContour(
+                tabs = AppCommentTab.entries.map { it.label },
+                selectedTabIndex = tab.ordinal,
+                onTabSelected = { onTabSelected(AppCommentTab.entries[it]) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = appTabRowColors(),
+            )
+        }
+        HorizontalDivider()
     }
 }
 

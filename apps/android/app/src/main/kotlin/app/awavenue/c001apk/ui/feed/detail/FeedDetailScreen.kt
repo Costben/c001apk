@@ -1,6 +1,5 @@
 package app.awavenue.c001apk.ui.feed.detail
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -48,6 +47,7 @@ import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.PinnedHeader
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
@@ -286,7 +286,9 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                 ),
                             ) {
                                 feedBody(feed, viewModel)
-                                stickyReplyHeader(viewModel)
+                                item(key = "reply-header", contentType = "reply-header") {
+                                    ReplyHeader(viewModel)
+                                }
                                 when (val replyStatus = viewModel.replyStatus) {
                                     ListStatus.Loading -> item(contentType = "reply-state") {
                                         ReplyStateBox { InfiniteProgressIndicator() }
@@ -356,6 +358,15 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         }
                     }
                 }
+                if (viewModel.feedStatus == ListStatus.Content) {
+                    PinnedHeader(
+                        listState = listState,
+                        headerIndex = if (viewModel.articles.isEmpty()) 1 else viewModel.articles.size + 2,
+                        topInset = innerPadding.calculateTopPadding(),
+                    ) {
+                        ReplyHeader(viewModel)
+                    }
+                }
             }
         }
     }
@@ -420,38 +431,36 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(feed: Entity
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-private fun androidx.compose.foundation.lazy.LazyListScope.stickyReplyHeader(viewModel: FeedDetailViewModel) {
-    stickyHeader(key = "reply-header") {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(COUITheme.colorScheme.surface),
+@Composable
+private fun ReplyHeader(viewModel: FeedDetailViewModel) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(COUITheme.colorScheme.surface),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "共 ${viewModel.replyCount} 回复",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.width(10.dp))
-                // The same segmented capsule as the home bar, in the tiny style: four labels plus
-                // the reply count have to share one line, so the count is measured first and the
-                // capsule takes what is left.
-                TabRowWithContour(
-                    tabs = ReplySortType.entries.map { it.label },
-                    selectedTabIndex = viewModel.replySort.ordinal,
-                    onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
-                    colors = appTabRowColors(),
-                    height = TabRowDefaults.TabRowWithContourTinyHeight,
-                    cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
-                    contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            Text(
+                "共 ${viewModel.replyCount} 回复",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.width(10.dp))
+            // The same segmented capsule as the home bar, in the tiny style: four labels plus
+            // the reply count have to share one line, so the count is measured first and the
+            // capsule takes what is left.
+            TabRowWithContour(
+                tabs = ReplySortType.entries.map { it.label },
+                selectedTabIndex = viewModel.replySort.ordinal,
+                onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
+                colors = appTabRowColors(),
+                height = TabRowDefaults.TabRowWithContourTinyHeight,
+                cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
+                contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
