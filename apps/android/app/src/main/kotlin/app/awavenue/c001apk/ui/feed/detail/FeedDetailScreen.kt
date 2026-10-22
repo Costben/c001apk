@@ -48,12 +48,12 @@ import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
-import app.awavenue.c001apk.ui.common.PinnedHeader
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.returnTopOnClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.FooterStatus
@@ -159,6 +159,9 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         viewModel.feed == null -> preview?.string("feedTypeName").orEmpty()
                         else -> viewModel.feedTypeName.orEmpty()
                     },
+                    // Tapping anywhere on the bar returns to the top, the ColorOS way: the bar is
+                    // the only chrome left once the list is deep in the replies.
+                    modifier = Modifier.returnTopOnClick(listState),
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
@@ -359,15 +362,8 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                         }
                     }
                 }
-                if (viewModel.feedStatus == ListStatus.Content) {
-                    PinnedHeader(
-                        listState = listState,
-                        headerIndex = if (viewModel.articles.isEmpty()) 1 else viewModel.articles.size + 2,
-                        topInset = innerPadding.calculateTopPadding(),
-                    ) {
-                        ReplyHeader(viewModel)
-                    }
-                }
+                // The reply bar is a plain list item: it scrolls away with the feed instead of
+                // staying pinned under the app bar.
             }
         }
     }
