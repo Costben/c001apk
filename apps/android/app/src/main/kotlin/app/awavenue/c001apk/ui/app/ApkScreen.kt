@@ -50,6 +50,7 @@ import app.awavenue.c001apk.platform.installedApp
 import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.PinnedHeader
 import app.awavenue.c001apk.ui.common.appTabRowColors
@@ -84,13 +85,11 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
@@ -336,10 +335,9 @@ fun ApkScreen(packageName: String) {
                     return@Box
                 }
 
-                PullToRefresh(
+                AppPullToRefresh(
                     isRefreshing = listViewModel?.isRefreshing == true,
                     onRefresh = { if (listViewModel != null) listViewModel.refresh() else attempts++ },
-                    pullToRefreshState = rememberPullToRefreshState(),
                     contentPadding = innerPadding,
                     topAppBarScrollBehavior = scrollBehavior,
                 ) {

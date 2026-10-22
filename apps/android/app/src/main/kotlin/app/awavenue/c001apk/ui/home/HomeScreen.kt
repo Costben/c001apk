@@ -257,11 +257,9 @@ fun HomeScreen(
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // Same profile as the Settings homepage's scroll-driven overlay: the blur is at full strength
     // at the bar's top edge and fades to clear over the bar plus the native extra band below it.
-    // The gradient starts below the status bar, because the bar's own rows sit there.
     val barHeightDp = statusBar + TOP_BAR_ROW_HEIGHT +
         TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2
     val materialExtra = AppBarBlurOverlayDefaults.ExtraHeight
-    val blurStartFraction = statusBar.value / (barHeightDp + materialExtra).value
     // Where the bar ends, so a return can scroll the list enough to bring the row below it.
     val appBarBounds = LocalAppBarBounds.current
     // The material never goes fully dark: at rest the bar keeps a translucent floor so the top row
@@ -296,7 +294,6 @@ fun HomeScreen(
                 // sharp. The blur now stays full down to the bar's bottom edge and fades over the
                 // extra band below it.
                 extraHeight = materialExtra,
-                blurStartFraction = blurStartFraction,
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Spacer(modifier = Modifier.height(statusBar))

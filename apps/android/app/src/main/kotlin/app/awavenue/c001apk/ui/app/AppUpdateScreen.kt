@@ -37,6 +37,7 @@ import app.awavenue.c001apk.platform.InstalledApp
 import app.awavenue.c001apk.platform.installedApps
 import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
@@ -49,12 +50,10 @@ import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -144,10 +143,9 @@ fun AppUpdateScreen() {
                 list.isEmpty() -> CenterBox(innerPadding) {
                     EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = { attempts++ })
                 }
-                else -> PullToRefresh(
+                else -> AppPullToRefresh(
                     isRefreshing = refreshing,
                     onRefresh = { attempts++ },
-                    pullToRefreshState = rememberPullToRefreshState(),
                     contentPadding = innerPadding,
                 ) {
                     LazyColumn(

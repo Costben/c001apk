@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
@@ -37,11 +38,9 @@ import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
@@ -150,10 +149,9 @@ fun FeedList(
             is ListStatus.Error -> CenterBox(contentPadding) {
                 EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
             }
-            ListStatus.Content -> PullToRefresh(
+            ListStatus.Content -> AppPullToRefresh(
                 isRefreshing = viewModel.isRefreshing,
                 onRefresh = viewModel::refresh,
-                pullToRefreshState = rememberPullToRefreshState(),
                 contentPadding = contentPadding,
                 topAppBarScrollBehavior = scrollBehavior,
             ) {

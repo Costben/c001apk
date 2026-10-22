@@ -59,6 +59,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -98,7 +99,6 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
@@ -107,7 +107,6 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TopAppBar
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -405,7 +404,6 @@ private fun TopicPage(tag: String?, id: String?) {
                 val barHeightDp = statusBar + TopAppBarDefaults.CollapsedHeight +
                     TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2
                 val materialExtra = AppBarBlurOverlayDefaults.ExtraHeight
-                val blurStartFraction = statusBar.value / (barHeightDp + materialExtra).value
                 val materialScrollFraction = remember(scrolledPx, scrollBehavior, density) {
                     {
                         // contentOffset lives in the bar's saved state, so a page rebuilt after a
@@ -434,7 +432,6 @@ private fun TopicPage(tag: String?, id: String?) {
                     backdrop = backdrop,
                     scrollFraction = materialScrollFraction,
                     extraHeight = materialExtra,
-                    blurStartFraction = blurStartFraction,
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(modifier = Modifier.height(statusBar))
@@ -877,10 +874,9 @@ private fun TopicFeedList(
         }.distinctUntilChanged().filter { it }.collect { viewModel.loadMore() }
     }
 
-    PullToRefresh(
+    AppPullToRefresh(
         isRefreshing = viewModel.isRefreshing,
         onRefresh = viewModel::refresh,
-        pullToRefreshState = rememberPullToRefreshState(),
         contentPadding = contentPadding,
         topAppBarScrollBehavior = scrollBehavior,
     ) {

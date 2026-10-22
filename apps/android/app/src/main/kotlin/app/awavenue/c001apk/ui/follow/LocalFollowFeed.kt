@@ -31,6 +31,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
@@ -45,11 +46,9 @@ import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.coroutineScope
@@ -130,10 +129,9 @@ fun LocalFollowFeed(returnTop: ReturnTopController, scrollBehavior: ScrollBehavi
         }
     }
 
-    PullToRefresh(
+    AppPullToRefresh(
         isRefreshing = viewModel.isRefreshing,
         onRefresh = viewModel::refresh,
-        pullToRefreshState = rememberPullToRefreshState(),
         contentPadding = contentPadding,
         topAppBarScrollBehavior = scrollBehavior,
     ) {

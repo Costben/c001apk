@@ -44,6 +44,7 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
@@ -73,14 +74,12 @@ import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -271,10 +270,9 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
 
                     ListStatus.Content -> {
                         val feed = viewModel.feed ?: return@Box
-                        PullToRefresh(
+                        AppPullToRefresh(
                             isRefreshing = viewModel.isRefreshing,
                             onRefresh = viewModel::refreshReplies,
-                            pullToRefreshState = rememberPullToRefreshState(),
                             contentPadding = innerPadding,
                             topAppBarScrollBehavior = scrollBehavior,
                         ) {

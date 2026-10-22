@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.platform.InstalledApp
 import app.awavenue.c001apk.platform.installedApps
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.toImageBitmap
@@ -40,11 +41,9 @@ import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.SmallTitle
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronForward
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -154,10 +153,9 @@ fun AppListPage(
                 val matched = remember(apps, query, filter.sort, filter.ascending) {
                     apps.matching(query, filter.sort, filter.ascending)
                 }
-                PullToRefresh(
+                AppPullToRefresh(
                     isRefreshing = refreshing,
                     onRefresh = { attempts++ },
-                    pullToRefreshState = rememberPullToRefreshState(),
                     contentPadding = contentPadding,
                     topAppBarScrollBehavior = scrollBehavior,
                 ) {

@@ -54,6 +54,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.fromToday
@@ -77,12 +78,10 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassHeader
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
-import io.github.suqi8.coui.kmp.basic.PullToRefresh
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.VerticalDivider
-import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -324,10 +323,9 @@ private fun MessageList(
     val localFollows = app.localFollow.users
     val historyRows = if (app.settings.historyCardMode == HistoryCardMode.Full) history else history.take(5)
 
-    PullToRefresh(
+    AppPullToRefresh(
         isRefreshing = refreshing,
         onRefresh = onRefresh,
-        pullToRefreshState = rememberPullToRefreshState(),
         contentPadding = contentPadding,
     ) {
         CompositionLocalProvider(LocalFeedListState provides listState) {
