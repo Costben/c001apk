@@ -1,6 +1,12 @@
 package app.awavenue.c001apk.ui.feed.reply
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -15,8 +21,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.lerp
+import io.github.suqi8.coui.kmp.layout.DialogDefaults
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,24 +47,38 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.ComposerBallAnchor
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.SelectedImage
@@ -57,6 +87,7 @@ import app.awavenue.c001apk.ui.text.EmojiEditText
 import app.awavenue.c001apk.ui.text.EmojiFiles
 import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
+import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarDefaults
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -72,9 +103,15 @@ import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.COUIPopupUtils
+import kotlin.math.abs
+import kotlin.math.min
+import kotlin.math.pow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * What the composer is answering. [id] empty means a new feed rather than a reply; [title] carries
@@ -197,147 +234,295 @@ fun ReplyComposerSheet(
         }
     }
 
-    // A floating composer window rather than a bottom sheet: it rides just above the keyboard
-    // (8dp clear of it) and has no drag handle.
-    OverlayDialog(
-        show = true,
-        outsideMargin = DpSize(16.dp, 8.dp),
-        onDismissRequest = { if (!publishing) onDismiss() },
+    // The composer rides just above the keyboard (8dp clear of it) and has no drag handle. The
+    // lift is animated here instead of being left to imePadding: a dialog window receives the
+    // keyboard inset as one jump, so the panel used to teleport between the two resting places
+    // while the keyboard itself slid up. Animating the margin keeps the panel glued to the
+    // keyboard on the way up and lets it settle back down when the keyboard goes away.
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val bottomBarBottom = WindowInsets.navigationBars.getBottom(density) +
+        WindowInsets.captionBar.getBottom(density)
+    val liftTarget = with(density) { maxOf(imeBottom, bottomBarBottom).toDp() }
+    val lift by animateDpAsState(
+        targetValue = liftTarget,
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
+        label = "composerLift",
+    )
+
+    // 回复某人时，这块面板从底部升起，和别的底部弹层一样；发评论时，它由右下角那颗球展开 ——
+    // 展开用的是遮罩：面板的版式从头到尾都是最终尺寸，只有可见区域从 56dp 的圆角方形长满整块，
+    // 于是内容不会被反复重排，第一帧的轮廓和球严丝合缝，中间不存在两个物体的交接。
+    val fromBall = target.type != "reply"
+    // 面板的右下角对到球真正量到的位置上。Scaffold 把球放在 inset 之上 FabSpacing(12dp)、
+    // 右边缘内 12dp，弹窗窗口自己拿到的 inset 又是另一份，两边各算一遍就会差出几 dp，
+    // 露出球的一小片下摆。量一次就没有这个问题，顺带面板也跟着宽了。
+    // 读一次就作废：只有从球点开的这一次才该对齐到球，从别处（底栏的"发布动态"）打开时
+    // 要退回默认留白，否则会去对齐上一次留下的旧位置。
+    val ballRect = remember {
+        ComposerBallAnchor.rect.also { ComposerBallAnchor.rect = null }
+    }
+    val windowWidthPx = LocalWindowInfo.current.containerSize.width
+    val windowHeightPx = LocalWindowInfo.current.containerSize.height
+    val restLift = with(density) { bottomBarBottom.toDp() }
+    val cornerPadEnd = if (ballRect != null && windowWidthPx > 0) {
+        with(density) { (windowWidthPx - ballRect.right).toDp() }
+    } else {
+        16.dp
+    }
+    val cornerPadBottom = if (ballRect != null && windowHeightPx > 0) {
+        with(density) { (windowHeightPx - ballRect.bottom).toDp() }
+    } else {
+        16.dp + restLift
+    }
+    // 面板底边 = 球的底边 + 键盘比归位 inset 多出来的那一截。
+    val panelBottomPad = cornerPadBottom - restLift + lift
+    val panelWidth = if (windowWidthPx > 0) {
+        with(density) { (windowWidthPx - (cornerPadEnd + 16.dp).toPx()).toDp() }
+            .coerceAtMost(DialogDefaults.MaxWidth)
+    } else {
+        320.dp
+    }
+    val ballSide = if (ballRect != null && ballRect.width > 0f) {
+        with(density) { ballRect.width.toDp() }
+    } else {
+        56.dp
+    }
+    // 圆角必须 ≥ 球的半径，否则圆角那段弧会切进球里 —— 面板再大也压不住，球会从弧的内侧
+    // 露出一条边（COUI 的 19dp 就是这样，28dp 才刚好相切）。这里多留 2dp 余量。
+    val panelCorner = ballSide / 2 + 2.dp
+    var panelSize by remember { mutableStateOf(IntSize.Zero) }
+    val panelHeight = if (panelSize.height > 0) with(density) { panelSize.height.toDp() } else 200.dp
+
+    // fold: 0 = 收起（球，或面板还在屏幕下方），1 = 到位。
+    val fold = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        // 弹簧起手是慢的：球先鼓起来，再被撑成面板，落位时有一点点回弹 —— 比匀速 tween 更像"被拉伸"。
+        fold.animateTo(
+            1f,
+            spring(dampingRatio = 0.78f, stiffness = 400f, visibilityThreshold = 0.001f),
+        )
+    }
+    var closing by remember { mutableStateOf(false) }
+    val shown = remember { mutableStateOf(true) }
+    fun close() {
+        if (closing || publishing) return
+        closing = true
+        focusManager.clearFocus()
+        scope.launch {
+            // 收起之前先等面板落回球的位置：键盘收起来时 lift 还要走完一程，如果这时候就开始折叠，
+            // 折叠的终点会落在球的下方（面板当时所在的位置），于是收尾那一下对不上球。
+            withTimeoutOrNull(900) {
+                snapshotFlow { lift.value - liftTarget.value }
+                    .first { abs(it) < 1.5f }
+            }
+            fold.animateTo(0f, tween(durationMillis = 220, easing = FastOutSlowInEasing))
+            shown.value = false
+            onDismiss()
+        }
+    }
+
+    val grow = fold.value.coerceIn(0f, 1f)
+    // 可见区域右下角锚定，从球的边长长到整块面板；圆角从球的半径收到面板自己的圆角。
+    // 横向比纵向先走一点：展开前半程是一块横向拉长的圆角块，后半程才补足高度，
+    // 观感上是球被拽开，而不是一个正方形整体放大。
+    val revealWidth = lerp(ballSide, panelWidth, grow.coerceAtLeast(0f).pow(0.85f))
+    val revealHeight = lerp(ballSide, panelHeight, grow.coerceAtLeast(0f).pow(1.2f))
+    val revealRadius = lerp(
+        ballSide / 2,
+        panelCorner,
+        ((grow - 0.45f) / 0.55f).coerceIn(0f, 1f),
+    )
+    val panelShape = remember(fromBall, revealWidth, revealHeight, revealRadius) {
+        if (fromBall) {
+            CornerRevealShape(revealWidth, revealHeight, revealRadius)
+        } else {
+            RoundedCornerShape(panelCorner)
+        }
+    }
+    val panelColor = DialogDefaults.backgroundColor()
+    // 表面在球的位置上淡入：那几帧轮廓还和球一模一样，看上去是球自己换了材质。
+    val surfaceAlpha = if (fromBall) (grow / 0.22f).coerceIn(0f, 1f) else grow
+    val contentAlpha = ((grow - 0.4f) / 0.6f).coerceIn(0f, 1f)
+    val slide = if (fromBall) 0.dp else (panelHeight + 40.dp) * (1f - grow)
+    val scrimColor = COUITheme.colorScheme.windowDimming
+
+    BackHandler(enabled = true) { close() }
+
+    COUIPopupUtils.DialogLayout(
+        visible = shown,
+        enterTransition = EnterTransition.None,
+        exitTransition = ExitTransition.None,
+        enableWindowDim = false,
+        renderInRootScaffold = true,
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(
-                hint,
-                modifier = Modifier.fillMaxWidth(),
-                style = COUITheme.textStyles.title4,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(scrimColor.copy(alpha = scrimColor.alpha * grow))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { close() },
             )
-            Spacer(Modifier.height(12.dp))
-            // Only the middle scrolls when the keyboard and the emoji panel leave little room; the
-            // title and the tool row stay put.
             Column(
                 Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
+                    .align(Alignment.BottomEnd)
+                    // 右下留白就是球的留白，收起时面板正好落在球上。
+                    .padding(end = cornerPadEnd, bottom = panelBottomPad)
+                    .offset(y = slide)
+                    .width(panelWidth)
+                    .onSizeChanged { panelSize = it }
+                    .dropShadow(
+                        shape = panelShape,
+                        shadow = BottomFloatingNavigationBarDefaults.BarShadow,
+                    )
+                    .clip(panelShape)
+                    .background(panelColor.copy(alpha = panelColor.alpha * surfaceAlpha))
+                    .graphicsLayer {
+                        alpha = contentAlpha
+                        val scale = 0.96f + 0.04f * grow
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(1f, 1f)
+                    }
+                    .padding(16.dp),
             ) {
+                Text(
+                    hint,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = COUITheme.textStyles.title4,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(12.dp))
+                // Only the middle scrolls when the keyboard and the emoji panel leave little room; the
+                // title and the tool row stay put.
                 Column(
                     Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(COUITheme.colorScheme.surfaceContainerHigh),
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
                 ) {
-                    EmojiEditText(
-                        state = input,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                        hint = "说点什么…",
-                        maxCount = 500,
-                        minLines = 4,
-                        maxLines = 6,
-                        textStyle = COUITheme.textStyles.body1,
-                        onFocused = { emojiPanel = false },
-                    )
-                    Text(
-                        "${input.text.length}/500",
-                        style = COUITheme.textStyles.footnote2,
-                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(end = 12.dp)
-                            .padding(bottom = 8.dp),
-                    )
-                }
-                if (images.isNotEmpty()) {
-                    Row(
+                    Column(
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(COUITheme.colorScheme.surfaceContainerHigh),
                     ) {
-                        images.forEach { image ->
-                            Box(Modifier.size(64.dp)) {
-                                AsyncImage(
-                                    model = java.io.File(image.path),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
-                                )
-                                IconButton(
-                                    onClick = { images = images - image },
-                                    modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
-                                ) {
-                                    Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
+                        EmojiEditText(
+                            state = input,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                            hint = "说点什么…",
+                            maxCount = 500,
+                            minLines = 4,
+                            maxLines = 6,
+                            textStyle = COUITheme.textStyles.body1,
+                            onFocused = { emojiPanel = false },
+                        )
+                        Text(
+                            "${input.text.length}/500",
+                            style = COUITheme.textStyles.footnote2,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(end = 12.dp)
+                                .padding(bottom = 8.dp),
+                        )
+                    }
+                    if (images.isNotEmpty()) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            images.forEach { image ->
+                                Box(Modifier.size(64.dp)) {
+                                    AsyncImage(
+                                        model = java.io.File(image.path),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                                    )
+                                    IconButton(
+                                        onClick = { images = images - image },
+                                        modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
+                                    ) {
+                                        Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                if (emojiPanel) {
-                    EmojiPanel(
-                        modifier = Modifier.height(180.dp).padding(top = 8.dp),
-                        onPick = { emoji -> input.insert(emoji) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    // The reply-and-forward toggle sits above the tools, at the window's bottom left.
-                    Row(
-                        Modifier
-                            .clip(RoundedCornerShape(50))
-                            .clickable { onlySelf = !onlySelf }
-                            .padding(start = 4.dp, end = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(
-                            state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
-                            onClick = null,
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        Text(
-                            if (target.id.isEmpty()) "仅自己可见" else "回复并转发",
-                            style = COUITheme.textStyles.body2,
-                            color = if (onlySelf) {
-                                COUITheme.colorScheme.onSurface
-                            } else {
-                                COUITheme.colorScheme.onSurfaceVariantSummary
-                            },
-                            maxLines = 1,
+                    if (emojiPanel) {
+                        EmojiPanel(
+                            modifier = Modifier.height(180.dp).padding(top = 8.dp),
+                            onPick = { emoji -> input.insert(emoji) },
                         )
                     }
-                    Row(
-                        Modifier.height(40.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
-                        Spacer(Modifier.width(8.dp))
-                        ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
-                            emojiPanel = !emojiPanel
-                            if (emojiPanel) {
-                                input.clearFocus()
-                                focusManager.clearFocus()
-                            } else {
-                                input.focus()
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        // The reply-and-forward toggle sits above the tools, at the window's bottom left.
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable { onlySelf = !onlySelf }
+                                .padding(start = 4.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
+                                onClick = null,
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                if (target.id.isEmpty()) "仅自己可见" else "回复并转发",
+                                style = COUITheme.textStyles.body2,
+                                color = if (onlySelf) {
+                                    COUITheme.colorScheme.onSurface
+                                } else {
+                                    COUITheme.colorScheme.onSurfaceVariantSummary
+                                },
+                                maxLines = 1,
+                            )
+                        }
+                        Row(
+                            Modifier.height(40.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
+                            Spacer(Modifier.width(8.dp))
+                            ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
+                                emojiPanel = !emojiPanel
+                                if (emojiPanel) {
+                                    input.clearFocus()
+                                    focusManager.clearFocus()
+                                } else {
+                                    input.focus()
+                                }
                             }
                         }
                     }
+                    LoadingButton(
+                        text = "发布",
+                        onClick = { scope.launch { publish() } },
+                        enabled = canPublish,
+                        isLoading = publishing,
+                        colors = ButtonDefaults.textButtonColorsPrimary(),
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        minWidth = 64.dp,
+                        minHeight = 32.dp,
+                        cornerRadius = 10.dp,
+                    )
                 }
-                LoadingButton(
-                    text = "发布",
-                    onClick = { scope.launch { publish() } },
-                    enabled = canPublish,
-                    isLoading = publishing,
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                    modifier = Modifier.padding(bottom = 4.dp),
-                    minWidth = 64.dp,
-                    minHeight = 32.dp,
-                    cornerRadius = 10.dp,
-                )
             }
         }
     }
@@ -505,5 +690,37 @@ private fun CaptchaDialog(
                 TextButton(text = "验证并继续", onClick = onConfirm)
             }
         }
+    }
+}
+
+/**
+ * 面板展开时的可见区域：一块锚在右下角、从球的大小长到整块面板的圆角矩形。这里用遮罩而不是缩放，
+ * 因为缩放会把圆角压成椭圆，也会让面板里的内容每帧重新排版。
+ */
+private class CornerRevealShape(
+    private val width: Dp,
+    private val height: Dp,
+    private val radius: Dp,
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline {
+        val visibleWidth = min(with(density) { width.toPx() }, size.width)
+        val visibleHeight = min(with(density) { height.toPx() }, size.height)
+        val corner = with(density) { radius.toPx() }
+            .coerceIn(0f, min(visibleWidth, visibleHeight) / 2f)
+        return Outline.Rounded(
+            RoundRect(
+                rect = Rect(
+                    left = size.width - visibleWidth,
+                    top = size.height - visibleHeight,
+                    right = size.width,
+                    bottom = size.height,
+                ),
+                cornerRadius = CornerRadius(corner, corner),
+            ),
+        )
     }
 }
