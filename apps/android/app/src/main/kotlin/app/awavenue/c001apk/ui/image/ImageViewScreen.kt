@@ -74,6 +74,8 @@ import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.lerp
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.media.isLivePhotoUrl
@@ -153,6 +155,11 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     val progress: () -> Float = remember(transition) { transition?.progress ?: { 1f } }
 
     LightSystemBarIcons(leaving = { transition?.exiting?.invoke() == true })
+    // 控件收起时状态栏跟着收，长图才能顶到屏幕最上沿；从顶部划一下可以临时叫出来。
+    ImmersiveStatusBar(
+        hidden = !chromeVisible,
+        leaving = { transition?.exiting?.invoke() == true },
+    )
 
     fun save(urls: List<String>) {
         sheetPage = null
@@ -634,6 +641,34 @@ private suspend fun PointerInputScope.detectZoomAndPan(
                 }
             }
         } while (!canceled && event.changes.fastAny { it.pressed })
+    }
+}
+
+/**
+ * 控件收起时把状态栏一起收起来，长图才能真正顶到屏幕最上沿。隐藏期间从顶部边缘划一下可以
+ * 临时叫出状态栏，划走又自动收回。离开这个页面时一定要还原，否则整个 App 都会顶到屏幕边上。
+ */
+@Composable
+private fun ImmersiveStatusBar(hidden: Boolean, leaving: () -> Boolean) {
+    val view = LocalView.current
+    val closing by remember { derivedStateOf(leaving) }
+    val controller = remember(view) {
+        view.context.findActivity()?.window?.let { WindowCompat.getInsetsController(it, view) }
+    }
+    // 离开这个页面（含返回手势）时状态栏必须还回去，否则整个 App 都顶到屏幕边上了。
+    DisposableEffect(controller) {
+        onDispose { controller?.show(WindowInsetsCompat.Type.statusBars()) }
+    }
+    LaunchedEffect(controller, hidden, closing) {
+        if (controller == null) return@LaunchedEffect
+        if (hidden && !closing) {
+            // 隐藏期间允许从屏幕边缘划出临时状态栏，划走自动收回。
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
     }
 }
 
