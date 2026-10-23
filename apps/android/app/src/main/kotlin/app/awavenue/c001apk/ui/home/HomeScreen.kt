@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -43,6 +44,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.CoolapkRepository
@@ -325,6 +327,9 @@ fun HomeScreen(
                                 .graphicsLayer {
                                     translationY = -topRowHeightPx * collapseFraction()
                                     alpha = 1f - collapseFraction()
+                                    // The avatar and buttons barely overlap, so the fade is applied
+                                    // to each draw instead of an offscreen copy of the whole row.
+                                    compositingStrategy = CompositingStrategy.ModulateAlpha
                                 }
                                 .padding(start = 16.dp, end = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -390,6 +395,18 @@ fun HomeScreen(
             }
         },
     ) { innerPadding ->
+        // Scaffold writes the bar's height into [innerPadding] while it measures, so the pages must
+        // read it in their own measure to land in the same frame as the bar. Reading the top
+        // padding here, in composition, would hand them last frame's height and recompose every
+        // page on each scroll frame, so the object delegates and is read lazily.
+        val pageContentPadding = remember(innerPadding, outerPadding) {
+            object : PaddingValues {
+                override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
+                override fun calculateTopPadding() = innerPadding.calculateTopPadding()
+                override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
+                override fun calculateBottomPadding() = outerPadding.calculateBottomPadding() + 12.dp
+            }
+        }
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
             HorizontalPager(
                 state = pagerState,
@@ -404,18 +421,14 @@ fun HomeScreen(
                 // last visible tab until the settle effect bounces them back.
                 val tab = tabs.getOrNull(page) ?: tabs.last()
                 val returnTopHere = returnTop.takeIf { page == pagerState.currentPage }
-                val contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = outerPadding.calculateBottomPadding() + 12.dp,
-                )
                 when (tab) {
                     HomeTab.App -> AppListPage(
                         returnTop = returnTopHere,
-                        contentPadding = contentPadding,
+                        contentPadding = pageContentPadding,
                         scrollBehavior = scrollBehavior,
                     )
-                    HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, contentPadding)
-                    HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, contentPadding)
+                    HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, pageContentPadding)
+                    HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, pageContentPadding)
                     else -> {
                         // Every stream is personalised, so its cached page is only valid for one account.
                         val key = "home-${tab.name}-${app.session.uid}"
@@ -425,7 +438,7 @@ fun HomeScreen(
                             viewModel = viewModel,
                             scrollBehavior = scrollBehavior,
                             returnTop = returnTopHere,
-                            contentPadding = contentPadding,
+                            contentPadding = pageContentPadding,
                         )
                     }
                 }

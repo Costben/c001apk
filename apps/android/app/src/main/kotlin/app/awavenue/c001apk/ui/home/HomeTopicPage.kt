@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
@@ -108,6 +109,21 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
         else -> {
             val selectedIndex = if (selected in list.indices) selected else 0
             val current = list[selectedIndex]
+            // The bar's height reaches [contentPadding] in the measure phase, so everything derived
+            // from it stays a delegate that is read in measure: reading the top padding here would
+            // recompose this page on every scroll frame and show the bar's previous height.
+            val railTopInset = remember(contentPadding) { { contentPadding.calculateTopPadding() } }
+            val carouselPadding = remember(contentPadding) {
+                object : PaddingValues {
+                    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
+                    // The list keeps the bar's height as leading space so its first card starts
+                    // below the bar, while the list itself runs under the bar and scrolls away
+                    // behind it.
+                    override fun calculateTopPadding() = contentPadding.calculateTopPadding() + 4.dp
+                    override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
+                    override fun calculateBottomPadding() = contentPadding.calculateBottomPadding() + 12.dp
+                }
+            }
             Row(
                 Modifier.fillMaxSize(),
             ) {
@@ -116,19 +132,13 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                     selectedIndex = selectedIndex,
                     onSelected = { selected = it },
                     scrollBehavior = scrollBehavior,
-                    topInset = contentPadding.calculateTopPadding(),
+                    topInset = railTopInset,
                 )
                 CarouselContent(
                     url = current.url,
                     title = current.title,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentPadding = PaddingValues(
-                        // The list keeps the bar's height as leading space so its first card starts
-                        // below the bar, while the list itself runs under the bar and scrolls away
-                        // behind it.
-                        top = contentPadding.calculateTopPadding() + 4.dp,
-                        bottom = contentPadding.calculateBottomPadding() + 12.dp,
-                    ),
+                    contentPadding = carouselPadding,
                     scrollBehavior = scrollBehavior,
                     // The rail already supplies the left margin, so the cards take less inset than
                     // a full-width stream does and read wider beside it.
@@ -149,15 +159,27 @@ private fun CategoryRail(
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
     scrollBehavior: ScrollBehavior,
-    topInset: Dp,
+    topInset: () -> Dp,
 ) {
     val listState = rememberLazyListState()
-    val topInsetPx = with(LocalDensity.current) { topInset.roundToPx() }
-    LaunchedEffect(selectedIndex, topInsetPx) {
+    val density = LocalDensity.current
+    LaunchedEffect(selectedIndex) {
         if (selectedIndex in titles.indices) {
             // Keep the selected row clear of the bar: a plain scroll-to-item would park it at the
-            // very top, behind the material.
-            listState.animateScrollToItem(selectedIndex, scrollOffset = -topInsetPx)
+            // very top, behind the material. The inset is read once per selection, so the bar
+            // collapsing does not restart the scroll.
+            listState.animateScrollToItem(
+                selectedIndex,
+                scrollOffset = -with(density) { topInset().roundToPx() },
+            )
+        }
+    }
+    val railPadding = remember(topInset) {
+        object : PaddingValues {
+            override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateTopPadding() = topInset()
+            override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateBottomPadding() = RailBottomInset
         }
     }
     LazyColumn(
@@ -170,7 +192,7 @@ private fun CategoryRail(
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         // The rail runs under the bar and to the bottom edge, so its tail rides behind the
         // floating bar and needs the bar's height as trailing space to stay reachable.
-        contentPadding = PaddingValues(top = topInset, bottom = RailBottomInset),
+        contentPadding = railPadding,
     ) {
         itemsIndexed(titles) { index, title ->
             RailItem(

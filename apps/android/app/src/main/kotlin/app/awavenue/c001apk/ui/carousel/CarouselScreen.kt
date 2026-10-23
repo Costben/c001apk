@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.model.Entity
@@ -182,9 +183,27 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
     rememberPageMemoryRecorder("carousel", pagerState.currentPage)
     val scope = rememberCoroutineScope()
 
+    // The caller's bar changes [contentPadding] in the measure phase, so both derived paddings
+    // delegate and are read in measure instead of recomposing this page on every scroll frame.
+    val tabRowPadding = remember(contentPadding) {
+        object : PaddingValues {
+            override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateTopPadding() = contentPadding.calculateTopPadding()
+            override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateBottomPadding() = 0.dp
+        }
+    }
+    val pagePadding = remember(contentPadding) {
+        object : PaddingValues {
+            override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateTopPadding() = 12.dp
+            override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
+            override fun calculateBottomPadding() = contentPadding.calculateBottomPadding()
+        }
+    }
     // The pager fills the screen behind the caller's bar, so the tab row takes the top inset and
     // the child lists start right below it instead of applying that inset a second time.
-    Column(Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
+    Column(Modifier.fillMaxSize().padding(tabRowPadding)) {
         TabRowWithContour(
             tabs = entries.map { it.title },
             selectedTabIndex = pagerState.currentPage,
@@ -202,10 +221,7 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
                 url = entry.url,
                 title = entry.title,
                 isInit = false,
-                contentPadding = PaddingValues(
-                    top = 12.dp,
-                    bottom = contentPadding.calculateBottomPadding(),
-                ),
+                contentPadding = pagePadding,
                 scrollBehavior = scrollBehavior,
             )
         }
