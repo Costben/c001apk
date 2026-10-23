@@ -14,7 +14,7 @@ import io.github.suqi8.coui.kmp.basic.TopAppBarState
 /**
  * Collapses the top row while scrolling up, but brings it back as soon as the content moves down,
  * even in the middle of a list. [COUIScrollBehavior] only expands once the content is back at the
- * top; here the downward scroll the list already consumed counts too.
+ * top; here the row takes a downward drag before the list does.
  */
 @Composable
 internal fun rememberTopRowScrollBehavior(
@@ -29,8 +29,12 @@ internal fun rememberTopRowScrollBehavior(
             override val snapAnimationSpec = settle.snapAnimationSpec
             override val flingAnimationSpec = settle.flingAnimationSpec
             override val nestedScrollConnection = object : NestedScrollConnection {
+                // The row takes the drag before the list in both directions: its height feeds the
+                // Scaffold padding, so the content already follows the finger. Growing it after the
+                // list scrolled moved the content twice, and the growth reported upward made the
+                // overscroll pull the page back every few frames.
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (available.y >= 0f) return Offset.Zero
+                    if (available.y == 0f) return Offset.Zero
                     val previous = state.heightOffset
                     state.heightOffset += available.y
                     return Offset(0f, state.heightOffset - previous)
@@ -44,11 +48,7 @@ internal fun rememberTopRowScrollBehavior(
                     state.contentOffset += consumed.y
                     scrolledPx.floatValue =
                         (scrolledPx.floatValue - consumed.y).coerceAtLeast(0f)
-                    val delta = if (consumed.y > 0f) consumed.y else available.y
-                    if (delta <= 0f) return Offset.Zero
-                    val previous = state.heightOffset
-                    state.heightOffset += delta
-                    return Offset(0f, state.heightOffset - previous)
+                    return Offset.Zero
                 }
 
                 override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
