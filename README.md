@@ -41,7 +41,7 @@
     </tr>
     <tr>
       <td align="center">Markdown 正文、代码与表格</td>
-      <td align="center">c001apk 小助手公告</td>
+      <td align="center">更新说明按 Markdown 排版</td>
       <td align="center">保存为 Markdown / 离线 HTML</td>
     </tr>
   </tbody>

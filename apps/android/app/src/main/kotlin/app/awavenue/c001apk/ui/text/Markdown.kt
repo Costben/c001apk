@@ -78,8 +78,8 @@ class MarkdownContent private constructor(
         private var cachedCharacters = 0
 
         /**
-         * @param explicit the caller knows the text is Markdown (announcements, release notes), so
-         *   the detector is skipped.
+         * @param explicit the caller knows the text is Markdown (release notes), so the detector
+         *   is skipped.
          * @param coolapk the body comes from a post: `<!--break-->`, inline HTML and single
          *   newlines follow Coolapk's transport rules instead of GitHub's.
          */

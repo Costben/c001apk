@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.common
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.Role
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
@@ -17,7 +18,7 @@ fun MoreMenu(
     show: Boolean,
     onDismissRequest: () -> Unit,
     entries: List<Pair<String, () -> Unit>>,
-    alignment: PopupPositionProvider.Align = PopupPositionProvider.Align.BottomEnd,
+    alignment: PopupPositionProvider.Align = PopupPositionProvider.Align.End,
 ) {
     OverlayListPopup(
         show = show,
@@ -32,6 +33,7 @@ fun MoreMenu(
                     isSelected = false,
                     index = index,
                     groupKey = "more-menu",
+                    role = Role.Button,
                     onSelectedIndexChange = {
                         onDismissRequest()
                         entry.second()

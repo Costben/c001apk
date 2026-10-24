@@ -55,8 +55,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.account.AccountsScreen
-import app.awavenue.c001apk.ui.announcements.AnnouncementInboxScreen
-import app.awavenue.c001apk.ui.announcements.AnnouncementMonitor
 import app.awavenue.c001apk.ui.app.ApkScreen
 import app.awavenue.c001apk.ui.app.AppUpdateScreen
 import app.awavenue.c001apk.ui.blacklist.BlacklistScreen
@@ -426,8 +424,6 @@ fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
                     }
                 }
             }
-            // Announcement prompts draw above every route, below the captcha page that App() adds.
-            AnnouncementMonitor()
         }
     }
 }
@@ -628,7 +624,6 @@ private fun RouteHost(route: Route) {
         Route.Params -> ParamsScreen()
         Route.About -> AboutScreen()
         Route.Settings -> SettingsScreen()
-        Route.Announcements -> AnnouncementInboxScreen()
         Route.Accounts -> AccountsScreen()
         Route.LocalFollowList -> LocalFollowListScreen()
         is Route.Feed -> FeedDetailScreen(id = route.id, preview = route.preview)

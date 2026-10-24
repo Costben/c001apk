@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -257,7 +258,7 @@ fun ApkScreen(packageName: String) {
                                 }
                                 OverlayListPopup(
                                     show = menu,
-                                    alignment = PopupPositionProvider.Align.BottomEnd,
+                                    alignment = PopupPositionProvider.Align.End,
                                     onDismissRequest = { menu = false },
                                 ) {
                                     ListPopupColumn {
@@ -283,6 +284,7 @@ fun ApkScreen(packageName: String) {
                                                 isSelected = false,
                                                 index = index,
                                                 groupKey = "apk-menu",
+                                                role = Role.Button,
                                                 onSelectedIndexChange = {
                                                     menu = false
                                                     entry.second()

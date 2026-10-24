@@ -2,7 +2,6 @@ package app.awavenue.c001apk
 
 import android.app.Application
 import app.awavenue.c001apk.data.AccountStore
-import app.awavenue.c001apk.data.AnnouncementService
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
 import app.awavenue.c001apk.data.CoolapkRepository
@@ -48,8 +47,6 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var unread: UnreadStore
         private set
-    lateinit var announcements: AnnouncementService
-        private set
 
     private val httpClient = OkHttpClient()
 
@@ -67,7 +64,6 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
         unread = UnreadStore(this, repository, session)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
-        announcements = AnnouncementService(this)
         MessageCheckWorker.schedule(this)
     }
 

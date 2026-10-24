@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -496,7 +497,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                     }
                                     OverlayListPopup(
                                         show = menu,
-                                        alignment = PopupPositionProvider.Align.BottomEnd,
+                                        alignment = PopupPositionProvider.Align.End,
                                         onDismissRequest = { menu = false },
                                     ) {
                                         ListPopupColumn {
@@ -523,6 +524,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                                     isSelected = false,
                                                     index = index,
                                                     groupKey = "topic-menu",
+                                                    role = Role.Button,
                                                     onSelectedIndexChange = {
                                                         menu = false
                                                         entry.second()

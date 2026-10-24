@@ -126,7 +126,7 @@ fun FeedText(
     MarkdownBody(content, modifier, fontSize = fontSize, picArr = picArr)
 }
 
-/** The full Markdown layout, also used for announcements and release notes. */
+/** The full Markdown layout, also used for release notes. */
 @Composable
 fun MarkdownBody(
     source: String,

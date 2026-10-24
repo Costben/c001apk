@@ -180,31 +180,29 @@
 | 已完成 | 用户动态 `includeTop`、登录页提示网页登录并在遇人机验证时打开、网页登录不带入当前账号（可添加其他账号） | `logic/network/network_repo.dart`、`pages/login/login_page.dart`、`pages/webview/webview_page.dart` | `data/CoolapkRepository.kt`、`ui/login/LoginScreen.kt`、`ui/feed/detail/WebScreen.kt` |
 | 未开始 | 零碎修复：分享链接去掉查询串再取动态 id、字号与系统缩放叠加 | `utils/utils.dart`、`utils/app_theme.dart` | |
 
-## 五之二、上游 1.3.5 新增（2026-10-23）
+## 五之二、上游 1.3.5 的 Markdown 与内容保存（2026-10-23）
 
-上游 `98526cc` 的三项功能已移植到 Compose 端。接口、限制与文案以 `docs/MARKDOWN_SUPPORT.md`、
-`docs/CONTENT_EXPORT.md`、`docs/ANNOUNCEMENTS.md` 为准。
+上游 `98526cc` 的 Markdown 与内容保存已移植到 Compose 端；公告 / c001apk 小助手不纳入本客户端。
+接口、限制与文案以 `docs/MARKDOWN_SUPPORT.md`、`docs/CONTENT_EXPORT.md` 为准。
 
 | 状态 | 项 | Flutter 来源 | Compose 落点 |
 | :--- | :--- | :--- | :--- |
 | 已完成 | Markdown 正文：保守自动识别、标题/列表/表格/代码/引用/任务列表、长代码与宽表格横向滚动、信息流与转发卡片限行预览、详情「查看原文 / 格式化显示」、更新说明按 Markdown 显示 | `utils/markdown_content.dart`、`components/markdown_body.dart`、`pages/feed/feed_page.dart`、`components/update_dialog.dart` | `ui/text/Markdown.kt`、`ui/text/MarkdownText.kt`、`ui/feed/FeedCard.kt`、`ui/feed/detail/FeedDetailScreen.kt`、`ui/feed/detail/ArticleBody.kt`、`ui/settings/AppUpdateDialog.kt` |
 | 已完成 | 保存动态与文章：Markdown / 离线 HTML、作者/时间/来源/转发/最多三条评论、置顶优先、遵守本地屏蔽、图片 8 MiB / 32 MP / 32 MiB / 60 张 / 45 秒限制、失败确认、系统文件选择器 | `utils/content_export.dart`、`utils/content_export_service.dart`、`components/content_export_button.dart` | `ui/feed/detail/ContentExport.kt`、`ui/feed/detail/ContentExportButton.kt` |
-| 已完成 | 公告与 c001apk 小助手：索引/正文校验、版本与修订冲突拒绝、SHA-256、正文缓存 20 篇 / 2 MiB、未读与提醒修订、重要公告自动弹窗、冷启动/回前台/列表/手动同步、设置开关、正文缓存清理 | `logic/announcements/`、`components/announcement_*.dart`、`pages/announcements/` | `data/Announcements.kt`、`ui/announcements/`、`ui/message/MessageScreen.kt`、`ui/notification/NotificationScreen.kt`、`ui/settings/SettingsScreen.kt`、`ui/nav/`（`Route.Announcements` 与监控挂载）、`C001apkApp.kt` |
 
-实现说明与差异（本轮按功能需要改动了禁改目录 `ui/nav/` 的 `Route.kt` 与
-`AppNavHost.kt`：新增 `Route.Announcements` 并挂载公告监控，按约定在此报告）：
+实现说明与差异：
 
 | 差异 | 原因 |
 | :--- | :--- |
 | Markdown 解析器为项目内 Kotlin 实现，不引入 `markdown` 包 | Compose 端没有 Flutter 的 `markdown`/`flutter_html` 组合；解析、渲染、导出共用同一棵 AST，避免两套规则 |
 | 标题不生成锚点；行内图片渲染为可点击的图片占位符，独立成段的图片按比例展示 | Compose 文本不支持 HTML 锚点跳转；行内占位符避免在文字行里塞入未测量的图片 |
 | 正文中的任意内嵌 HTML 只保留文字与链接，不执行也不原样渲染 | 与上游「不执行任意内嵌 HTML」一致；导出同样只写转义后的文本 |
-| 公告来源固定为 `TG-Twilight/c001apk` 的 `announcements` 分支 | 该分支是上游公告的唯一发布点；本仓库尚未建立自己的公告分支 |
-| 公告阅读页是覆盖全屏的展开卡片，不是独立路由；没有桌面端上下键/Esc 快捷键 | Compose 端只发布 Android；返回键先收起再关闭 |
-| 自动公告只检查路由栈、更新弹窗和前台状态，不感知每个 COUI 菜单/面板 | COUI 没有全局「有弹窗」状态；根页、无二级路由、无更新弹窗时才提醒 |
 | 离线 HTML 不读取 Coil 磁盘缓存，图片重新下载 | Coil 3 的缓存键与导出请求不同；直接下载并做同样的体积/解码校验，结果一致 |
 | Markdown 由模型直接生成，不做 HTML→Markdown 往返 | 保留作者原文，避免往返转换丢失格式 |
-| 公告状态保存在 SharedPreferences 的单个 JSON 键 | 与项目其余持久化一致，不引入 Hive |
+
+三点菜单的展开 / 收起动画取自 coui17 的 `194423a2`（玻璃菜单恢复从锚点缩放）。
+子模块指向 `menu-animation-only` 分支，只摘取 `cb5f1211`、`b46e03f1`、`194423a2`
+三个提交；该提交之后改变顶栏材质与 edgeToEdge 绘制的提交没有纳入，顶栏绘制保持原样。
 
 ## 六、接口对照
 
@@ -340,17 +338,12 @@
 - 测完已恢复：本机名单清空、悄悄关注关闭、关注页回到「用户关注」、原账号登录。`logcat -b crash` 无记录。
 - 未实机验证：密码登录与网页登录添加第二个账号（需要真实账号）、有 Release 时的更新弹窗与下载（单元测试覆盖解析与选包）。
 
-上游 1.3.5 移植复测（2026-10-24，OnePlus 8 Pro `192.168.31.216`，release 2.0.20-pre）：
+上游 1.3.5 的 Markdown 与内容保存复测（2026-10-24，OnePlus 8 Pro `192.168.31.216`，release 2.0.20-pre）：
 
-- 冷启动后「我的」顶部出现「c001apk 小助手」，副标题为线上公告摘要，未读徽标 1；
-  点开列表显示 1 篇有效公告（撤回的测试公告不显示），点开弹窗正文按 Markdown 渲染
-  （标题、列表、加粗），「展开阅读」铺满全屏，返回先收起再关闭。
-- 读完返回列表与「我的」，未读徽标消失；公告正文缓存清理与「自动检查公告」开关在
-  设置 → 更新 中实机确认，开关来回切换后恢复开启。
 - 帖子详情右上角出现「保存内容」，选择 Markdown 后经系统文件选择器写入
   `Download/<标题>-<id>.md`；文件含标题、作者、发布时间、两个来源链接、正文与热门评论，
   话题锚点转为 Markdown 链接，正文中的 `[cos滑稽]` 被转义为字面文本。
 - 普通动态（含话题锚点与表情码）不会被误判为 Markdown；信息流、详情、长文与转发卡片
   的既有渲染未出现回归；`logcat -b crash` 无记录。
-- 未实机验证：重要公告自动弹窗（线上表当前没有 `important=true` 的公告）、
-  离线 HTML 的图片内嵌（本轮打开的动态没有图片）、「查看原文」（未命中 Markdown 动态）。
+- 未实机验证：离线 HTML 的图片内嵌（本轮打开的动态没有图片）、「查看原文」（未命中
+  Markdown 动态）。

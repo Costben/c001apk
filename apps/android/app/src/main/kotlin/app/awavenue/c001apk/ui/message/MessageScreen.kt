@@ -53,7 +53,6 @@ import app.awavenue.c001apk.data.asEntity
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
-import app.awavenue.c001apk.ui.announcements.AnnouncementEntryCard
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
@@ -339,9 +338,6 @@ private fun MessageList(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item(key = "assistant", contentType = "assistant") {
-                    AnnouncementEntryCard()
-                }
                 // A guest has no counters to show, so the page starts at the shortcuts.
                 if (isLogin) {
                     item(key = "stats", contentType = "stats") {

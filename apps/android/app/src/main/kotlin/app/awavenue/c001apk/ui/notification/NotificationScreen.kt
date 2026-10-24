@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.UnreadStore
 import app.awavenue.c001apk.ui.LocalApp
-import app.awavenue.c001apk.ui.announcements.AnnouncementEntryCard
 import app.awavenue.c001apk.ui.chat.MessageRow
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
@@ -89,8 +88,6 @@ fun NotificationScreen(
     val navigator = LocalNavigator.current
     val scrollBehavior = rememberPageScrollBehavior("notification")
     val backdrop = rememberGlassBackdrop()
-    // Announcement unread is folded into the 私信 tile, so the centre has to follow its table too.
-    val announcementUnread = app.announcements.revision.let { app.announcements.unreadCount }
 
     LaunchedEffect(Unit) {
         app.unread.refresh()
@@ -133,24 +130,16 @@ fun NotificationScreen(
                 viewModel = viewModel,
                 scrollBehavior = scrollBehavior,
                 backdrop = backdrop,
-                leading = when {
-                    showShortcuts -> {
-                        {
-                            NotificationShortcuts(
-                                unread = { kind ->
-                                    app.unread.unread(*kind.unreadFields) +
-                                        if (kind == NotificationType.Message) announcementUnread else 0
-                                },
-                            ) { target ->
-                                navigator.push(Route.Notification(target))
-                            }
+                leading = if (showShortcuts) {
+                    {
+                        NotificationShortcuts(
+                            unread = { kind -> app.unread.unread(*kind.unreadFields) },
+                        ) { target ->
+                            navigator.push(Route.Notification(target))
                         }
                     }
-                    // 私信与信息 opens with c001apk 小助手; guests can read it without an account.
-                    type == NotificationType.Message -> {
-                        { AnnouncementEntryCard() }
-                    }
-                    else -> null
+                } else {
+                    null
                 },
                 contentPadding = PaddingValues(
                     start = 10.dp,
@@ -200,16 +189,8 @@ private fun NotificationList(
             }
         }
 
-        is ListStatus.Error -> Column(Modifier.fillMaxSize().padding(contentPadding)) {
-            leading?.invoke()
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                EmptyState(
-                    title = "加载失败",
-                    subtitle = status.message,
-                    actionText = "重试",
-                    onActionClick = viewModel::refresh,
-                )
-            }
+        is ListStatus.Error -> CenterBox(contentPadding) {
+            EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
         }
 
         ListStatus.Content -> AppPullToRefresh(

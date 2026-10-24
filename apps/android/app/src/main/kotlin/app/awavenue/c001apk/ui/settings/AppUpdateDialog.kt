@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.awavenue.c001apk.data.UpdatePromptState
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.openBrowser
@@ -98,13 +97,10 @@ fun AutomaticUpdateCheck() {
 
     LaunchedEffect(Unit) {
         update = app.updates.check(automatic = true) as? UpdateResult.Available
-        // Even a suppressed or failed check settles: the announcement monitor is waiting for it.
-        UpdatePromptState.settleAutomatic()
     }
 
     val pending = update
     if (pending != null && !navigator.hasOverlay && app.settings.autoCheckAppUpdate) {
-        LaunchedEffect(pending) { UpdatePromptState.markPromptShown() }
         AppUpdateDialog(pending, onDismiss = { update = null })
     }
 }
