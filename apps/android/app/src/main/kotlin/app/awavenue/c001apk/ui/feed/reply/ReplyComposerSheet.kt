@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -346,6 +347,15 @@ fun ReplyComposerSheet(
     val panelColor = DialogDefaults.backgroundColor()
     // 表面在球的位置上淡入：那几帧轮廓还和球一模一样，看上去是球自己换了材质。
     val surfaceAlpha = if (fromBall) (grow / 0.22f).coerceIn(0f, 1f) else grow
+    // 阴影的浓度跟着表面走。dropShadow 画在 clip / background 之外，不受表面 alpha 影响：只按形状
+    // 铺满的话，展开第一帧球还没显形，球的位置先落下一块影子；收起时表面已经透明，影子还挂到最后。
+    val barShadow = BottomFloatingNavigationBarDefaults.BarShadow
+    val panelShadow = Shadow(
+        color = barShadow.color.copy(alpha = barShadow.color.alpha * surfaceAlpha),
+        offset = barShadow.offset,
+        radius = barShadow.radius,
+        spread = barShadow.spread,
+    )
     val contentAlpha = ((grow - 0.4f) / 0.6f).coerceIn(0f, 1f)
     val slide = if (fromBall) 0.dp else (panelHeight + 40.dp) * (1f - grow)
     val scrimColor = COUITheme.colorScheme.windowDimming
@@ -379,7 +389,7 @@ fun ReplyComposerSheet(
                     .onSizeChanged { panelSize = it }
                     .dropShadow(
                         shape = panelShape,
-                        shadow = BottomFloatingNavigationBarDefaults.BarShadow,
+                        shadow = panelShadow,
                     )
                     .clip(panelShape)
                     .background(panelColor.copy(alpha = panelColor.alpha * surfaceAlpha))
