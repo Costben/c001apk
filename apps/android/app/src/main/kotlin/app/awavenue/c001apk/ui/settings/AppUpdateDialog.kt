@@ -1,14 +1,20 @@
 package app.awavenue.c001apk.ui.settings
 
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,32 +44,50 @@ fun AppUpdateDialog(update: UpdateResult.Available, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val release = update.release
 
+    val notesShape = RoundedCornerShape(12.dp)
     OverlayDialog(show = true, title = "发现新版本", onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 280.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 Text("${update.current} → ${release.version}", style = COUITheme.textStyles.headline1)
                 release.publishedAt?.let {
                     val date = Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).toLocalDate()
                     Text("发布于 $date", style = COUITheme.textStyles.footnote1)
                 }
-                MarkdownBody(
-                    release.notes,
-                    modifier = Modifier.padding(top = 12.dp),
-                    fontSize = 14.sp,
-                    explicit = true,
-                    coolapk = false,
-                    showEmoji = false,
-                )
-                TextButton(text = "查看发布页面", onClick = { context.openBrowser(release.page) })
             }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .heightIn(max = 280.dp)
+                    .clip(notesShape)
+                    .background(COUITheme.colorScheme.surfaceContainer)
+                    .border(1.dp, COUITheme.colorScheme.dividerLine, notesShape),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(14.dp),
+                ) {
+                    MarkdownBody(
+                        release.notes,
+                        fontSize = 14.sp,
+                        explicit = true,
+                        coolapk = false,
+                        showEmoji = false,
+                    )
+                }
+            }
+            TextButton(
+                text = "查看发布页面",
+                modifier = Modifier.padding(horizontal = 12.dp),
+                onClick = { context.openBrowser(release.page) },
+            )
             Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.End,
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
             ) {
                 TextButton(text = "稍后", onClick = onDismiss)
                 TextButton(
