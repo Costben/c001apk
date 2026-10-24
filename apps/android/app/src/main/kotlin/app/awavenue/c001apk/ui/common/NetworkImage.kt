@@ -62,6 +62,21 @@ fun thumbnail(url: String): String {
     return if (base.endsWith(SUFFIX_THUMBNAIL)) url else base + SUFFIX_THUMBNAIL + suffix
 }
 
+/**
+ * The address of the original file behind a Coolapk picture: the app is handed a display variant
+ * with a `@WxH` size suffix, and lists ask for the smaller `.s.jpg` thumbnail on top of it.
+ * Anything that is not a Coolapk address is left untouched.
+ */
+fun originalImageUrl(url: String): String {
+    if (url.isEmpty() || !url.contains("coolapk.com")) return url
+    val query = url.indexOf('?')
+    var base = if (query >= 0) url.substring(0, query) else url
+    val suffix = if (query >= 0) url.substring(query) else ""
+    if (base.endsWith(SUFFIX_THUMBNAIL)) base = base.removeSuffix(SUFFIX_THUMBNAIL)
+    base = base.replace(Regex("""@\d+x\d+(?=\.[A-Za-z0-9]+$)"""), "")
+    return base + suffix
+}
+
 /** Width and height encoded in Coolapk image URLs (`…@1080x2400.jpg`); 1×1 when absent. */
 fun imageSize(url: String): Pair<Float, Float> {
     val path = url.substringBefore('?')

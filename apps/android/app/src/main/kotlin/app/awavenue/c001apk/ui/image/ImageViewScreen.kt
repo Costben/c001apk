@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -70,6 +73,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.lerp
@@ -80,7 +84,7 @@ import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.openBrowser
-import app.awavenue.c001apk.ui.common.saveImage
+import app.awavenue.c001apk.ui.common.saveOriginalImage
 import app.awavenue.c001apk.ui.common.saveLivePhoto
 import app.awavenue.c001apk.ui.common.shareImage
 import app.awavenue.c001apk.ui.common.thumbnail
@@ -105,9 +109,9 @@ import io.github.suqi8.coui.kmp.icon.extended.Image
 import io.github.suqi8.coui.kmp.icon.extended.Link
 import io.github.suqi8.coui.kmp.icon.extended.Share
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
-import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import kotlin.math.abs
 import kotlin.math.max
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val ChromeColor = Color.Black.copy(alpha = 0.45f)
@@ -151,6 +155,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     var chromeVisible by remember { mutableStateOf(true) }
     var sheetPage by remember { mutableStateOf<Int?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var saveHud by remember { mutableStateOf("") }
     val frame = remember { ViewerFrame() }
     val progress: () -> Float = remember(transition) { transition?.progress ?: { 1f } }
 
@@ -161,19 +166,31 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
         leaving = { transition?.exiting?.invoke() == true },
     )
 
-    fun save(urls: List<String>) {
+    fun saveOriginals(urls: List<String>) {
         sheetPage = null
+        if (saving || urls.isEmpty()) return
         scope.launch {
             saving = true
-            var failed = false
+            var saved = 0
             urls.forEachIndexed { index, url ->
-                if (!saveImage(context, url)) {
-                    failed = true
-                    context.toast("第 ${index + 1} 张图片保存失败，请检查存储权限")
-                }
+                saveHud = if (urls.size == 1) "正在保存原图…" else "正在保存 ${index + 1}/${urls.size}…"
+                if (saveOriginalImage(context, url)) saved++
             }
             saving = false
-            if (!failed) context.toast("已保存")
+            saveHud = when {
+                urls.size == 1 && saved == 1 -> "已保存原图到相册"
+                urls.size == 1 -> "原图保存失败"
+                saved == urls.size -> "已保存 $saved 张原图到相册"
+                else -> "已保存 $saved/${urls.size} 张原图"
+            }
+        }
+    }
+
+    // The status pill outlives the menu, but not the save: every update restarts the timer.
+    LaunchedEffect(saveHud) {
+        if (saveHud.isNotEmpty()) {
+            delay(1800)
+            saveHud = ""
         }
     }
 
@@ -224,7 +241,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                     isSettledElsewhere = pagerState.settledPage != page,
                     frame = frame,
                     onTap = { chromeVisible = !chromeVisible },
-                    onLongPress = { sheetPage = page },
+                    onLongPress = { if (!saving) sheetPage = page },
                 )
             }
         }
@@ -269,6 +286,22 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                 )
             }
         }
+
+        if (saveHud.isNotEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Text(
+                    text = saveHud,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 30.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
     }
 
     val page = sheetPage
@@ -279,9 +312,13 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                 if (url.isLivePhotoUrl()) {
                     ActionSheetItem(COUIIcons.Download, "保存实况照片", onClick = { saveLive(url) })
                 }
-                ActionSheetItem(COUIIcons.Download, "保存图片", onClick = { save(listOf(url)) })
+                ActionSheetItem(COUIIcons.Download, "保存原图", onClick = { saveOriginals(listOf(url)) })
                 if (images.size != 1) {
-                    ActionSheetItem(COUIIcons.Image, "保存全部图片", onClick = { save(images) })
+                    ActionSheetItem(
+                        COUIIcons.Image,
+                        "一键保存原图（${images.size} 张）",
+                        onClick = { saveOriginals(images) },
+                    )
                 }
                 ActionSheetItem(
                     COUIIcons.Share,
@@ -316,7 +353,6 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
         }
     }
 
-    OverlayLoadingDialog(show = saving, text = "保存中")
 }
 
 private const val ChromeFadeMillis = 180

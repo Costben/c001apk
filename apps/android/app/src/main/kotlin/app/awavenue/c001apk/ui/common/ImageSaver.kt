@@ -20,14 +20,30 @@ private const val ALBUM = "c001apk"
 /** Downloads a picture and files it into the gallery album the Flutter client uses. */
 suspend fun saveImage(context: Context, url: String): Boolean {
     val bytes = downloadBytes(context, url) ?: return false
-    return withContext(Dispatchers.IO) {
+    return saveBytes(context, url, bytes)
+}
+
+/**
+ * Saves the full-resolution file behind a display variant. Coolapk hands the app a `@WxH` address
+ * and lists request an `.s.jpg` thumbnail on top of it; both are stripped first. If the original
+ * address is not served, the variant that was on screen is saved instead.
+ */
+suspend fun saveOriginalImage(context: Context, url: String): Boolean {
+    val target = originalImageUrl(url)
+    val bytes = downloadBytes(context, target)
+        ?: (if (target != url) downloadBytes(context, url) else null)
+        ?: return false
+    return saveBytes(context, target, bytes)
+}
+
+private suspend fun saveBytes(context: Context, url: String, bytes: ByteArray): Boolean =
+    withContext(Dispatchers.IO) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveToMediaStore(context, url, bytes)
         } else {
             saveToPublicPictures(context, url, bytes)
         }
     }
-}
 
 /** Saves the picture into the app cache so the share sheet can hand it to another app. */
 suspend fun shareImage(context: Context, url: String): Boolean {
