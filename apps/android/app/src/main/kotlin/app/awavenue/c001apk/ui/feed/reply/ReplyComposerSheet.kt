@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -84,12 +85,14 @@ import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.SelectedImage
 import app.awavenue.c001apk.ui.feed.detail.rememberImagePicker
 import app.awavenue.c001apk.ui.text.EmojiEditText
-import app.awavenue.c001apk.ui.text.EmojiFiles
+import app.awavenue.c001apk.ui.text.EmojiSections
 import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
 import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarDefaults
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Checkbox
+import io.github.suqi8.coui.kmp.basic.ChipTabData
+import io.github.suqi8.coui.kmp.basic.ChipTabGroup
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.LoadingButton
@@ -458,8 +461,10 @@ fun ReplyComposerSheet(
                         }
                     }
                     if (emojiPanel) {
+                        // 196dp: the 32dp chip row plus roughly the four grid rows the old 180dp
+                        // panel showed, so switching tabs does not resize the sheet.
                         EmojiPanel(
-                            modifier = Modifier.height(180.dp).padding(top = 8.dp),
+                            modifier = Modifier.height(196.dp).padding(top = 8.dp),
                             onPick = { emoji -> input.insert(emoji) },
                         )
                     }
@@ -625,29 +630,45 @@ private fun ToolbarIcon(
 
 @Composable
 internal fun EmojiPanel(modifier: Modifier = Modifier, onPick: (String) -> Unit) {
-    val emojis = remember { EmojiFiles.entries.toList() }
-    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
-        emojis.chunked(7).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { (code, file) ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .padding(vertical = 5.dp)
-                            .combinedClickable(onClick = { onPick(code) }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AsyncImage(
-                            model = "file:///android_asset/emojis/$file",
-                            contentDescription = code,
-                            modifier = Modifier.size(32.dp),
-                        )
+    val tabs = remember { EmojiSections.map { ChipTabData(it.label) } }
+    var section by remember { mutableIntStateOf(0) }
+    Column(modifier.fillMaxWidth()) {
+        ChipTabGroup(
+            tabs = tabs,
+            selectedIndex = section,
+            onSelectedChange = { section = it },
+            modifier = Modifier.padding(horizontal = 10.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp),
+        ) {
+            EmojiSections[section].emojis.chunked(7).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { (code, file) ->
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .padding(vertical = 5.dp)
+                                .combinedClickable(onClick = { onPick(code) }),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = "file:///android_asset/emojis/$file",
+                                contentDescription = code,
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
                     }
+                    repeat(7 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(7 - row.size) { Spacer(Modifier.weight(1f)) }
             }
+            Spacer(Modifier.height(6.dp))
         }
-        Spacer(Modifier.height(10.dp))
     }
 }
 

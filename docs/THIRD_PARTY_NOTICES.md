@@ -6,6 +6,8 @@
 Android 16.6.4（2609291）安装包中的 32 张牛牛表情，用于兼容官方表情名称。
 名称以官方 `niuniu_emotion_array` 核对；素材版权归酷安及相应权利人所有，
 不因本项目的 AGPL-3.0 许可证而改变。未引入官方应用代码、账号或用户数据。
+Compose 端（`apps/android/app/src/main/assets/emojis/`）直接复用同一批 PNG，
+文件名与名称表保持一致。
 
 本轮会话置顶、取消置顶及删除的接口路径参考
 [c001apk-compose](https://github.com/bggRGjQaUbCoE/c001apk-compose)

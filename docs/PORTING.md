@@ -175,7 +175,7 @@
 | 未开始 | 设置页分类：外观与字号 / 关注与内容 / 浏览与隐私 / 存储与更新 / 协议与设备 | `pages/settings/settings_page.dart` | |
 | 未开始 | 私信：发送动态、逐条发送状态与重试、动态链接卡片、会话置顶与删除 | `pages/chat/`、`components/cards/chat_card.dart`、`message_card.dart` | |
 | 未开始 | 活动页 `/event/:id` 与站内活动链接 | `pages/event/event_page.dart`、`utils/utils.dart` | |
-| 未开始 | 32 个牛牛表情 | `assets/emojis/niuniu_*`、`utils/emoji_util.dart`、`pages/feed/reply/emoji_panel.dart` | |
+| 已完成 | 32 个牛牛表情：正文与输入框内联渲染、面板“常用 / 牛牛 / 酷币”分栏 | `assets/emojis/niuniu_*`、`utils/emoji_util.dart`、`pages/feed/reply/emoji_panel.dart` | `assets/emojis/niuniu_emotion_*.png`、`ui/text/EmojiFiles.kt`（`EmojiSections`）、`ui/feed/reply/ReplyComposerSheet.kt`（`EmojiPanel`） |
 | 已完成 | 自身更新检查：每次冷启动查一次最新正式版、按 ABI 选包、跳过版本；来源为本仓库 `Costben/c001apk` 的 Release | `logic/app_update/`、`components/update_check_tile.dart` | `data/AppUpdate.kt`、`ui/settings/AppUpdateDialog.kt` |
 | 已完成 | 用户动态 `includeTop`、登录页提示网页登录并在遇人机验证时打开、网页登录不带入当前账号（可添加其他账号） | `logic/network/network_repo.dart`、`pages/login/login_page.dart`、`pages/webview/webview_page.dart` | `data/CoolapkRepository.kt`、`ui/login/LoginScreen.kt`、`ui/feed/detail/WebScreen.kt` |
 | 未开始 | 零碎修复：分享链接去掉查询串再取动态 id、字号与系统缩放叠加 | `utils/utils.dart`、`utils/app_theme.dart` | |

@@ -113,6 +113,38 @@ internal val EmojiFiles: Map<String, String> = mapOf(
     "[下次一定]" to "coolapk_emotion_1029.png",
     "[酷安土豆]" to "coolapk_emotion_1030.png",
     "[头条通知书]" to "coolapk_emotion_1031.png",
+    "[牛牛阿巴]" to "niuniu_emotion_babble.png",
+    "[牛牛财奴]" to "niuniu_emotion_money_grubber.png",
+    "[牛牛呲牙笑]" to "niuniu_emotion_grin.png",
+    "[牛牛大喊]" to "niuniu_emotion_shout.png",
+    "[牛牛戴耳机]" to "niuniu_emotion_headphones.png",
+    "[牛牛点赞]" to "niuniu_emotion_thumbs_up.png",
+    "[牛牛恶心]" to "niuniu_emotion_nauseous.png",
+    "[牛牛尴尬]" to "niuniu_emotion_awkward.png",
+    "[牛牛鬼脸]" to "niuniu_emotion_silly_face.png",
+    "[牛牛害怕]" to "niuniu_emotion_scared.png",
+    "[牛牛害羞]" to "niuniu_emotion_shy.png",
+    "[牛牛挥手]" to "niuniu_emotion_wave.png",
+    "[牛牛娇羞]" to "niuniu_emotion_coy.png",
+    "[牛牛惊讶]" to "niuniu_emotion_surprised.png",
+    "[牛牛冷汗]" to "niuniu_emotion_cold_sweat.png",
+    "[牛牛墨镜]" to "niuniu_emotion_sunglasses.png",
+    "[牛牛疲惫]" to "niuniu_emotion_tired.png",
+    "[牛牛求饶]" to "niuniu_emotion_pleading.png",
+    "[牛牛认真脸]" to "niuniu_emotion_serious.png",
+    "[牛牛伤心]" to "niuniu_emotion_sad.png",
+    "[牛牛生病]" to "niuniu_emotion_sick.png",
+    "[牛牛生气]" to "niuniu_emotion_angry.png",
+    "[牛牛思考]" to "niuniu_emotion_thinking.png",
+    "[牛牛微笑]" to "niuniu_emotion_smile.png",
+    "[牛牛委屈]" to "niuniu_emotion_aggrieved.png",
+    "[牛牛问号脸]" to "niuniu_emotion_question_face.png",
+    "[牛牛喜欢]" to "niuniu_emotion_love.png",
+    "[牛牛星星眼]" to "niuniu_emotion_star_eyes.png",
+    "[牛牛疑惑]" to "niuniu_emotion_puzzled.png",
+    "[牛牛眨眼]" to "niuniu_emotion_wink.png",
+    "[牛牛真香]" to "niuniu_emotion_delicious.png",
+    "[牛牛爆赞]" to "niuniu_emotion_super_praise.png",
     "[酷币]" to "c_coolb.png",
     "[酷币1分]" to "c_onef.png",
     "[酷币2分]" to "c_twof.png",
@@ -156,4 +188,24 @@ internal val EmojiFiles: Map<String, String> = mapOf(
     "[新酷币1€]" to "coolapk_emotion_78.png",
     "[新酷币2€]" to "coolapk_emotion_79.png",
     "[新酷币5€]" to "coolapk_emotion_80.png",
+)
+
+/** One tab of the emoji panel: the codes and files it shows, kept in [EmojiFiles] order. */
+internal class EmojiSection(val label: String, val emojis: List<Pair<String, String>>)
+
+private val emojiEntries = EmojiFiles.entries.map { it.key to it.value }
+
+private fun isNiuniu(code: String) = code.startsWith("[牛牛")
+
+private fun isCoolCoin(code: String) = code.contains("酷币") || code == "[新币1分]"
+
+/**
+ * The three panel tabs — 常用 / 牛牛 / 酷币 — split exactly like Flutter `emoji_panel.dart`: the
+ * 牛牛 family is recognised by its `[牛牛` prefix, the coin family by the 酷币 word (plus the odd
+ * `[新币1分]` that shipped without it).
+ */
+internal val EmojiSections: List<EmojiSection> = listOf(
+    EmojiSection("常用", emojiEntries.filterNot { isNiuniu(it.first) || isCoolCoin(it.first) }),
+    EmojiSection("牛牛", emojiEntries.filter { isNiuniu(it.first) }),
+    EmojiSection("酷币", emojiEntries.filter { isCoolCoin(it.first) }),
 )
