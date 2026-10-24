@@ -32,6 +32,7 @@ import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.image.imageOrigin
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.Text
@@ -80,7 +81,12 @@ private val ImageCornerRadius = 12.dp
 private val ImageShape = RoundedCornerShape(ImageCornerRadius)
 
 @Composable
-fun ArticleBody(article: FeedArticle, images: List<String>, modifier: Modifier = Modifier) {
+fun ArticleBody(
+    article: FeedArticle,
+    images: List<String>,
+    modifier: Modifier = Modifier,
+    forcePlain: Boolean = false,
+) {
     when (article.type) {
         "title" -> HtmlText(
             article.title,
@@ -91,7 +97,7 @@ fun ArticleBody(article: FeedArticle, images: List<String>, modifier: Modifier =
         "text" -> {
             val navigator = LocalNavigator.current
             val haptics = LocalHapticFeedback.current
-            HtmlText(
+            FeedText(
                 article.message,
                 modifier
                     .padding(horizontal = 16.dp)
@@ -102,7 +108,9 @@ fun ArticleBody(article: FeedArticle, images: List<String>, modifier: Modifier =
                             navigator.push(Route.Copy(article.message))
                         },
                     ),
-                style = HtmlTextDefaults.style().copy(fontSize = 16.sp),
+                fontSize = 16.sp,
+                forcePlain = forcePlain,
+                picArr = images,
             )
         }
 

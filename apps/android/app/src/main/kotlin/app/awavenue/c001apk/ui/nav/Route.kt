@@ -42,6 +42,7 @@ sealed interface Route {
     data object Params : Route
     data object About : Route
     data object Settings : Route
+    data object Announcements : Route
     data object Accounts : Route
     data object LocalFollowList : Route
     /** [preview] is the list entry the post was opened from, drawn while the full post loads. */

@@ -39,6 +39,11 @@
       <td align="center">应用、话题及产品详情</td>
       <td align="center">本地收藏与屏蔽、浏览历史</td>
     </tr>
+    <tr>
+      <td align="center">Markdown 正文、代码与表格</td>
+      <td align="center">c001apk 小助手公告</td>
+      <td align="center">保存为 Markdown / 离线 HTML</td>
+    </tr>
   </tbody>
 </table>
 

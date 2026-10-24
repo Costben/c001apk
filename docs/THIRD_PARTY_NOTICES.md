@@ -2,6 +2,11 @@
 
 本项目保留原有 [LICENSE](../LICENSE) 与上游署名。
 
+2026-10-24，c001apk 小助手使用的三个图标（`AllInclusive`、`Campaign`、
+`OpenInFull`）取自 Material Icons，由 Google 以 Apache-2.0 发布，仅复制了
+路径数据，与 `ui/common/Icons.kt` 中已有的 Material 图标来源相同。
+Markdown 解析、渲染与导出为项目内实现，没有引入新的第三方解析库。
+
 2026-10-16，新增的 `assets/emojis/niuniu_emotion_*.png` 为酷安官方
 Android 16.6.4（2609291）安装包中的 32 张牛牛表情，用于兼容官方表情名称。
 名称以官方 `niuniu_emotion_array` 核对；素材版权归酷安及相应权利人所有，

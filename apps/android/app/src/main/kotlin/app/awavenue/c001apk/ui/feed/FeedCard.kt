@@ -57,6 +57,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.expandOrigin
 import app.awavenue.c001apk.ui.nav.rememberExpandOrigin
+import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.Card
@@ -254,10 +255,11 @@ fun FeedCard(
         if (feed.message.isNotEmpty()) {
             Spacer(Modifier.height(if (feed.messageTitle.isNotEmpty()) 4.dp else 10.dp))
             var truncated by remember(feed) { mutableStateOf(FeedActions.wasTruncated(feed.id)) }
-            HtmlText(
+            FeedText(
                 feed.message,
-                style = HtmlTextDefaults.style().copy(fontSize = 16.sp),
-                maxLines = PreviewMaxLines,
+                fontSize = 16.sp,
+                preview = true,
+                previewMaxLines = PreviewMaxLines,
                 onTextClick = openFeed,
                 onTextLayout = {
                     truncated = it.hasVisualOverflow
@@ -426,9 +428,9 @@ private fun ForwardSource(source: Entity?) {
         val author = "<a href=\"/u/${sourceFeed.uid}\">@${sourceFeed.username}</a>: "
         if (sourceFeed.messageTitle.isNotEmpty()) {
             HtmlText(author + sourceFeed.messageTitle, maxLines = 2)
-            HtmlText(sourceFeed.message, maxLines = 6)
+            FeedText(sourceFeed.message, preview = true, previewMaxLines = 6)
         } else {
-            HtmlText(author + sourceFeed.message, maxLines = 6)
+            FeedText(author + "\n" + sourceFeed.message, preview = true, previewMaxLines = 6)
         }
         val sourcePics = sourceFeed.picArr
         if (sourcePics.isNotEmpty()) {

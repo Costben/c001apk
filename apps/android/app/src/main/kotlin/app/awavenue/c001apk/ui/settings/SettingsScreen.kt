@@ -40,6 +40,7 @@ import app.awavenue.c001apk.data.HistoryCardMode
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.announcements.AnnouncementIcons
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -383,6 +384,26 @@ fun SettingsScreen() {
                             checked = settings.autoCheckAppUpdate,
                             onCheckedChange = settings::updateAutoCheckAppUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                        )
+                        SwitchPreference(
+                            title = "自动检查公告",
+                            summary = "普通公告进入小助手，重要公告首次弹窗提醒",
+                            checked = app.announcements.automaticEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { app.announcements.setAutomaticEnabled(enabled) }
+                            },
+                            startAction = { PreferenceStartIcon(AnnouncementIcons.Campaign) },
+                        )
+                        ArrowPreference(
+                            title = "清理公告正文缓存",
+                            summary = "阅读记录与提醒状态保留",
+                            startAction = { PreferenceStartIcon(COUIIcons.Clear) },
+                            onClick = rememberHapticClick {
+                                scope.launch {
+                                    app.announcements.clearBodyCache()
+                                    context.toast("公告正文缓存已清理，阅读记录已保留")
+                                }
+                            },
                         )
                         SwitchPreference(
                             title = "接收预发布更新",

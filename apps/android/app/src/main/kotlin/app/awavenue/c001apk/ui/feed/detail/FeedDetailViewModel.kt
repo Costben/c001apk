@@ -18,6 +18,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
+import app.awavenue.c001apk.ui.text.MarkdownContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -67,6 +68,10 @@ class FeedDetailViewModel(
     var articles by mutableStateOf<List<FeedArticle>>(emptyList())
         private set
     var articleImages by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** Whether the body can be read as Markdown, so 查看原文 has something to switch to. */
+    var hasMarkdown by mutableStateOf(false)
         private set
     var isFav by mutableStateOf(false)
         private set
@@ -188,6 +193,8 @@ class FeedDetailViewModel(
         }
         articles = blocks
         articleImages = blocks.filter { it.type == "image" }.map { it.url }
+        hasMarkdown = MarkdownContent.parse(data.message).isMarkdown ||
+            blocks.any { it.type == "text" && MarkdownContent.parse(it.message).isMarkdown }
         topReply = data.list("topReplyRows").firstOrNull()
         replyMe = data.list("replyMeRows").firstOrNull()
         isFav = history.isFav(data.id)

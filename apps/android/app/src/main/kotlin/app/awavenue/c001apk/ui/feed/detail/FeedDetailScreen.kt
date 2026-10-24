@@ -67,6 +67,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
@@ -109,6 +110,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     val listState = rememberPageListState("feed-detail")
 
     var menuOpen by remember { mutableStateOf(false) }
+    var showSource by remember { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
     var fabVisible by remember { mutableStateOf(true) }
@@ -182,6 +184,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                     }
                                 }
                             }
+                            ContentExportButton(viewModel.feed, viewModel.articles)
                             Box {
                                 TopBarIconButton(onClick = { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "更多")
@@ -189,17 +192,20 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                 MoreMenu(
                                     show = menuOpen,
                                     onDismissRequest = { menuOpen = false },
-                                    entries = listOf(
-                                        "复制" to { context.copyText(viewModel.shareUrl) },
-                                        "分享" to { context.shareText(viewModel.shareUrl) },
-                                        (if (viewModel.isFav) "取消收藏" else "收藏") to viewModel::toggleFav,
-                                        (if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock,
-                                        "举报" to {
+                                    entries = buildList {
+                                        add("复制" to { context.copyText(viewModel.shareUrl) })
+                                        add("分享" to { context.shareText(viewModel.shareUrl) })
+                                        add((if (viewModel.isFav) "取消收藏" else "收藏") to viewModel::toggleFav)
+                                        add((if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock)
+                                        if (viewModel.hasMarkdown) {
+                                            add((if (showSource) "格式化显示" else "查看原文") to { showSource = !showSource })
+                                        }
+                                        add("举报" to {
                                             if (viewModel.feedUid.isNotEmpty()) {
                                                 navigator.push(Route.Web(viewModel.reportUrl))
                                             }
-                                        },
-                                    ),
+                                        })
+                                    },
                                 )
                             }
                         }
@@ -287,7 +293,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                     bottom = innerPadding.calculateBottomPadding() + 16.dp,
                                 ),
                             ) {
-                                feedBody(feed, viewModel)
+                                feedBody(feed, viewModel, showSource)
                                 item(key = "reply-header", contentType = "reply-header") {
                                     ReplyHeader(viewModel)
                                 }
@@ -400,10 +406,14 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(feed: Entity, viewModel: FeedDetailViewModel) {
+private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(
+    feed: Entity,
+    viewModel: FeedDetailViewModel,
+    forcePlain: Boolean,
+) {
     if (viewModel.articles.isEmpty()) {
         item(contentType = "feed") {
-            FeedDetailBody(feed, Modifier.padding(horizontal = CardPadding))
+            FeedDetailBody(feed, Modifier.padding(horizontal = CardPadding), forcePlain = forcePlain)
         }
         return
     }
@@ -413,7 +423,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(feed: Entity
         }
     }
     itemsIndexed(viewModel.articles, contentType = { _, article -> article.type }) { _, article ->
-        ArticleBody(article, viewModel.articleImages, Modifier.padding(top = 12.dp))
+        ArticleBody(article, viewModel.articleImages, Modifier.padding(top = 12.dp), forcePlain = forcePlain)
     }
     item(contentType = "feed-footer") {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -462,7 +472,7 @@ private fun ReplyHeader(viewModel: FeedDetailViewModel) {
 
 /** The body of the detail page without its reply list, reused wherever a feed is shown in full. */
 @Composable
-fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier) {
+fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier, forcePlain: Boolean = false) {
     val navigator = LocalNavigator.current
     // Upstream's feed content card copies its text on a long press but has no tap or ripple.
     Column(
@@ -486,7 +496,7 @@ fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier) {
         }
         if (feed.message.isNotEmpty()) {
             Spacer(Modifier.height(5.dp))
-            HtmlText(feed.message, style = HtmlTextDefaults.style().copy(fontSize = 16.sp))
+            FeedText(feed.message, fontSize = 16.sp, forcePlain = forcePlain)
         }
         if (feed.picArr.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -599,9 +609,9 @@ private fun ForwardSource(source: Entity?) {
         val author = "<a href=\"/u/${source.uid}\">@${source.username}</a>: "
         if (source.messageTitle.isNotEmpty()) {
             HtmlText(author + source.messageTitle, maxLines = 2)
-            HtmlText(source.message, maxLines = 6)
+            FeedText(source.message, preview = true, previewMaxLines = 6)
         } else {
-            HtmlText(author + source.message, maxLines = 6)
+            FeedText(author + "\n" + source.message, preview = true, previewMaxLines = 6)
         }
         if (source.picArr.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
