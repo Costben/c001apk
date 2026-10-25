@@ -46,6 +46,7 @@ fun ParamsScreen() {
     val params = settings.deviceParams
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

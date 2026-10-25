@@ -68,6 +68,7 @@ fun CarouselScreen(url: String, title: String, isInit: Boolean) {
     var pageTitle by remember(url, title) { mutableStateOf("") }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

@@ -59,6 +59,7 @@ fun HistoryScreen(type: HistoryType) {
     val entries = app.history.list(type)
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

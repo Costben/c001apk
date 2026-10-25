@@ -126,6 +126,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

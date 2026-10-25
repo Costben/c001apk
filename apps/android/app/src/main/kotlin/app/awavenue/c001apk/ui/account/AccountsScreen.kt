@@ -71,6 +71,7 @@ fun AccountsScreen() {
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

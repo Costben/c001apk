@@ -151,6 +151,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
     }
 
     Scaffold(
+        edgeToEdge = true,
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {

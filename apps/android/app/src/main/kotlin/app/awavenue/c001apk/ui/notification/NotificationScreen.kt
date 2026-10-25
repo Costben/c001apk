@@ -110,6 +110,7 @@ fun NotificationScreen(
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

@@ -50,6 +50,7 @@ fun CoolPicScreen(title: String) {
     val backdrop = rememberGlassBackdrop()
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

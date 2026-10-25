@@ -227,6 +227,7 @@ fun ApkScreen(packageName: String) {
     }
 
     Scaffold(
+        edgeToEdge = true,
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {

@@ -121,6 +121,7 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             AppBarBlurOverlay(
                 modifier = Modifier

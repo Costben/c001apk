@@ -52,6 +52,7 @@ fun LocalFollowListScreen() {
     val users = app.localFollow.users
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

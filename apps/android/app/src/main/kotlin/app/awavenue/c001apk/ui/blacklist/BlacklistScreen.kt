@@ -112,6 +112,7 @@ fun BlacklistScreen(type: BlacklistType) {
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

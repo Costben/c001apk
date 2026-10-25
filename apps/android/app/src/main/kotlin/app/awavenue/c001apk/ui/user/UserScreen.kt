@@ -209,6 +209,7 @@ fun UserScreen(uid: String) {
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

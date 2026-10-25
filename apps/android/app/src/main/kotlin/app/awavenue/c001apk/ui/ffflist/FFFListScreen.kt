@@ -97,6 +97,7 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
     rememberPageMemoryRecorder("fff-list", pagerState.currentPage)
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(

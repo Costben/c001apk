@@ -277,6 +277,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             // COUI's own app bar material: progressive blur plus the gradient surface ramp. The
             // overlay measures the bar and draws the material past it without adding that band to

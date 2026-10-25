@@ -398,6 +398,7 @@ private fun TopicPage(tag: String?, id: String?) {
     }
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 // The material is measured to the bar and draws its fade past it, the way the home

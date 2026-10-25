@@ -89,6 +89,7 @@ fun AboutScreen() {
     val version = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})"
 
     Scaffold(
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 TopAppBar(
