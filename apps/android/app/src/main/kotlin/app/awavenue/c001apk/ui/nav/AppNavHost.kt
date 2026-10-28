@@ -18,7 +18,6 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
@@ -88,6 +87,8 @@ import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.squircle.SquircleShape
+import io.github.suqi8.coui.kmp.squircle.isSquircleEnabled
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -121,9 +122,15 @@ fun AppNavHost(
     val density = LocalDensity.current
     val appBarFadePx = with(density) { AppBarBlurOverlayDefaults.ExtraHeight.toPx() }
     // Sliding pages wear the display's own corner radius: rounded while they travel, and exactly
-    // the display's cut once they land, so the clip never shows at rest.
+    // the display's cut once they land, so the clip never shows at rest. The cut is the display's
+    // silhouette, not a circular arc: ColorOS rounds with an Lp superellipse, which sits about 7% of
+    // the radius further out than a circle at the diagonal, so a circular clip cut the corners short
+    // and left a crescent of the colour behind the page in all four of them.
     val screenCornerRadius = rememberScreenCornerRadius()
-    val slideShape = remember(screenCornerRadius) { RoundedCornerShape(screenCornerRadius) }
+    val squircle = isSquircleEnabled()
+    val slideShape = remember(screenCornerRadius, squircle) {
+        SquircleShape(screenCornerRadius, squircleEnabled = squircle)
+    }
 
     // How far the back gesture has pulled the top page: 1 at rest, 0 once it is fully away. It is
     // read in layer blocks, so a running gesture never recomposes the page.
@@ -179,7 +186,18 @@ fun AppNavHost(
                         top.returnScrolled = true
                         alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
                     }
-                    animate(gestureProgress, 0f, animationSpec = tween(GestureCommitMillis)) { value, _ ->
+                    // The commit finishes whatever travel the finger left at the rate the page
+                    // opened at. A fixed short duration snapped the last stretch shut, which read
+                    // faster than the way in and made the card look like it jumped back.
+                    val remaining = gestureProgress
+                    animate(
+                        remaining,
+                        0f,
+                        animationSpec = tween(
+                            (ExpandDurationMillis * remaining).roundToInt().coerceAtLeast(1),
+                            easing = ExpandEasing,
+                        ),
+                    ) { value, _ ->
                         gestureProgress = value
                     }
                     top.previewed = true
@@ -326,10 +344,12 @@ fun AppNavHost(
                             // A gesture already handed the page back under the finger. Replaying
                             // that last frame as a shrinking card would park its picture over the
                             // list for the whole exit, so a previewed page goes at once.
-                            val duration = when {
-                                targetState != EnterExitState.PostExit -> ExpandDurationMillis
-                                entry.previewed -> 0
-                                else -> ExitDurationMillis
+                            // The way back runs at the way in's rate: a shorter exit read as the
+                            // card snapping shut under the finger.
+                            val duration = if (targetState == EnterExitState.PostExit && entry.previewed) {
+                                0
+                            } else {
+                                ExpandDurationMillis
                             }
                             tween(duration, easing = ExpandEasing)
                         },
@@ -340,10 +360,10 @@ fun AppNavHost(
                         // early. A fast exit curve left a blank card-coloured rectangle shrinking
                         // over the list, which read as the list failing to draw after the pop.
                         transitionSpec = {
-                            val duration = when {
-                                targetState != EnterExitState.PostExit -> ExpandDurationMillis
-                                entry.previewed -> 0
-                                else -> ExitDurationMillis
+                            val duration = if (targetState == EnterExitState.PostExit && entry.previewed) {
+                                0
+                            } else {
+                                ExpandDurationMillis
                             }
                             tween(duration, easing = LinearEasing)
                         },
@@ -481,18 +501,8 @@ private const val RouteParallaxDivisor = 4
 /** How long the page takes to ease back under the finger when a gesture is released early. */
 private const val GestureSettleMillis = 200
 
-/** How long the page takes to finish leaving once the gesture has committed. */
-private const val GestureCommitMillis = 150
-
 /** Wait after the settle before photographing a covered page again, once its list has been moved. */
 private const val ReturnSnapshotDelayMillis = 160L
-
-/**
- * How long a page takes to shrink back into its card. Shorter than the way in: the frame still
- * carries the leaving page, and once the list starts moving under it that picture reads as an
- * afterimage, so the return has to be over before the user's own scroll gets going.
- */
-private const val ExitDurationMillis = 220
 
 /** How long the opening page takes to cover the list it grew from, before the list is aligned. */
 private const val OpenCoverMillis = 260L

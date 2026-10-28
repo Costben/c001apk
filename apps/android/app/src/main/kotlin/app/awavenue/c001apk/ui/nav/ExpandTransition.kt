@@ -151,12 +151,6 @@ private const val ExitCardEnd = 0.08f
 // earlier leaves the frame's own fill as a blank card-coloured rectangle shrinking over the list.
 private const val ExitHandoverProgress = 0.02f
 
-// On the way out the frame lands on the card this early in the gesture, so a finger held near the
-// end of a back swipe already shows the page exactly as the release will leave it. Landing only at
-// zero left the last stretch of the pull a frame a percent too wide and a few dozen pixels high,
-// and letting go then snapped it the rest of the way down.
-private const val ExitLandAt = 0.15f
-
 /**
  * Hosts a page that grows out of [origin]. [progress] drives the frame from the element's bounds
  * (0) to the full screen (1); [fade] runs linearly over the same time and cross-fades the element's
@@ -179,20 +173,11 @@ internal fun ExpandFrame(
 
     fun active(): ExpandOrigin? = origin?.takeIf { progress() < 1f && it.hasBounds }
 
-    // The frame's travel on the way out, brought forward so it is already at the card before the
-    // gesture is home. The way in keeps the raw value: the page has to start at the element's bounds.
-    fun frameProgress(): Float =
-        if (exiting()) {
-            ((progress() - ExitLandAt) / (1f - ExitLandAt)).coerceIn(0f, 1f)
-        } else {
-            progress()
-        }
-
     // How much of the card shows over the page on the way out, or null when nothing of it is left
     // to show and the page has to hand over to the real one in place.
     fun exitCardAlpha(source: ExpandOrigin): Float? =
         if (source.isAvailable || source.picture != null) {
-            ((ExitCardStart - frameProgress()) / (ExitCardStart - ExitCardEnd)).coerceIn(0f, 1f)
+            ((ExitCardStart - progress()) / (ExitCardStart - ExitCardEnd)).coerceIn(0f, 1f)
         } else {
             null
         }
@@ -240,7 +225,7 @@ internal fun ExpandFrame(
                     clip = false
                     return@graphicsLayer
                 }
-                val p = frameProgress()
+                val p = progress()
                 val left = lerp(bounds.left, 0f, p)
                 val top = lerp(bounds.top, 0f, p)
                 val width = lerp(bounds.width, size.width, p)
@@ -268,7 +253,7 @@ internal fun ExpandFrame(
                 // Only a page leaving with no drawing of the card left hands over without one: the
                 // fill goes once the frame has arrived, and the real card underneath shows through.
                 val handover = if (exiting() && exitCard == null) {
-                    (frameProgress() / ExitHandoverProgress).coerceIn(0f, 1f)
+                    (progress() / ExitHandoverProgress).coerceIn(0f, 1f)
                 } else {
                     1f
                 }
@@ -326,7 +311,7 @@ internal fun ExpandFrame(
                         // to fade to it keeps drawing until the frame reaches the real one.
                         val source = active()
                         val exitCard = source?.takeIf { exiting() }?.let { exitCardAlpha(it) }
-                        val p = frameProgress()
+                        val p = progress()
                         alpha = when {
                             exitCard != null -> 1f - exitCard
                             exiting() -> (p / ExitHandoverProgress).coerceIn(0f, 1f)
