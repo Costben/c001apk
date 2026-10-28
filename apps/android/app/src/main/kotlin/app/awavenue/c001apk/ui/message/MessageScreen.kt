@@ -63,6 +63,7 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.drafts.DraftPreviewRow
 import app.awavenue.c001apk.ui.follow.localFollowLabel
 import app.awavenue.c001apk.ui.nav.ExpandOrigin
 import app.awavenue.c001apk.ui.nav.FFFListType
@@ -321,6 +322,7 @@ private fun MessageList(
         }
     }
     val localFollows = app.localFollow.users
+    val drafts = app.drafts.drafts
     val historyRows = if (app.settings.historyCardMode == HistoryCardMode.Full) history else history.take(5)
 
     AppPullToRefresh(
@@ -375,6 +377,23 @@ private fun MessageList(
                             PreviewEmpty("暂无浏览记录")
                         } else {
                             historyRows.forEach { item -> HistoryPreviewRow(item) }
+                        }
+                    }
+                }
+                item(key = "drafts", contentType = "drafts") {
+                    PreviewCard(
+                        title = "草稿箱",
+                        onClick = { navigator.push(Route.Drafts) },
+                    ) {
+                        if (drafts.isEmpty()) {
+                            PreviewEmpty("暂无草稿")
+                        } else {
+                            drafts.take(5).forEach { draft ->
+                                DraftPreviewRow(
+                                    draft = draft,
+                                    onClick = { navigator.push(Route.Drafts) },
+                                )
+                            }
                         }
                     }
                 }

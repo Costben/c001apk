@@ -1,16 +1,14 @@
 package app.awavenue.c001apk.ui.feed.reply
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -18,25 +16,21 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.captionBar
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.lerp
-import io.github.suqi8.coui.kmp.layout.DialogDefaults
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -48,74 +42,78 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.awavenue.c001apk.data.Draft
+import app.awavenue.c001apk.data.DraftImage
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
-import app.awavenue.c001apk.ui.common.ComposerBallAnchor
+import app.awavenue.c001apk.ui.common.MoreMenu
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
+import app.awavenue.c001apk.ui.feed.detail.OssUploadModel
 import app.awavenue.c001apk.ui.feed.detail.SelectedImage
 import app.awavenue.c001apk.ui.feed.detail.rememberImagePicker
 import app.awavenue.c001apk.ui.text.EmojiEditText
 import app.awavenue.c001apk.ui.text.EmojiSections
 import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
-import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarDefaults
-import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.ChipTabGroup
+import io.github.suqi8.coui.kmp.basic.GradientStrokeStyle
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
-import io.github.suqi8.coui.kmp.basic.LoadingButton
+import io.github.suqi8.coui.kmp.basic.InnerShadowStyle
+import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.materialShadowEdge
+import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Close
 import io.github.suqi8.coui.kmp.icon.extended.Photos
-import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
+import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import io.github.suqi8.coui.kmp.utils.COUIPopupUtils
-import kotlin.math.abs
-import kotlin.math.min
-import kotlin.math.pow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 
 /**
  * What the composer is answering. [id] empty means a new feed rather than a reply; [title] carries
@@ -134,31 +132,64 @@ data class ReplyTarget(
  * The reply and publish sheet, ported from the Flutter `ReplyPage`: pictures first go to OSS,
  * then the write endpoint is called, and the legacy picture captcha is answered inline when the
  * server asks for it.
+ *
+ * [draft] reopens a composition that was put aside: its text, pictures and target take the place
+ * of the ones [target] would start with, and leaving the sheet again updates that same draft
+ * instead of filing a second one. Closing a sheet with unsaved work asks whether to keep it.
  */
+@OptIn(ExperimentalCOUIApi::class)
 @Composable
 fun ReplyComposerSheet(
     target: ReplyTarget,
     onDismiss: () -> Unit,
     onPosted: () -> Unit,
+    draft: Draft? = null,
 ) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    val initialText = if (target.targetType == "tag") "#${target.title}# " else ""
+    // A resumed draft carries its own target and content; a fresh sheet starts from the target it
+    // was opened for. Everything below reads this one, so publishing stays single-minded.
+    val activeTarget = draft?.let {
+        ReplyTarget(
+            id = it.replyId,
+            type = it.replyType,
+            targetType = it.targetType,
+            targetId = it.targetId,
+            title = it.title,
+            feedType = it.feedType,
+        )
+    } ?: target
+
+    val initialText = draft?.text
+        ?: if (activeTarget.targetType == "tag") "#${activeTarget.title}# " else ""
     val input = rememberEmojiInputState(initialText)
-    var onlySelf by remember { mutableStateOf(false) }
+    var onlySelf by remember { mutableStateOf(draft?.onlySelf == true) }
     var emojiPanel by remember { mutableStateOf(false) }
-    var images by remember { mutableStateOf<List<SelectedImage>>(emptyList()) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var images by remember {
+        mutableStateOf(
+            draft?.images.orEmpty().map { image ->
+                SelectedImage(image.path, OssUploadModel(image.name, image.resolution, image.md5))
+            },
+        )
+    }
+    // The id the draft box files this composition under: a resumed draft keeps its own, so
+    // saving twice replaces rather than duplicates.
+    val draftId = remember { draft?.id ?: UUID.randomUUID().toString() }
+    val initialImages = remember { draft?.images.orEmpty().map { it.path } }
+    var askSave by remember { mutableStateOf(false) }
+    var savingDraft by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<String?>(null) }
     var publishing by remember { mutableStateOf(false) }
     var captchaImage by remember { mutableStateOf<ByteArray?>(null) }
     var captchaCode by remember { mutableStateOf("") }
 
     val hint = when {
-        target.id.isNotEmpty() -> "回复: ${target.title}"
-        target.title.isNotEmpty() -> "发布于: ${target.title}"
+        activeTarget.id.isNotEmpty() -> "回复: ${activeTarget.title}"
+        activeTarget.title.isNotEmpty() -> "发布于: ${activeTarget.title}"
         else -> "发布动态"
     }
     val canPublish = input.text.replace("\n", "").isNotEmpty() && !publishing
@@ -179,6 +210,55 @@ fun ReplyComposerSheet(
         },
     )
 
+    // The draft question and the exit path sit above publish(), so a successful post can leave
+    // through the same animation as a plain close.
+    var shown by remember { mutableStateOf(true) }
+    var closing by remember { mutableStateOf(false) }
+    var afterExit by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    /** Unsaved work: text that moved away from what the sheet opened with, or a changed picture set. */
+    fun hasUnsavedWork(): Boolean =
+        input.text.trim() != initialText.trim() || images.map { it.path } != initialImages
+
+    /** Slides the panel out; [then] runs once it has left the screen. */
+    fun leave(then: () -> Unit) {
+        if (closing) return
+        closing = true
+        focusManager.clearFocus()
+        afterExit = then
+        shown = false
+    }
+
+    /** Leaving: work worth keeping is offered to the draft box first, an untouched sheet just folds. */
+    fun requestClose() {
+        if (closing || publishing) return
+        if (askSave) {
+            // The question is the library's dialog now, so its own answers settle it; this only
+            // catches a backdrop tap that lands while it is up.
+            askSave = false
+            return
+        }
+        if (hasUnsavedWork()) {
+            input.clearFocus()
+            focusManager.clearFocus()
+            askSave = true
+        } else {
+            leave(onDismiss)
+        }
+    }
+
+    /** 继续编辑: the panel never moved, so all it takes is the keyboard back. */
+    fun keepEditing() {
+        askSave = false
+        input.focus()
+    }
+
+    /** A second exit while the question is up: the composition is dropped, not filed. */
+    fun discardDraft() {
+        askSave = false
+        leave(onDismiss)
+    }
+
     suspend fun publish() {
         if (publishing) return
         publishing = true
@@ -194,11 +274,11 @@ fun ReplyComposerSheet(
             }
             progress = "正在发布"
             val fields = mutableListOf("message" to input.text)
-            if (target.id.isEmpty()) {
-                val type = if (target.targetType == "apk") "comment" else target.feedType.ifEmpty { "feed" }
+            if (activeTarget.id.isEmpty()) {
+                val type = if (activeTarget.targetType == "apk") "comment" else activeTarget.feedType.ifEmpty { "feed" }
                 val feedFields = mutableListOf("type" to type)
-                if (target.targetType.isNotEmpty()) feedFields += "targetType" to target.targetType
-                if (target.targetId.isNotEmpty()) feedFields += "targetId" to target.targetId
+                if (activeTarget.targetType.isNotEmpty()) feedFields += "targetType" to activeTarget.targetType
+                if (activeTarget.targetId.isNotEmpty()) feedFields += "targetId" to activeTarget.targetId
                 feedFields += "message" to input.text
                 feedFields += "status" to if (onlySelf) "-1" else "1"
                 feedFields += "pic" to pic
@@ -208,18 +288,20 @@ fun ReplyComposerSheet(
                     context.toast(result.message)
                 } else {
                     context.toast("发布成功")
-                    onPosted()
+                    app.drafts.remove(draftId)
+                    leave(onPosted)
                 }
             } else {
                 fields += "replyAndForward" to if (onlySelf) "1" else "0"
                 fields += "pic" to pic
-                val result = app.repository.postReply(target.id, target.type, fields, emptyList())
+                val result = app.repository.postReply(activeTarget.id, activeTarget.type, fields, emptyList())
                 progress = null
                 if (result.message.isNotEmpty()) {
                     context.toast(result.message)
                 } else {
                     context.toast("回复成功")
-                    onPosted()
+                    app.drafts.remove(draftId)
+                    leave(onPosted)
                 }
             }
         } catch (e: CancellationException) {
@@ -238,311 +320,248 @@ fun ReplyComposerSheet(
         }
     }
 
-    // The composer rides just above the keyboard (8dp clear of it) and has no drag handle. The
-    // lift is animated here instead of being left to imePadding: a dialog window receives the
-    // keyboard inset as one jump, so the panel used to teleport between the two resting places
-    // while the keyboard itself slid up. Animating the margin keeps the panel glued to the
-    // keyboard on the way up and lets it settle back down when the keyboard goes away.
-    val density = LocalDensity.current
-    val imeBottom = WindowInsets.ime.getBottom(density)
-    val bottomBarBottom = WindowInsets.navigationBars.getBottom(density) +
-        WindowInsets.captionBar.getBottom(density)
-    val liftTarget = with(density) { maxOf(imeBottom, bottomBarBottom).toDp() }
-    val lift by animateDpAsState(
-        targetValue = liftTarget,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
-        label = "composerLift",
-    )
-
-    // 回复某人时，这块面板从底部升起，和别的底部弹层一样；发评论时，它由右下角那颗球展开 ——
-    // 展开用的是遮罩：面板的版式从头到尾都是最终尺寸，只有可见区域从 56dp 的圆角方形长满整块，
-    // 于是内容不会被反复重排，第一帧的轮廓和球严丝合缝，中间不存在两个物体的交接。
-    val fromBall = target.type != "reply"
-    // 面板的右下角对到球真正量到的位置上。Scaffold 把球放在 inset 之上 FabSpacing(12dp)、
-    // 右边缘内 12dp，弹窗窗口自己拿到的 inset 又是另一份，两边各算一遍就会差出几 dp，
-    // 露出球的一小片下摆。量一次就没有这个问题，顺带面板也跟着宽了。
-    // 读一次就作废：只有从球点开的这一次才该对齐到球，从别处（底栏的"发布动态"）打开时
-    // 要退回默认留白，否则会去对齐上一次留下的旧位置。
-    val ballRect = remember {
-        ComposerBallAnchor.rect.also { ComposerBallAnchor.rect = null }
-    }
-    val windowWidthPx = LocalWindowInfo.current.containerSize.width
-    val windowHeightPx = LocalWindowInfo.current.containerSize.height
-    val restLift = with(density) { bottomBarBottom.toDp() }
-    val cornerPadEnd = if (ballRect != null && windowWidthPx > 0) {
-        with(density) { (windowWidthPx - ballRect.right).toDp() }
-    } else {
-        16.dp
-    }
-    val cornerPadBottom = if (ballRect != null && windowHeightPx > 0) {
-        with(density) { (windowHeightPx - ballRect.bottom).toDp() }
-    } else {
-        16.dp + restLift
-    }
-    // 面板底边 = 球的底边 + 键盘比归位 inset 多出来的那一截。
-    val panelBottomPad = cornerPadBottom - restLift + lift
-    val panelWidth = if (windowWidthPx > 0) {
-        with(density) { (windowWidthPx - (cornerPadEnd + 16.dp).toPx()).toDp() }
-            .coerceAtMost(DialogDefaults.MaxWidth)
-    } else {
-        320.dp
-    }
-    val ballSide = if (ballRect != null && ballRect.width > 0f) {
-        with(density) { ballRect.width.toDp() }
-    } else {
-        56.dp
-    }
-    // 圆角必须 ≥ 球的半径，否则圆角那段弧会切进球里 —— 面板再大也压不住，球会从弧的内侧
-    // 露出一条边（COUI 的 19dp 就是这样，28dp 才刚好相切）。这里多留 2dp 余量。
-    val panelCorner = ballSide / 2 + 2.dp
-    var panelSize by remember { mutableStateOf(IntSize.Zero) }
-    val panelHeight = if (panelSize.height > 0) with(density) { panelSize.height.toDp() } else 200.dp
-
-    // fold: 0 = 收起（球，或面板还在屏幕下方），1 = 到位。
-    val fold = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        // 弹簧起手是慢的：球先鼓起来，再被撑成面板，落位时有一点点回弹 —— 比匀速 tween 更像"被拉伸"。
-        fold.animateTo(
-            1f,
-            spring(dampingRatio = 0.78f, stiffness = 400f, visibilityThreshold = 0.001f),
-        )
-    }
-    var closing by remember { mutableStateOf(false) }
-    val shown = remember { mutableStateOf(true) }
-    fun close() {
-        if (closing || publishing) return
-        closing = true
-        focusManager.clearFocus()
+    fun saveToDrafts() {
+        if (savingDraft) return
+        savingDraft = true
         scope.launch {
-            // 收起之前先等面板落回球的位置：键盘收起来时 lift 还要走完一程，如果这时候就开始折叠，
-            // 折叠的终点会落在球的下方（面板当时所在的位置），于是收尾那一下对不上球。
-            withTimeoutOrNull(900) {
-                snapshotFlow { lift.value - liftTarget.value }
-                    .first { abs(it) < 1.5f }
+            val saved = runCatching {
+                app.drafts.save(
+                    id = draftId,
+                    text = input.text,
+                    images = images.map {
+                        DraftImage(it.path, it.model.name, it.model.resolution, it.model.md5)
+                    },
+                    replyId = activeTarget.id,
+                    replyType = activeTarget.type,
+                    targetType = activeTarget.targetType,
+                    targetId = activeTarget.targetId,
+                    title = activeTarget.title,
+                    feedType = activeTarget.feedType,
+                    onlySelf = onlySelf,
+                )
+            }.getOrNull()
+            savingDraft = false
+            askSave = false
+            if (saved == null) {
+                context.toast("草稿保存失败")
+            } else {
+                context.toast("已保存到草稿箱")
+                leave(onDismiss)
             }
-            fold.animateTo(0f, tween(durationMillis = 220, easing = FastOutSlowInEasing))
-            shown.value = false
-            onDismiss()
         }
     }
 
-    val grow = fold.value.coerceIn(0f, 1f)
-    // 可见区域右下角锚定，从球的边长长到整块面板；圆角从球的半径收到面板自己的圆角。
-    // 横向比纵向先走一点：展开前半程是一块横向拉长的圆角块，后半程才补足高度，
-    // 观感上是球被拽开，而不是一个正方形整体放大。
-    val revealWidth = lerp(ballSide, panelWidth, grow.coerceAtLeast(0f).pow(0.85f))
-    val revealHeight = lerp(ballSide, panelHeight, grow.coerceAtLeast(0f).pow(1.2f))
-    val revealRadius = lerp(
-        ballSide / 2,
-        panelCorner,
-        ((grow - 0.45f) / 0.55f).coerceIn(0f, 1f),
-    )
-    val panelShape = remember(fromBall, revealWidth, revealHeight, revealRadius) {
-        if (fromBall) {
-            CornerRevealShape(revealWidth, revealHeight, revealRadius)
-        } else {
-            RoundedCornerShape(panelCorner)
-        }
-    }
-    val panelColor = DialogDefaults.backgroundColor()
-    // 表面在球的位置上淡入：那几帧轮廓还和球一模一样，看上去是球自己换了材质。
-    val surfaceAlpha = if (fromBall) (grow / 0.22f).coerceIn(0f, 1f) else grow
-    // 阴影的浓度跟着表面走。dropShadow 画在 clip / background 之外，不受表面 alpha 影响：只按形状
-    // 铺满的话，展开第一帧球还没显形，球的位置先落下一块影子；收起时表面已经透明，影子还挂到最后。
-    val barShadow = BottomFloatingNavigationBarDefaults.BarShadow
-    val panelShadow = Shadow(
-        color = barShadow.color.copy(alpha = barShadow.color.alpha * surfaceAlpha),
-        offset = barShadow.offset,
-        radius = barShadow.radius,
-        spread = barShadow.spread,
-    )
-    val contentAlpha = ((grow - 0.4f) / 0.6f).coerceIn(0f, 1f)
-    val slide = if (fromBall) 0.dp else (panelHeight + 40.dp) * (1f - grow)
-    val scrimColor = COUITheme.colorScheme.windowDimming
+    // The panel is the ColorOS 17 bottom-panel template: the sheet supplies the frosted surface and
+    // its material rim, while the toolbar, the title, the status line and the capsule action are
+    // laid out here at the template's measured rhythm. The drag bar stays hidden — the toolbar is
+    // the panel's top row, and the sheet keeps its slim strip so the panel remains draggable.
+    val density = LocalDensity.current
+    val keyboard = with(density) { WindowInsets.ime.getBottom(density).toDp() }
+    // The panel runs to the window edge and pads itself clear of the gesture bar; sitting on the
+    // IME, the same gap would read as dead space, so it shrinks to the native keyboard spacing.
+    val bottomGap = if (keyboard > 0.dp) ComposerPanel.KeyboardBottomInset else ComposerPanel.BottomInset
 
-    BackHandler(enabled = true) { close() }
-
-    COUIPopupUtils.DialogLayout(
-        visible = shown,
-        enterTransition = EnterTransition.None,
-        exitTransition = ExitTransition.None,
-        enableWindowDim = false,
-        renderInRootScaffold = true,
+    OverlayBottomSheet(
+        show = shown,
+        showDragHandle = false,
+        insideMargin = DpSize(ComposerPanel.SideInset, bottomGap),
+        onDismissRequest = { requestClose() },
+        onDismissFinished = { afterExit?.invoke() },
+        startAction = {
+            CloseCapsule(onClick = { requestClose() })
+        },
+        endAction = {
+            Box {
+                OverflowButton(onClick = { menuOpen = true })
+                MoreMenu(
+                    show = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    entries = listOf(
+                        // An untouched sheet has nothing worth filing; the box would just collect
+                        // blanks, so the entry says so instead.
+                        "保存到草稿箱" to {
+                            if (input.text.isNotBlank() || images.isNotEmpty()) {
+                                saveToDrafts()
+                            } else {
+                                context.toast("还没有写内容")
+                            }
+                        },
+                    ),
+                )
+            }
+        },
     ) {
-        Box(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(scrimColor.copy(alpha = scrimColor.alpha * grow))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { close() },
+        // Back is answered inside the panel rather than left to the sheet's own handler: that one
+        // slides the panel away before it asks, and an unsaved composition has to be offered to the
+        // draft box while the work is still in place. With the question up, an exit drops it.
+        BackHandler(enabled = true) {
+            // Swallow the exit that lands while the panel is already folding, or while a post is
+            // in flight: neither may fall through to the screen underneath.
+            if (closing) return@BackHandler
+            if (askSave) discardDraft() else requestClose()
+        }
+
+        Spacer(Modifier.height(ComposerPanel.ToolbarGap))
+        // The trimmed line box is taller than the measured ink box, so the title is centred inside
+        // a pinned-height box and measured unbounded, which keeps ascenders and descenders whole.
+        Box(
+            Modifier.fillMaxWidth().height(ComposerPanel.TitleHeight),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                text = hint,
+                modifier = Modifier.wrapContentHeight(unbounded = true),
+                style = trimmedLineHeight,
+                fontSize = 28.sp,
+                lineHeight = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = COUITheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+        }
+        Spacer(Modifier.height(ComposerPanel.StatusGap))
+        StatusLine(text = "${input.text.length}/500")
+        Spacer(Modifier.height(ComposerPanel.StatusToBodyGap))
+        // The sheet hands the content whatever is left once its toolbar is in, so the field is
+        // capped by that leftover instead of by a guess about the window: with the keyboard up the
+        // panel rides on it, and a field sized from the full window would push the action off the
+        // bottom. Everything below the field is subtracted here, since it shares the same space.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val belowField = (if (images.isNotEmpty()) ComposerPanel.ImagesHeight else 0.dp) +
+                (if (emojiPanel) ComposerPanel.EmojiHeight else 0.dp) +
+                ComposerPanel.ToolsGap + ComposerPanel.ToolsHeight +
+                ComposerPanel.ActionGap + ComposerPanel.ActionHeight
+            val editorMax = (maxHeight - belowField).coerceAtLeast(ComposerPanel.MinEditorHeight)
+            // The card itself is capped rather than scrolled: a scroll viewport shorter than the
+            // field would cut the card off square at the bottom, and the field already scrolls its
+            // own text when it runs out of lines.
             Column(
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    // 右下留白就是球的留白，收起时面板正好落在球上。
-                    .padding(end = cornerPadEnd, bottom = panelBottomPad)
-                    .offset(y = slide)
-                    .width(panelWidth)
-                    .onSizeChanged { panelSize = it }
-                    .dropShadow(
-                        shape = panelShape,
-                        shadow = panelShadow,
-                    )
-                    .clip(panelShape)
-                    .background(panelColor.copy(alpha = panelColor.alpha * surfaceAlpha))
-                    .graphicsLayer {
-                        alpha = contentAlpha
-                        val scale = 0.96f + 0.04f * grow
-                        scaleX = scale
-                        scaleY = scale
-                        transformOrigin = TransformOrigin(1f, 1f)
-                    }
-                    .padding(16.dp),
+                    .fillMaxWidth()
+                    .heightIn(max = editorMax)
+                    .squircleSurface(
+                        color = COUITheme.colorScheme.surfaceContainer,
+                        cornerRadius = ComposerPanel.EditorRadius,
+                    ),
             ) {
-                Text(
-                    hint,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = COUITheme.textStyles.title4,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                EmojiEditText(
+                    state = input,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    hint = "说点什么…",
+                    maxCount = 500,
+                    minLines = 4,
+                    maxLines = 6,
+                    textStyle = COUITheme.textStyles.body1,
+                    onFocused = { emojiPanel = false },
                 )
-                Spacer(Modifier.height(12.dp))
-                // Only the middle scrolls when the keyboard and the emoji panel leave little room; the
-                // title and the tool row stay put.
-                Column(
-                    Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(COUITheme.colorScheme.surfaceContainerHigh),
-                    ) {
-                        EmojiEditText(
-                            state = input,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                            hint = "说点什么…",
-                            maxCount = 500,
-                            minLines = 4,
-                            maxLines = 6,
-                            textStyle = COUITheme.textStyles.body1,
-                            onFocused = { emojiPanel = false },
+            }
+        }
+        if (images.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                images.forEach { image ->
+                    Box(Modifier.size(64.dp)) {
+                        AsyncImage(
+                            model = java.io.File(image.path),
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
                         )
-                        Text(
-                            "${input.text.length}/500",
-                            style = COUITheme.textStyles.footnote2,
-                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier
-                                .align(Alignment.End)
-                                .padding(end = 12.dp)
-                                .padding(bottom = 8.dp),
-                        )
-                    }
-                    if (images.isNotEmpty()) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        IconButton(
+                            onClick = { images = images - image },
+                            modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
                         ) {
-                            images.forEach { image ->
-                                Box(Modifier.size(64.dp)) {
-                                    AsyncImage(
-                                        model = java.io.File(image.path),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
-                                    )
-                                    IconButton(
-                                        onClick = { images = images - image },
-                                        modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
-                                    ) {
-                                        Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
-                                    }
-                                }
-                            }
+                            Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
                         }
                     }
-                    if (emojiPanel) {
-                        // 196dp: the 32dp chip row plus roughly the four grid rows the old 180dp
-                        // panel showed, so switching tabs does not resize the sheet.
-                        EmojiPanel(
-                            modifier = Modifier.height(196.dp).padding(top = 8.dp),
-                            onPick = { emoji -> input.insert(emoji) },
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        // The reply-and-forward toggle sits above the tools, at the window's bottom left.
-                        Row(
-                            Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable { onlySelf = !onlySelf }
-                                .padding(start = 4.dp, end = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
-                                onClick = null,
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                if (target.id.isEmpty()) "仅自己可见" else "回复并转发",
-                                style = COUITheme.textStyles.body2,
-                                color = if (onlySelf) {
-                                    COUITheme.colorScheme.onSurface
-                                } else {
-                                    COUITheme.colorScheme.onSurfaceVariantSummary
-                                },
-                                maxLines = 1,
-                            )
-                        }
-                        Row(
-                            Modifier.height(40.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
-                            Spacer(Modifier.width(8.dp))
-                            ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
-                                emojiPanel = !emojiPanel
-                                if (emojiPanel) {
-                                    input.clearFocus()
-                                    focusManager.clearFocus()
-                                } else {
-                                    input.focus()
-                                }
-                            }
-                        }
-                    }
-                    LoadingButton(
-                        text = "发布",
-                        onClick = { scope.launch { publish() } },
-                        enabled = canPublish,
-                        isLoading = publishing,
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                        modifier = Modifier.padding(bottom = 4.dp),
-                        minWidth = 64.dp,
-                        minHeight = 32.dp,
-                        cornerRadius = 10.dp,
-                    )
                 }
             }
         }
+        if (emojiPanel) {
+            // 212dp lands exactly on a row boundary: a 32dp chip row, a 6dp gap, four 42dp grid
+            // rows and the closing 6dp, so switching tabs does not resize the sheet and the last
+            // row is never sliced.
+            EmojiPanel(
+                modifier = Modifier.height(212.dp).padding(top = 8.dp),
+                onPick = { emoji -> input.insert(emoji) },
+            )
+        }
+
+        Spacer(Modifier.height(ComposerPanel.ToolsGap))
+        // One row for the field's tools: pictures and emoji on the start side, the visibility
+        // toggle on the end side, where the template puts its non-primary controls.
+        Row(
+            Modifier.fillMaxWidth().height(ComposerPanel.ToolsHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
+            Spacer(Modifier.width(8.dp))
+            ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
+                emojiPanel = !emojiPanel
+                if (emojiPanel) {
+                    input.clearFocus()
+                    focusManager.clearFocus()
+                } else {
+                    input.focus()
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable { onlySelf = !onlySelf }
+                    .padding(start = 4.dp, end = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
+                    onClick = null,
+                )
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    if (activeTarget.id.isEmpty()) "仅自己可见" else "回复并转发",
+                    style = COUITheme.textStyles.body2,
+                    color = if (onlySelf) {
+                        COUITheme.colorScheme.onSurface
+                    } else {
+                        COUITheme.colorScheme.onSurfaceVariantSummary
+                    },
+                    maxLines = 1,
+                )
+            }
+        }
+        Spacer(Modifier.height(ComposerPanel.ActionGap))
+        ActionCapsule(
+            text = "发布",
+            enabled = canPublish,
+            onClick = { scope.launch { publish() } },
+        )
+    }
+
+    // The question the close path raises, as the library's centered alert dialog: 继续编辑 is the
+    // negative answer, 保存 the positive one, and an exit while it is up drops the composition
+    // instead of filing it.
+    OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
+        show = askSave,
+        title = "保存到草稿箱？",
+        summary = "这次编辑还没发布，存进草稿箱下次可以接着写。",
+        cancelText = "继续编辑",
+        confirmText = "保存",
+        onCancel = { keepEditing() },
+        onConfirm = { saveToDrafts() },
+    ) {
+        BackHandler(enabled = askSave) { discardDraft() }
     }
 
     OverlayLoadingDialog(show = progress != null, text = progress)
+
 
     captchaImage?.let { bytes ->
         CaptchaDialog(
@@ -588,6 +607,264 @@ private suspend fun loadCaptchaImage(
         context.toast("无法获取验证码：${ApiFailure.from(e).message}")
     }
 }
+
+/**
+ * Geometry of the ColorOS 17 panel template, taken from the library's demo at the 3.875 px/dp it was
+ * measured on: a 10dp handle strip, a 50dp toolbar carrying a 60x40 close capsule and a 40dp
+ * overflow circle, a 28sp title, a 12sp status line, the body, one tool row and a 44dp capsule
+ * action, closing on a 40dp bottom inset.
+ */
+private object ComposerPanel {
+    val SideInset = 16.dp
+
+    /** Inset between the capsule action and the window bottom: 155px. */
+    val BottomInset = 40.dp
+
+    /** The same gap while the sheet sits on the keyboard, where 40dp would read as dead space. */
+    val KeyboardBottomInset = 12.dp
+
+    /** Height of the close capsule and the overflow circle: 155px. */
+    val ToolbarButtonHeight = 40.dp
+
+    /** Distance from the toolbar's foot to the title ink: 80px. */
+    val ToolbarGap = 3.dp
+
+    /** Ink height of the 28sp title: 105px. */
+    val TitleHeight = 27.dp
+
+    /** Gap between the title and the status line: 29px. */
+    val StatusGap = 12.dp
+
+    /** Ink height of the 12sp status line: 44px. */
+    val StatusHeight = 12.dp
+
+    val StatusToBodyGap = 16.dp
+
+    /** The list-row radius the template uses for its squircle cards. */
+    val EditorRadius = 23.dp
+
+    /** The field keeps at least three lines plus its own padding before it starts scrolling. */
+    val MinEditorHeight = 88.dp
+
+    /** A 64dp thumbnail row plus its 10dp gap. */
+    val ImagesHeight = 74.dp
+
+    /** The emoji grid's 212dp plus its 8dp gap. */
+    val EmojiHeight = 220.dp
+
+    val ToolsHeight = 40.dp
+    val ToolsGap = 16.dp
+    val ActionGap = 20.dp
+
+    /** Height of the capsule action: 171px. */
+    val ActionHeight = 44.dp
+
+    /** The toolbar buttons' rim: 0.5 alpha over 2dp, as the template measured it. */
+    val ToolbarButtonStroke = MaterialStrokeParams(
+        edgeAlpha = 0.5f,
+        edgeWidth = 2.dp,
+        shadowFadeIn = 0.03f,
+    )
+
+    /** `couiColorPrimary` measured on the live capsule: #1A8CFE at the top, #3198FF at the bottom. */
+    val ActionGradient = listOf(Color(0xFF1A8CFE), Color(0xFF3198FF))
+
+    /** The dark-mode toolbar fill: 12% white over the dark panel. */
+    val ToolbarFillDark = Color(0x20FFFFFF)
+
+    /** The light-mode halo round a toolbar button: dark, deepest below the button. */
+    val ToolbarHaloLight = Shadow(
+        radius = 16.dp,
+        color = Color.Black,
+        offset = DpOffset(0.dp, 6.dp),
+        alpha = 0.12f,
+    )
+
+    /** The dark-mode halo: the same geometry in faint white. */
+    val ToolbarHaloDark = Shadow(
+        radius = 16.dp,
+        color = Color.White,
+        offset = DpOffset(0.dp, 6.dp),
+        alpha = 0.05f,
+    )
+
+    /** The capsule's 1dp edge light: white at both ends, clear across the middle. */
+    val ActionEdgeGradient = listOf(
+        Color.White.copy(alpha = 0.18f),
+        Color.Transparent,
+        Color.White.copy(alpha = 0.15f),
+    )
+}
+
+/**
+ * The two toolbar buttons' shared dress. Light mode has no fill of its own — the capsule reads the
+ * panel underneath — and carries a dark halo that is deepest under its bottom edge; dark mode
+ * swaps in a 12% white fill and a faint light halo. The halo never paints inside the capsule, so it
+ * is drawn with the capsule cut out: a plain gradient started at the bottom edge left a hard line
+ * across the button's foot.
+ */
+@Composable
+private fun PanelToolbarButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val isDark = COUITheme.colorScheme.background.luminance() < 0.5f
+    val fill = if (isDark) ComposerPanel.ToolbarFillDark else Color.Transparent
+    val halo = if (isDark) ComposerPanel.ToolbarHaloDark else ComposerPanel.ToolbarHaloLight
+    Box {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .drawWithContent {
+                    val capsule = Path().apply {
+                        addOutline(CircleShape.createOutline(size, layoutDirection, this@drawWithContent))
+                    }
+                    clipPath(capsule, ClipOp.Difference) { this@drawWithContent.drawContent() }
+                }
+                .dropShadow(CircleShape, halo),
+        )
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(fill)
+                .materialShadowEdge(
+                    stroke = ComposerPanel.ToolbarButtonStroke,
+                    edgeStyle = GradientStrokeStyle.EDGE_STYLE_1,
+                    shadowStyle = InnerShadowStyle.SHADOW_STYLE_1,
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
+    }
+}
+
+/** The capsule close button in the panel toolbar: 60x40dp, full radius. */
+@Composable
+private fun CloseCapsule(onClick: () -> Unit) {
+    PanelToolbarButton(onClick = onClick) {
+        Box(
+            modifier = Modifier
+                .height(ComposerPanel.ToolbarButtonHeight)
+                // 16dp a side keeps the capsule at the native 60dp for a two-character label.
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "关闭",
+                style = trimmedLineHeight,
+                fontSize = 14.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = COUITheme.colorScheme.onBackground,
+            )
+        }
+    }
+}
+
+/** The circular overflow button in the panel toolbar: a 40dp circle with three dots. */
+@Composable
+private fun OverflowButton(onClick: () -> Unit) {
+    val ink = COUITheme.colorScheme.onBackground
+    PanelToolbarButton(onClick = onClick) {
+        Box(
+            modifier = Modifier
+                .size(ComposerPanel.ToolbarButtonHeight)
+                .semantics { contentDescription = "更多" },
+            contentAlignment = Alignment.Center,
+        ) {
+            OverflowDots(ink)
+        }
+    }
+}
+
+/** The three stacked dots of the overflow button: 3.5dp wide, 17.5dp tall. */
+@Composable
+private fun OverflowDots(ink: Color) {
+    Canvas(modifier = Modifier.size(width = 3.5.dp, height = 17.5.dp)) {
+        val radius = size.width / 2f
+        val pitch = (size.height - size.width) / 2f
+        repeat(3) { index ->
+            drawCircle(
+                color = ink,
+                radius = radius,
+                center = Offset(size.width / 2f, radius + pitch * index),
+            )
+        }
+    }
+}
+
+/** The `● 12sp` line under the title: a 6dp dot, a 5dp gap and the state text. */
+@Composable
+private fun StatusLine(text: String) {
+    val dotColor = COUITheme.colorScheme.onSurfaceVariantActions
+    Row(
+        modifier = Modifier.height(ComposerPanel.StatusHeight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Canvas(modifier = Modifier.size(6.dp)) {
+            drawCircle(color = dotColor)
+        }
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = text,
+            style = trimmedLineHeight,
+            fontSize = 12.sp,
+            lineHeight = 12.sp,
+            color = COUITheme.colorScheme.onBackground,
+        )
+    }
+}
+
+/**
+ * The capsule call-to-action: 44dp tall, full radius, filled with the ColorOS 17 primary gradient.
+ * A disabled capsule keeps its shape and fades, so the action stays where the thumb expects it.
+ */
+@Composable
+private fun ActionCapsule(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ComposerPanel.ActionHeight)
+            // The fade has to wrap the fill as well as the label, so it is the outermost layer:
+            // applied after the background it would only wash out the text.
+            .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
+            .clip(CircleShape)
+            .background(Brush.verticalGradient(ComposerPanel.ActionGradient))
+            // The native capsule is lit along its top and bottom edge only, fading across the middle.
+            .border(
+                BorderStroke(1.dp, Brush.verticalGradient(ComposerPanel.ActionEdgeGradient)),
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = trimmedLineHeight,
+            fontSize = 16.sp,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+        )
+    }
+}
+
+/**
+ * The library's line-height style keeps the full font box, which renders taller than the panel's
+ * measured line boxes. Every text slot here is pinned to its measured height, so the trimmed style
+ * keeps the glyphs centred inside them.
+ */
+private val trimmedLineHeight: TextStyle = TextStyle(
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
+)
 
 @Composable
 private fun ToolbarIcon(
@@ -683,6 +960,7 @@ internal fun EmojiPanel(modifier: Modifier = Modifier, onPick: (String) -> Unit)
 }
 
 /** The legacy picture captcha: a 4-character code next to the image the server just drew. */
+@OptIn(ExperimentalCOUIApi::class)
 @Composable
 private fun CaptchaDialog(
     bytes: ByteArray,
@@ -691,67 +969,37 @@ private fun CaptchaDialog(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    OverlayDialog(
+    OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = true,
         title = "验证码",
-        onDismissRequest = onCancel,
+        summary = "输入图片里的四个字符，验证通过后继续发布。",
+        cancelText = "取消",
+        confirmText = "验证并继续",
+        onCancel = onCancel,
+        onConfirm = onConfirm,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = bytes,
-                    contentDescription = "验证码",
-                    modifier = Modifier.weight(1f).height(64.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-                TextField(
-                    value = code,
-                    onValueChange = onCodeChange,
-                    modifier = Modifier.weight(1f),
-                    label = "验证码",
-                    maxCount = 4,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(text = "取消", onClick = onCancel)
-                Spacer(Modifier.width(8.dp))
-                TextButton(text = "验证并继续", onClick = onConfirm)
-            }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AsyncImage(
+                model = bytes,
+                contentDescription = "验证码",
+                modifier = Modifier.weight(1f).height(64.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            TextField(
+                value = code,
+                onValueChange = onCodeChange,
+                modifier = Modifier.weight(1f),
+                label = "验证码",
+                maxCount = 4,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+            )
         }
     }
 }
 
-/**
- * 面板展开时的可见区域：一块锚在右下角、从球的大小长到整块面板的圆角矩形。这里用遮罩而不是缩放，
- * 因为缩放会把圆角压成椭圆，也会让面板里的内容每帧重新排版。
- */
-private class CornerRevealShape(
-    private val width: Dp,
-    private val height: Dp,
-    private val radius: Dp,
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density,
-    ): Outline {
-        val visibleWidth = min(with(density) { width.toPx() }, size.width)
-        val visibleHeight = min(with(density) { height.toPx() }, size.height)
-        val corner = with(density) { radius.toPx() }
-            .coerceIn(0f, min(visibleWidth, visibleHeight) / 2f)
-        return Outline.Rounded(
-            RoundRect(
-                rect = Rect(
-                    left = size.width - visibleWidth,
-                    top = size.height - visibleHeight,
-                    right = size.width,
-                    bottom = size.height,
-                ),
-                cornerRadius = CornerRadius(corner, corner),
-            ),
-        )
-    }
-}
+

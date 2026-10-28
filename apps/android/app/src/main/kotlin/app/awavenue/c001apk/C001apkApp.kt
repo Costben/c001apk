@@ -5,6 +5,7 @@ import app.awavenue.c001apk.data.AccountStore
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
 import app.awavenue.c001apk.data.CoolapkRepository
+import app.awavenue.c001apk.data.DraftStore
 import app.awavenue.c001apk.data.HistoryStore
 import app.awavenue.c001apk.data.LocalFollowStore
 import app.awavenue.c001apk.data.ProductComparisonStore
@@ -37,6 +38,8 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var history: HistoryStore
         private set
+    lateinit var drafts: DraftStore
+        private set
     lateinit var searchHistory: SearchHistoryStore
         private set
     lateinit var productComparison: ProductComparisonStore
@@ -58,6 +61,7 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         localFollow = LocalFollowStore(this)
         blacklist = BlacklistStore(this)
         history = HistoryStore(this)
+        drafts = DraftStore(this)
         searchHistory = SearchHistoryStore(this)
         productComparison = ProductComparisonStore()
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)

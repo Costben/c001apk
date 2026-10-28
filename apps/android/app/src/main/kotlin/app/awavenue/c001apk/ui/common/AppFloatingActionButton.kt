@@ -18,7 +18,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -26,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -34,7 +32,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -152,15 +149,11 @@ fun AppFloatingActionButton(
         (1f - progress).coerceIn(0f, 1f) *
         (progress * 4f).coerceIn(0f, 1f)
 
-    // 点击那一刻的球位。只在按下时记录：键盘一开这块窗口会重排，之后再读就不是球归位时的位置了。
-    var ballBounds by remember { mutableStateOf(Rect.Zero) }
-
     Box(
         modifier = modifier
             .size(BallSize)
             .onGloballyPositioned {
                 boxRightPx = it.positionInWindow().x.roundToInt() + it.size.width
-                ballBounds = it.boundsInRoot()
             }
             .graphicsLayer {
                 scaleX = pressScale * stretchX
@@ -269,11 +262,7 @@ fun AppFloatingActionButton(
                     interactionSource = interactionSource,
                     indication = null,
                     role = Role.Button,
-                    onClick = {
-                        // 面板的右下角要压在这颗球上，先把球此刻的矩形交出去。
-                        ComposerBallAnchor.rect = ballBounds
-                        onClick()
-                    },
+                    onClick = onClick,
                 ),
         )
     }
