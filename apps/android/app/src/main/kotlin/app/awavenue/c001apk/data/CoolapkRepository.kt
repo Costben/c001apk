@@ -305,7 +305,7 @@ class CoolapkRepository(
             .also { cacheDetail(id, it, startedAt) }
     }
 
-    /** One reply by id. A nested reply's `rid` is the top-level reply it sits under, `0` otherwise. */
+    /** One reply by id. A nested reply's `rid` is the reply it answered, `0` for a top-level comment. */
     suspend fun replyDetail(id: String): Entity = fromUrl("/v6/feed/replyDetail", mapOf("id" to id))
 
     suspend fun userSpace(uid: String): Entity = fromUrl("/v6/user/space?uid=$uid")

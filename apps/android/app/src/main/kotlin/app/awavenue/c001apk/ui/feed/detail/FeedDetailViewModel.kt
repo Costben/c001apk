@@ -215,11 +215,10 @@ class FeedDetailViewModel(
     /** The anchor for [targetReplyId]; a missing or deleted reply only costs the jump, not the page. */
     private suspend fun loadAnchor(): Entity? = try {
         val target = repository.replyDetail(targetReplyId).withPicArr()
-        val parentId = target.string("rid")
         when {
             target.string("fid") != id -> null
-            parentId.isEmpty() || parentId == "0" -> withNestedPreview(target, null)
-            else -> withNestedPreview(repository.replyDetail(parentId).withPicArr(), target)
+            target.parentReplyId() == null -> withNestedPreview(target, null)
+            else -> withNestedPreview(topLevelReply(target), target)
         }
     } catch (e: CancellationException) {
         throw e
@@ -227,6 +226,21 @@ class FeedDetailViewModel(
         if (BuildConfig.DEBUG) Log.w("FeedDetail", "reply $targetReplyId failed", e)
         notice = ApiFailure.from(e).message.ifEmpty { null }
         null
+    }
+
+    /**
+     * The comment [reply] sits under in the list. A nested reply's `rid` is the row it answered, which
+     * is itself nested when the thread runs back and forth, so it climbs until a row has no parent.
+     */
+    private suspend fun topLevelReply(reply: Entity): Entity {
+        var current = reply
+        repeat(MAX_THREAD_DEPTH) {
+            val parentId = current.string("rrid").takeIf { it.isNotEmpty() && it != "0" && it != current.id }
+                ?: current.parentReplyId()
+                ?: return current
+            current = repository.replyDetail(parentId).withPicArr()
+        }
+        return current
     }
 
     /**
@@ -520,11 +534,17 @@ class FeedDetailViewModel(
 
         /** Nested rows the reply list previews under a comment before 查看更多回复. */
         const val NESTED_PREVIEW = 3
+
+        /** Bounds the climb to the top-level comment should the server ever send a cycle. */
+        const val MAX_THREAD_DEPTH = 32
     }
 }
 
 private fun Entity.withReplyRows(rows: List<Entity>): Entity =
     Entity(JsonObject(json + ("replyRows" to JsonArray(rows.map { it.json }))))
+
+/** The reply this one answered, or `null` for a top-level comment. */
+private fun Entity.parentReplyId(): String? = string("rid").takeIf { it.isNotEmpty() && it != "0" }
 
 /** `replyDetail` sends a reply's pictures only as the comma-joined `pic`; the card reads `picArr`. */
 private fun Entity.withPicArr(): Entity {

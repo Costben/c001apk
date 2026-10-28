@@ -449,10 +449,13 @@ private fun nestedReplyHtml(nested: Entity, parent: Entity): String {
         ruid == parent.uid -> " [层主] "
         else -> ""
     }
-    val rReplyUser = if (ruid == parent.uid) {
+    // The Flutter client drops the name when the answer goes to the comment's author; it is kept here
+    // so every row says whom it answers.
+    val rusername = nested.string("rusername")
+    val rReplyUser = if (ruid.isEmpty() || ruid == "0" || rusername.isEmpty()) {
         ""
     } else {
-        "<a href=\"/u/$ruid\">${nested.string("rusername")}$rReplyTag</a>"
+        "<a href=\"/u/$ruid\">$rusername$rReplyTag</a>"
     }
     val replyPic = if (nested.picArr.isEmpty()) {
         ""
