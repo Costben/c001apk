@@ -59,6 +59,7 @@ import app.awavenue.c001apk.data.ToggleResult
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppBarTitleSize
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
@@ -470,7 +471,7 @@ private fun TopicPage(tag: String?, id: String?) {
                                     modifier = Modifier
                                         .weight(1f)
                                         .padding(start = TopAppBarDefaults.NavigationIconGap),
-                                    fontSize = with(density) { 24.dp.toSp() },
+                                    fontSize = with(density) { AppBarTitleSize.toSp() },
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
