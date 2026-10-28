@@ -71,7 +71,7 @@ import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Alarm
@@ -115,7 +115,7 @@ fun EventScreen(id: String) {
     Scaffold(
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = "活动详情",
                     gradientGlass = true,
                     navigationIcon = {

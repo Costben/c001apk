@@ -75,7 +75,7 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TextField
 import io.github.suqi8.coui.kmp.basic.TextFieldMode
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -200,7 +200,7 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
     Scaffold(
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = username,
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,

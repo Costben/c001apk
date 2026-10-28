@@ -40,7 +40,7 @@ import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -129,7 +129,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = keyword,
                     gradientGlass = true,
                     subtitle = if (title.isEmpty()) "" else "${scopeLabel(pageType)}：$title",

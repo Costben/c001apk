@@ -107,7 +107,7 @@ import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -165,7 +165,7 @@ private fun TopicPage(tag: String?, id: String?) {
 
     val topic = detail
     if (topic == null) {
-        Scaffold(topBar = { TopAppBar(title = "", navigationIcon = { BackIcon(navigator) }) }) { innerPadding ->
+        Scaffold(topBar = { SmallTopAppBar(title = "", navigationIcon = { BackIcon(navigator) }) }) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 if (failure == null) {
                     InfiniteProgressIndicator()
