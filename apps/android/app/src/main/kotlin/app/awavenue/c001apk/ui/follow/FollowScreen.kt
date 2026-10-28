@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -61,7 +63,7 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.ExpandMore
+import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
 import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -173,7 +175,16 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
-                                        Icon(COUIIcons.ExpandMore, contentDescription = "切换关注内容")
+                                        // ColorOS's own chevron (coui_btn_next_normal) turned to point down; the
+                                        // extended ExpandMore glyph is a fullscreen bracket, not a dropdown arrow.
+                                        Icon(
+                                            COUIIcons.Basic.ArrowRight,
+                                            contentDescription = "切换关注内容",
+                                            modifier = Modifier
+                                                .padding(start = 6.dp)
+                                                .size(width = 12.dp, height = 24.dp)
+                                                .rotate(90f),
+                                        )
                                     }
                                 }
                                 // The popup composes in the root Scaffold's overlay, so the backdrop
