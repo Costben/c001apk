@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -38,6 +39,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.FFFListType
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -56,8 +58,23 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.delay
 
 internal val ItemPadding = 12.dp
+private val IconTileSize = 40.dp
+private val IconTileRadius = 12.dp
 private val appCardTypes = setOf("apk", "product", "topic")
 private const val ICON_GRID_COLUMNS = 5
+
+/**
+ * The shortcut artwork ships with its own coloured margin: the white glyph covers only about half
+ * the image, so it reads as a small logo floating in a large tile. Drawing the artwork larger than
+ * the tile and letting the tile crop it enlarges the glyph without growing the 40dp footprint. It
+ * also pushes the artwork's own rounded corners off screen — they used to leave a sliver of the
+ * card's background showing in each corner.
+ *
+ * Kept deliberately small: the CDN only serves these icons at 96×96, which the tile already scales
+ * up by 1.6× on a 40dp tile. Every extra percent of zoom is paid for in soft edges.
+ */
+private const val ICON_TILE_ZOOM = 1.15f
+
 private const val INFINITE_LOOP_RESET_DELAY = 500L
 
 /** One list entry. Templates follow the Flutter client's `itemCard` dispatch. */
@@ -313,7 +330,7 @@ private fun CarouselCard(item: Entity, modifier: Modifier) {
             }
         }
     }
-    Box(modifier.fillMaxWidth().aspectRatio(3f).clip(RoundedCornerShape(17.dp))) {
+    Box(modifier.fillMaxWidth().aspectRatio(3f).clip(rememberSquircleShape(17.dp))) {
         HorizontalPager(state = pagerState) { page ->
             val entry = pages[page]
             Card(cornerRadius = 0.dp, onClick = rememberHapticClick { openLink(entry.url, entry.title) }) {
@@ -342,6 +359,7 @@ private fun IconGridCard(item: Entity, modifier: Modifier) {
     if (pages == 0) return
     val openLink = rememberLinkOpener()
     val pagerState = rememberPagerState { pages }
+    val tileShape = rememberSquircleShape(IconTileRadius)
     Card(modifier.fillMaxWidth(), insideMargin = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
         HorizontalPager(state = pagerState) { page ->
             Row(Modifier.fillMaxWidth()) {
@@ -349,15 +367,25 @@ private fun IconGridCard(item: Entity, modifier: Modifier) {
                     val entry = entries[page * ICON_GRID_COLUMNS + column]
                     Column(
                         Modifier.weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(tileShape)
                             .padding(vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Card(
-                            cornerRadius = 12.dp,
+                            modifier = Modifier.size(IconTileSize),
+                            cornerRadius = IconTileRadius,
                             onClick = rememberHapticClick { openLink(entry.url, entry.title) },
                         ) {
-                            NetworkImage(entry.pic.ifEmpty { entry.logo }, Modifier.size(40.dp), contentDescription = entry.title)
+                            Box(
+                                Modifier.fillMaxSize().clip(tileShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                NetworkImage(
+                                    entry.pic.ifEmpty { entry.logo },
+                                    Modifier.requiredSize(IconTileSize * ICON_TILE_ZOOM),
+                                    contentDescription = entry.title,
+                                )
+                            }
                         }
                         Spacer(Modifier.size(6.dp))
                         Text(
@@ -395,7 +423,7 @@ private fun ImageSquareScrollCard(item: Entity, horizontalPadding: Dp = ItemPadd
                 Box(
                     Modifier
                         .size(cell)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(rememberSquircleShape(12.dp))
                         .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) }),
                 ) {
                     NetworkImage(entry.pic, Modifier.fillMaxSize(), contentDescription = entry.title)
@@ -467,7 +495,7 @@ private fun IconScrollCard(item: Entity, modifier: Modifier) {
                     Column(
                         Modifier
                             .width(cell)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(rememberSquircleShape(12.dp))
                             .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
                             .padding(5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -555,7 +583,7 @@ private fun EntityRowCard(item: Entity, modifier: Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
                 image,
-                Modifier.size(44.dp).clip(if (isUser) CircleShape else RoundedCornerShape(12.dp)),
+                Modifier.size(44.dp).clip(if (isUser) CircleShape else rememberSquircleShape(12.dp)),
                 contentDescription = title,
             )
             Spacer(Modifier.width(12.dp))
