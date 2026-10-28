@@ -149,6 +149,9 @@ fun EmojiEditText(
                 view.setText(state.text)
                 view.setSelection(caret.coerceIn(0, view.text.length))
             }
+            // The theme can change while the view is alive; the factory only runs once.
+            view.setTextColor(textColor)
+            view.setHintTextColor(hintColor)
             state.editText = view
         },
     )
