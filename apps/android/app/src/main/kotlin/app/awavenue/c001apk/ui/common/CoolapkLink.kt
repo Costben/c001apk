@@ -38,7 +38,12 @@ fun openCoolapkLink(
     val path = coolapkPath(url)
     return when {
         path.startsWith("/feed/") -> {
-            navigator.push(Route.Feed(path.removePrefix("/feed/").substringBefore('?').replace('?', '&')))
+            navigator.push(
+                Route.Feed(
+                    path.removePrefix("/feed/").substringBefore('?').replace('?', '&'),
+                    replyId = queryValue(path, "rid").orEmpty(),
+                ),
+            )
             true
         }
 

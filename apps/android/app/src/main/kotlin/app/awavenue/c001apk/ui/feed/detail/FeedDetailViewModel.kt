@@ -45,6 +45,7 @@ class FeedDetailViewModel(
     private val settings: AppSettings,
     private val history: HistoryStore,
     private val blacklist: BlacklistStore,
+    private val targetReplyId: String = "",
 ) : ViewModel() {
 
     // ---- feed body -----------------------------------------------------------------------------
@@ -117,6 +118,30 @@ class FeedDetailViewModel(
     /** Guards the automatic challenge retry, so a cancelled check cannot loop. */
     private var askedToVerify = false
 
+    /**
+     * The reply a notification pointed at, or the top-level reply holding it with the target as its
+     * only preview row. It leads the default ordering so the reader does not page through to find it.
+     */
+    private var anchor: Entity? = null
+    private var anchorRequested = false
+    private var anchorJumped = false
+
+    /** Id of the anchor while it still wants marking; the screen clears it once it has. */
+    var highlightReplyId by mutableStateOf<String?>(null)
+        private set
+
+    /** Set once the anchor is in the list, so the screen scrolls to it a single time. */
+    var scrollToAnchor by mutableStateOf(false)
+        private set
+
+    fun onAnchorScrolled() {
+        scrollToAnchor = false
+    }
+
+    fun onAnchorHighlighted() {
+        highlightReplyId = null
+    }
+
     /** The first row is the pinned reply only while the default ordering is active. */
     val showsPinnedReply: Boolean get() = topReply != null && replySort == ReplySortType.Def
 
@@ -145,6 +170,10 @@ class FeedDetailViewModel(
                 isPublic = detail.isPublic
                 feedStatus = ListStatus.Content
                 accountDetailNotice = if (detail.isPublic) PUBLIC_NOTICE else ""
+                if (targetReplyId.isNotEmpty() && !anchorRequested) {
+                    anchorRequested = true
+                    anchor = loadAnchor()
+                }
                 refreshReplies()
             } catch (e: CancellationException) {
                 throw e
@@ -181,6 +210,48 @@ class FeedDetailViewModel(
             }
             if (verifyNext) loadFeed(verify = true)
         }
+    }
+
+    /** The anchor for [targetReplyId]; a missing or deleted reply only costs the jump, not the page. */
+    private suspend fun loadAnchor(): Entity? = try {
+        val target = repository.replyDetail(targetReplyId).withPicArr()
+        val parentId = target.string("rid")
+        when {
+            target.string("fid") != id -> null
+            parentId.isEmpty() || parentId == "0" -> withNestedPreview(target, null)
+            else -> withNestedPreview(repository.replyDetail(parentId).withPicArr(), target)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.w("FeedDetail", "reply $targetReplyId failed", e)
+        notice = ApiFailure.from(e).message.ifEmpty { null }
+        null
+    }
+
+    /**
+     * `replyDetail` carries no nested rows, so [reply] would list as a bare comment with only a count.
+     * Its first page of answers fills the same preview the reply list draws, [target] leading it.
+     */
+    private suspend fun withNestedPreview(reply: Entity, target: Entity?): Entity {
+        val total = reply.int("replynum") ?: 0
+        val answers = if (total == 0) {
+            emptyList()
+        } else {
+            try {
+                repository.replyToReply(reply.id, page = 1, firstItem = null, lastItem = null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The comment still lists with its count; 查看更多回复 opens the full thread.
+                emptyList()
+            }
+        }
+        val rows = (listOfNotNull(target) + answers.filterNot { it.id == target?.id })
+            .filterNot { blacklist.isUserBlocked(it.uid) }
+            .take(NESTED_PREVIEW)
+        val more = (total - rows.size).coerceAtLeast(0)
+        return Entity(JsonObject(reply.json + ("replyRowsMore" to JsonPrimitive(more)))).withReplyRows(rows)
     }
 
     private fun applyFeed(data: Entity) {
@@ -239,6 +310,7 @@ class FeedDetailViewModel(
                     feed = feed?.withLike(count, liked)
                 } else {
                     replies = replies.map { if (it.id == id) it.withLike(count, liked) else it }
+                    anchor = anchor?.let { if (it.id == id) it.withLike(count, liked) else it }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -345,6 +417,13 @@ class FeedDetailViewModel(
                     replyStatus = ListStatus.Content
                     replyFooter = FooterStatus.Idle
                     page = requestPage + 1
+                    // Only the first arrival jumps; a later refresh keeps the anchor listed but
+                    // leaves the reader where they are.
+                    if (refresh && anchor != null && !anchorJumped) {
+                        anchorJumped = true
+                        highlightReplyId = anchor?.id
+                        scrollToAnchor = true
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -370,7 +449,7 @@ class FeedDetailViewModel(
 
     private fun decorate(rows: List<Entity>, requestPage: Int): List<Entity> {
         val injected = if (requestPage == 1 && listType == "lastupdate_desc") {
-            listOfNotNull(topReply, replyMe)
+            listOfNotNull(anchor, topReply, replyMe)
         } else {
             emptyList()
         }
@@ -397,6 +476,8 @@ class FeedDetailViewModel(
                     notice = result.message
                     return@launch
                 }
+                // A refresh would otherwise list the deleted reply again from the stale anchor.
+                if (anchor?.id == id || anchor?.id == fid) anchor = null
                 if (fid != null) {
                     replies = replies.map {
                         if (it.id == fid) it.withReplyRows(it.replyRows.filterNot { r -> r.id == id }) else it
@@ -436,11 +517,21 @@ class FeedDetailViewModel(
         const val PUBLIC_NOTICE = "正文可正常阅读，当前账号的点赞状态暂不可用。"
         const val UNAVAILABLE_NOTICE = "账号详情暂不可用，请稍后重试"
         val CHALLENGE_KINDS = setOf(ApiFailureKind.Captcha, ApiFailureKind.Authentication)
+
+        /** Nested rows the reply list previews under a comment before 查看更多回复. */
+        const val NESTED_PREVIEW = 3
     }
 }
 
 private fun Entity.withReplyRows(rows: List<Entity>): Entity =
     Entity(JsonObject(json + ("replyRows" to JsonArray(rows.map { it.json }))))
+
+/** `replyDetail` sends a reply's pictures only as the comma-joined `pic`; the card reads `picArr`. */
+private fun Entity.withPicArr(): Entity {
+    if (json["picArr"] is JsonArray) return this
+    val pics = pic.split(',').map(String::trim).filter(String::isNotEmpty)
+    return Entity(JsonObject(json + ("picArr" to JsonArray(pics.map { JsonPrimitive(it) }))))
+}
 
 private fun Entity.withLike(count: String, liked: Boolean): Entity {
     val action = JsonObject(

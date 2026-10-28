@@ -1,5 +1,7 @@
 package app.awavenue.c001apk.ui.feed.detail
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -31,6 +33,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -90,20 +93,25 @@ import io.github.suqi8.coui.kmp.icon.extended.Reply
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 private val CardPadding = 12.dp
 private val InsetShape = RoundedCornerShape(12.dp)
 
-/** [preview] is the list entry the post was opened from; it stands in for the post while it loads. */
+/**
+ * [preview] is the list entry the post was opened from; it stands in for the post while it loads.
+ * [replyId] is the reply a notification pointed at; the page opens on the replies with it first.
+ */
 @Composable
-fun FeedDetailScreen(id: String, preview: Entity? = null) {
+fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val viewModel = viewModel(key = "feed-detail-$id") {
-        FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist)
+    val viewModel = viewModel(key = "feed-detail-$id-$replyId") {
+        FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist, replyId)
     }
     val backdrop = rememberGlassBackdrop()
     val scrollBehavior = rememberPageScrollBehavior("feed-detail")
@@ -126,6 +134,18 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
             context.toast(it)
             viewModel.refreshError = null
         }
+    }
+    LaunchedEffect(viewModel.scrollToAnchor) {
+        if (!viewModel.scrollToAnchor) return@LaunchedEffect
+        // The reply header sits right after the body; landing on it keeps the sort tabs in view
+        // with the anchor straight below.
+        val header = if (viewModel.articles.isEmpty()) 1 else viewModel.articles.size + 2
+        snapshotFlow { listState.layoutInfo.totalItemsCount > header + 1 }.first { it }
+        listState.animateScrollToItem(header)
+        // The bar's glass follows the content offset its nested-scroll connection adds up, which a
+        // programmatic jump never feeds; mark it scrolled. Reaching the top again clears it there.
+        scrollBehavior.state.contentOffset = -listState.layoutInfo.viewportSize.height.toFloat()
+        viewModel.onAnchorScrolled()
     }
     LaunchedEffect(listState, viewModel) {
         snapshotFlow {
@@ -313,15 +333,32 @@ fun FeedDetailScreen(id: String, preview: Entity? = null) {
                                             viewModel.replies,
                                             key = { index, reply -> reply.entityId.ifEmpty { "reply-$index" } },
                                             contentType = { _, _ -> "reply" },
-                                        ) { index, reply ->
-                                            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                                        ) { _, reply ->
+                                            val highlight = remember { Animatable(0f) }
+                                            if (reply.id == viewModel.highlightReplyId) {
+                                                LaunchedEffect(Unit) {
+                                                    highlight.snapTo(1f)
+                                                    delay(1200)
+                                                    highlight.animateTo(0f, tween(600))
+                                                    viewModel.onAnchorHighlighted()
+                                                }
+                                            }
+                                            val highlightColor = COUITheme.colorScheme.primary
+                                            Column(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .drawBehind {
+                                                        drawRect(highlightColor.copy(alpha = 0.12f * highlight.value))
+                                                    }
+                                                    .padding(vertical = 5.dp),
+                                            ) {
                                                 ReplyCard(
                                                     reply = reply,
                                                     onOpenFeed = {
                                                         val url = reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$id" }
                                                         navigator.push(Route.Web(url))
                                                     },
-                                                    isTopReply = viewModel.showsPinnedReply && index == 0,
+                                                    isTopReply = reply.id == viewModel.pinnedReplyId,
                                                     canPin = viewModel.feedUid.isNotEmpty() &&
                                                         viewModel.feedUid == app.session.uid,
                                                     onTogglePin = {

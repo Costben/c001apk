@@ -630,7 +630,7 @@ private fun RouteHost(route: Route) {
         Route.Accounts -> AccountsScreen()
         Route.LocalFollowList -> LocalFollowListScreen()
         Route.Drafts -> DraftsScreen()
-        is Route.Feed -> FeedDetailScreen(id = route.id, preview = route.preview)
+        is Route.Feed -> FeedDetailScreen(id = route.id, preview = route.preview, replyId = route.replyId)
         is Route.Reply2Reply -> Reply2ReplyScreen(
             id = route.id,
             replyId = route.replyId,

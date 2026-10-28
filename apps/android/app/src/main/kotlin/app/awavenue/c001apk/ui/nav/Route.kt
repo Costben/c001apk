@@ -45,8 +45,11 @@ sealed interface Route {
     data object Accounts : Route
     data object LocalFollowList : Route
     data object Drafts : Route
-    /** [preview] is the list entry the post was opened from, drawn while the full post loads. */
-    data class Feed(val id: String, val preview: Entity? = null) : Route
+    /**
+     * [preview] is the list entry the post was opened from, drawn while the full post loads.
+     * [replyId] is the reply a link pointed at (`?rid=`); the page lists it first and scrolls to it.
+     */
+    data class Feed(val id: String, val preview: Entity? = null, val replyId: String = "") : Route
     /** [origin] is the reply being answered; the page lists it first and counts its answers from it. */
     data class Reply2Reply(
         val id: String,
