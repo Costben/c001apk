@@ -1,6 +1,9 @@
 package app.awavenue.c001apk.ui.text
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,12 +11,16 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -21,7 +28,6 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -80,41 +86,78 @@ fun HtmlText(
     val currentOnTextClick by rememberUpdatedState(onTextClick)
     val currentOnShowTotalReply by rememberUpdatedState(onShowTotalReply)
     val currentOnViewFan by rememberUpdatedState(onViewFan)
-    val text = remember(html, linkColor, openInBrowser, showEmoji, picArr, badgeTags) {
-        val linkStyles = TextLinkStyles(style = SpanStyle(color = linkColor))
-        val parsed = AnnotatedString.fromHtml(
-            htmlString = html.replace("\n", "<br/>"),
-            linkStyles = linkStyles,
-            linkInteractionListener = { link ->
-                val url = (link as? LinkAnnotation.Url)?.url.orEmpty()
-                when {
-                    url.contains("/feed/replyList") -> currentOnShowTotalReply?.invoke()
-                    url == "/contacts/fans" -> currentOnViewFan?.invoke()
-                    url.contains("image.coolapk.com") -> navigator.push(
-                        Route.ImageView(picArr?.takeIf { it.isNotEmpty() } ?: listOf(url)),
-                    )
+    val openLink: (String) -> Unit = { url ->
+        when {
+            url.contains("/feed/replyList") -> currentOnShowTotalReply?.invoke()
+            url == "/contacts/fans" -> currentOnViewFan?.invoke()
+            url.contains("image.coolapk.com") -> navigator.push(
+                Route.ImageView(picArr?.takeIf { it.isNotEmpty() } ?: listOf(url)),
+            )
 
-                    !openCoolapkLink(context, navigator, url, openInBrowser = openInBrowser) ->
-                        currentOnTextClick?.invoke()
-                }
-            },
-        )
+            !openCoolapkLink(context, navigator, url, openInBrowser = openInBrowser) ->
+                currentOnTextClick?.invoke()
+        }
+    }
+    val currentOpenLink by rememberUpdatedState(openLink)
+    val text = remember(html, linkColor, showEmoji, badgeTags) {
+        val parsed = tintLinks(AnnotatedString.fromHtml(html.replace("\n", "<br/>")), linkColor)
         if (showEmoji || badgeTags) {
             decorate(parsed, linkColor, showEmoji = showEmoji, badgeTags = badgeTags)
         } else {
             parsed to emptyMap()
         }
     }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         text = text.first,
-        modifier = modifier,
+        modifier = modifier.pointerInput(text.first) {
+            // A link takes only the touches that land on its own glyphs; the rest of the text belongs to
+            // whatever holds it. Compose's own link handling gives a link that wraps one box spanning
+            // every line it touches, which swallowed taps meant for the row around it.
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val url = layout?.linkAt(text.first, down.position) ?: return@awaitEachGesture
+                val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                up.consume()
+                currentOpenLink(url)
+            }
+        },
         style = style,
         color = color,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         inlineContent = text.second,
-        onTextLayout = onTextLayout,
+        onTextLayout = {
+            layout = it
+            onTextLayout(it)
+        },
     )
+}
+
+private const val LinkTag = "html-link"
+
+/** Turns the parsed links into tinted ranges tagged with their url, which [linkAt] reads back. */
+private fun tintLinks(source: AnnotatedString, linkColor: Color): AnnotatedString {
+    val links = source.getLinkAnnotations(0, source.length)
+    if (links.isEmpty()) return source
+    return buildAnnotatedString {
+        append(AnnotatedString(source.text, source.spanStyles, source.paragraphStyles))
+        links.forEach { range ->
+            val url = (range.item as? LinkAnnotation.Url)?.url.orEmpty()
+            addStyle(SpanStyle(color = linkColor), range.start, range.end)
+            addStringAnnotation(LinkTag, url, range.start, range.end)
+        }
+    }
+}
+
+/** The url of the link whose glyph sits under [position], or `null` when the touch misses every link. */
+private fun TextLayoutResult.linkAt(text: AnnotatedString, position: Offset): String? {
+    val offset = getOffsetForPosition(position)
+    // The offset is the caret nearest the touch, so the glyph under it is on either side.
+    val char = listOf(offset, offset - 1).firstOrNull {
+        it in text.indices && getBoundingBox(it).contains(position)
+    } ?: return null
+    return text.getStringAnnotations(LinkTag, char, char + 1).firstOrNull()?.item
 }
 
 /** The author tags Coolapk writes into the reply HTML as bracketed text. */
