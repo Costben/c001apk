@@ -66,7 +66,7 @@ import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -113,7 +113,7 @@ fun NotificationScreen(
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = title ?: type.label,
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,

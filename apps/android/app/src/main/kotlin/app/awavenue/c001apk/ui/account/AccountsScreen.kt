@@ -38,7 +38,7 @@ import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTitle
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -75,7 +75,7 @@ fun AccountsScreen() {
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = "账号管理",
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,

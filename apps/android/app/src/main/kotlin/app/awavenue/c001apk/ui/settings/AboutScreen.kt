@@ -36,7 +36,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTitle
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -92,7 +92,7 @@ fun AboutScreen() {
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = "关于",
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,

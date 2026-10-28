@@ -34,7 +34,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -100,7 +100,7 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = titleText,
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,

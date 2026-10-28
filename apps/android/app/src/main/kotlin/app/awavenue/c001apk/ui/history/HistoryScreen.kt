@@ -38,7 +38,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -63,7 +63,7 @@ fun HistoryScreen(type: HistoryType) {
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                TopAppBar(
+                SmallTopAppBar(
                     title = type.label,
                     modifier = Modifier.onGloballyPositioned {
                         appBarBounds.reportPage(
