@@ -14,6 +14,8 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.detail.CaptchaVerifierHost
 import app.awavenue.c001apk.ui.nav.AppNavHost
+import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.rememberNavigator
 import app.awavenue.c001apk.ui.onboarding.OnboardingScreen
 import app.awavenue.c001apk.ui.theme.AppTheme
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -39,25 +41,31 @@ fun App(app: C001apkApp, deepLinks: Flow<String> = emptyFlow()) {
             // panel blurs the page under it instead of itself. Below Android 13, where the blur
             // cannot run, the backdrop is null and the panels keep their flat fill.
             val backdrop = rememberGlassBackdrop()
-            Scaffold(
-                containerColor = Color.Transparent,
-                contentWindowInsets = WindowInsets(0),
-                popupHost = {
-                    CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                        COUIPopupHost()
+            // The popup host is a sibling of the nav host, so anything it draws — the update
+            // dialog's Markdown links, for one — reads these locals from here rather than from
+            // inside the nav host. The host and the stack share one navigator.
+            val navigator = rememberNavigator()
+            CompositionLocalProvider(LocalNavigator provides navigator) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0),
+                    popupHost = {
+                        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                            COUIPopupHost()
+                        }
+                    },
+                ) {
+                    Box(Modifier.fillMaxSize().glassSource(backdrop)) {
+                        AppNavHost(deepLinks = deepLinks, navigator = navigator)
+                        MessageNotifier.RequestPermission()
+                        // The guide covers the app on first launch and returns from 设置, until
+                        // dismissed.
+                        if (!app.settings.onboardingDone) {
+                            OnboardingScreen(onClose = app.settings::completeOnboarding)
+                        }
+                        // The captcha page mounts as the last child so it draws over the whole app.
+                        CaptchaVerifierHost()
                     }
-                },
-            ) {
-                Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-                    AppNavHost(deepLinks = deepLinks)
-                    MessageNotifier.RequestPermission()
-                    // The guide covers the app on first launch and returns from 设置, until
-                    // dismissed.
-                    if (!app.settings.onboardingDone) {
-                        OnboardingScreen(onClose = app.settings::completeOnboarding)
-                    }
-                    // The captcha page mounts as the last child so it draws over the whole app.
-                    CaptchaVerifierHost()
                 }
             }
         }

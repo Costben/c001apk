@@ -107,8 +107,10 @@ import kotlin.math.roundToInt
  * it is revealed; releasing early puts the page back where it was.
  */
 @Composable
-fun AppNavHost(deepLinks: Flow<String> = emptyFlow()) {
-    val navigator = rememberNavigator()
+fun AppNavHost(
+    deepLinks: Flow<String> = emptyFlow(),
+    navigator: Navigator = rememberNavigator(),
+) {
     val context = LocalContext.current
     val openInBrowser = LocalApp.current.settings.openInBrowser
     val scope = rememberCoroutineScope()
