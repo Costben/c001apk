@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.data.SavedAccount
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -204,6 +205,7 @@ private fun RowIcon(content: @Composable () -> Unit) {
 @Composable
 private fun RemoveDialog(account: SavedAccount, isCurrent: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit) {
     OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = true,
         title = "移除本机登录？",
         summary = "将移除“${account.displayName}”在本机保存的登录。再次使用需要重新登录。" +

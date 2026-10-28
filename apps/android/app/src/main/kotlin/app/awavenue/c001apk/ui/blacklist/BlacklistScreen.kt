@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
@@ -234,6 +235,7 @@ fun BlacklistScreen(type: BlacklistType) {
 @Composable
 private fun ClearDialog(type: BlacklistType, onConfirm: () -> Unit, onCancel: () -> Unit) {
     OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = true,
         title = "确定清除全部${if (type == BlacklistType.User) "用户" else "话题"}黑名单？",
         confirmText = "确定",

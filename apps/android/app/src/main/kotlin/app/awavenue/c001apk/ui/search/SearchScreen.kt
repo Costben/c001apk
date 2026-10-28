@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
@@ -176,6 +177,7 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
     }
 
     OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = showClearDialog,
         title = "确定清除全部搜索历史？",
         confirmText = "确定",

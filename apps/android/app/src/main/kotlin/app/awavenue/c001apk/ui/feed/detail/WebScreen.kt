@@ -43,6 +43,7 @@ import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.MoreMenu
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -265,6 +266,7 @@ fun WebScreen(url: String, isLogin: Boolean = false) {
 
     externalLink?.let { target ->
         OverlayAlertDialog(
+            buttonColors = appDialogButtonColors(),
             show = true,
             title = "当前网页将要打开外部链接，是否打开",
             confirmText = "打开",

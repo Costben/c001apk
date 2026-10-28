@@ -24,6 +24,7 @@ import app.awavenue.c001apk.data.HistoryType
 import app.awavenue.c001apk.data.asEntity
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedCard
@@ -146,6 +147,7 @@ fun HistoryScreen(type: HistoryType) {
 @Composable
 private fun ClearDialog(type: HistoryType, onConfirm: () -> Unit, onCancel: () -> Unit) {
     OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = true,
         title = "确定清除全部${if (type == HistoryType.Fav) "收藏" else "浏览历史"}？",
         confirmText = "确定",

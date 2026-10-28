@@ -42,6 +42,7 @@ import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
+import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -504,6 +505,7 @@ private fun SeedColorSwatch(color: Color, modifier: Modifier = Modifier) {
 @Composable
 private fun ClearCacheDialog(cacheSize: Long, onConfirm: () -> Unit, onCancel: () -> Unit) {
     OverlayAlertDialog(
+        buttonColors = appDialogButtonColors(),
         show = true,
         title = "清理缓存",
         summary = "当前缓存大小：${formatSize(cacheSize)}",
