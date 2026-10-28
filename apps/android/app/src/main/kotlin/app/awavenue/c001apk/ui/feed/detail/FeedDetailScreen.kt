@@ -57,6 +57,7 @@ import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.returnTopOnClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
@@ -99,7 +100,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 
 private val CardPadding = 12.dp
-private val InsetShape = RoundedCornerShape(12.dp)
 
 /**
  * [preview] is the list entry the post was opened from; it stands in for the post while it loads.
@@ -688,7 +688,7 @@ private fun InsetBlock(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(InsetShape)
+            .clip(rememberSquircleShape(12.dp))
             .background(COUITheme.colorScheme.surface)
             .then(
                 if (onClick != null || onLongClick != null) {

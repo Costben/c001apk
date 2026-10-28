@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -44,6 +43,7 @@ import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.EntityItem
 import app.awavenue.c001apk.ui.feed.FeedActions
@@ -329,13 +329,13 @@ private fun RowScope.ShortcutTile(
     Column(
         Modifier
             .weight(1f)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(rememberSquircleShape(16.dp))
             .clickable(onClick = rememberHapticClick(onClick = onClick))
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(colors.first),
+            Modifier.size(52.dp).clip(rememberSquircleShape(17.dp)).background(colors.first),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(26.dp), tint = colors.second)

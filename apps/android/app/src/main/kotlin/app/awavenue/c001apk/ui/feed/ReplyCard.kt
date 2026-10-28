@@ -46,6 +46,7 @@ import app.awavenue.c001apk.ui.common.CounterButton
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
@@ -118,7 +119,7 @@ fun ReplyCard(
             // them; top-level replies go straight to their 16dp content padding so the avatar
             // lines up with the section badge above.
             .padding(horizontal = if (isContainer) 10.dp else 0.dp)
-            .clip(if (isContainer) RoundedCornerShape(12.dp) else RectangleShape)
+            .clip(if (isContainer) rememberSquircleShape(12.dp) else RectangleShape)
             .background(if (isContainer) COUITheme.colorScheme.surfaceContainer else Color.Transparent),
     ) {
         Row(
@@ -256,7 +257,7 @@ private fun NestedReplies(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rememberSquircleShape(12.dp))
             .background(COUITheme.colorScheme.surfaceContainer),
     ) {
         reply.replyRows.forEach { nested ->
@@ -342,7 +343,7 @@ private fun NestedFeed(feed: Entity, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rememberSquircleShape(12.dp))
             .background(COUITheme.colorScheme.surface)
             .combinedClickable(onClick = onClick)
             .padding(10.dp),

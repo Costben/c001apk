@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.openBrowser
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.text.MarkdownBody
 import io.github.suqi8.coui.kmp.basic.Text
@@ -44,7 +44,7 @@ fun AppUpdateDialog(update: UpdateResult.Available, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val release = update.release
 
-    val notesShape = RoundedCornerShape(12.dp)
+    val notesShape = rememberSquircleShape(12.dp)
     OverlayDialog(show = true, title = "发现新版本", onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {

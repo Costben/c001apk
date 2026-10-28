@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +67,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.rememberTopRowScrollBehavior
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
@@ -784,7 +784,7 @@ private fun TopicHeader(
         Row(verticalAlignment = if (score != null) Alignment.Top else Alignment.CenterVertically) {
             NetworkImage(
                 topic.logo.ifEmpty { topic.pic },
-                Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)),
+                Modifier.size(56.dp).clip(rememberSquircleShape(14.dp)),
                 contentDescription = topic.title,
             )
             Spacer(Modifier.width(12.dp))

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -60,6 +59,7 @@ import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toImageBitmap
 import app.awavenue.c001apk.ui.common.toast
@@ -481,7 +481,7 @@ private fun LocalApkFallback(
                     Image(
                         bitmap = icon,
                         contentDescription = app.appName,
-                        modifier = Modifier.size(80.dp).clip(RoundedCornerShape(18.dp)),
+                        modifier = Modifier.size(80.dp).clip(rememberSquircleShape(18.dp)),
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -547,7 +547,7 @@ private fun ApkHeader(app: Entity, onOpenIcon: () -> Unit, onDownload: () -> Uni
                 Modifier
                     .size(80.dp)
                     .imageOrigin(app.logo, 18.dp)
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(rememberSquircleShape(18.dp))
                     .clickable(onClick = onOpenIcon),
                 contentDescription = app.title,
             )

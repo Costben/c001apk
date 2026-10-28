@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.min
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.image.imageOrigin
 import io.github.suqi8.coui.kmp.basic.Text
@@ -28,7 +29,6 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val GridSpacing = 5.dp
 private val ImageCornerRadius = 12.dp
-private val ImageShape = RoundedCornerShape(ImageCornerRadius)
 private const val LONG_IMAGE_RATIO = 22f / 9f
 
 /**
@@ -88,7 +88,7 @@ private fun GridImage(url: String, width: Dp, height: Dp, more: Int = 0, onClick
         Modifier
             .size(width, min(height, width * LONG_IMAGE_RATIO))
             .imageOrigin(url, ImageCornerRadius)
-            .clip(ImageShape)
+            .clip(rememberSquircleShape(ImageCornerRadius))
             .clickable(onClick = onClick),
     ) {
         // A live photo's thumbnail suffix is not served; the still image doubles as its preview.

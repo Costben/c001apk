@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +32,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.image.imageOrigin
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -40,6 +40,7 @@ import app.awavenue.c001apk.ui.text.HtmlText
 import io.github.suqi8.coui.kmp.basic.Badge
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.squircle.squircleClip
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** One conversation of the private-message list, ported from the Flutter `MessageCard`. */
@@ -112,16 +113,17 @@ fun ChatCard(item: Entity, onLongPress: () -> Unit, onImageClick: (String) -> Un
                 Spacer(Modifier.width(10.dp))
             }
             if (message.isNotEmpty()) {
-                val shape = RoundedCornerShape(
-                    topStart = if (isLeft) 4.dp else 12.dp,
-                    topEnd = if (isLeft) 12.dp else 4.dp,
-                    bottomStart = 12.dp,
-                    bottomEnd = 12.dp,
-                )
                 Box(
                     Modifier
                         .widthIn(max = bubbleMax)
-                        .clip(shape)
+                        // A bubble has one squared-off corner, so it needs the per-corner variant
+                        // rather than the single-radius shape helper.
+                        .squircleClip(
+                            topStart = if (isLeft) 4.dp else 12.dp,
+                            topEnd = if (isLeft) 12.dp else 4.dp,
+                            bottomStart = 12.dp,
+                            bottomEnd = 12.dp,
+                        )
                         .background(
                             if (isLeft) COUITheme.colorScheme.surfaceContainer else COUITheme.colorScheme.primaryContainer,
                         )
@@ -158,7 +160,7 @@ private fun ChatAvatar(url: String, contentDescription: String, onClick: () -> U
 @Composable
 private fun ChatImage(pic: String, width: androidx.compose.ui.unit.Dp, onImageClick: (String) -> Unit) {
     val (imageWidth, imageHeight) = imageSize(pic)
-    val shape = RoundedCornerShape(12.dp)
+    val shape = rememberSquircleShape(12.dp)
     val size = Modifier
         .width(width)
         .height(width * (imageHeight / imageWidth))

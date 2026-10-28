@@ -23,8 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +44,7 @@ import io.github.suqi8.coui.kmp.basic.SmallTitle
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronForward
+import io.github.suqi8.coui.kmp.squircle.squircleClip
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.Dispatchers
@@ -74,12 +73,29 @@ private fun List<AppRow>.matching(query: String, sort: AppSort, ascending: Boole
     return if (ascending) ordered else ordered.asReversed()
 }
 
-/** The card's surface for one row of the single long list card. */
-private fun appCardShape(index: Int, count: Int): Shape = when {
-    count <= 1 -> RoundedCornerShape(17.dp)
-    index == 0 -> RoundedCornerShape(topStart = 17.dp, topEnd = 17.dp)
-    index == count - 1 -> RoundedCornerShape(bottomStart = 17.dp, bottomEnd = 17.dp)
-    else -> RectangleShape
+private val AppCardRadius = 17.dp
+
+/**
+ * The card's surface for one row of the single long list card. A `Modifier` rather than a `Shape`
+ * because only two of the four corners are rounded per row, and COUI's continuous corner is
+ * per-corner in the modifier API only.
+ */
+@Composable
+private fun appCardClip(index: Int, count: Int): Modifier = when {
+    count <= 1 -> Modifier.squircleClip(AppCardRadius)
+    index == 0 -> Modifier.squircleClip(
+        topStart = AppCardRadius,
+        topEnd = AppCardRadius,
+        bottomEnd = 0.dp,
+        bottomStart = 0.dp,
+    )
+    index == count - 1 -> Modifier.squircleClip(
+        topStart = 0.dp,
+        topEnd = 0.dp,
+        bottomEnd = AppCardRadius,
+        bottomStart = AppCardRadius,
+    )
+    else -> Modifier
 }
 
 @Composable
@@ -194,7 +210,7 @@ fun AppListPage(
                             }
                         } else {
                             itemsIndexed(matched, key = { _, row -> row.app.packageName }) { index, row ->
-                                AppRowItem(row, appCardShape(index, matched.size)) {
+                                AppRowItem(row, appCardClip(index, matched.size)) {
                                     navigator.push(Route.Apk(row.app.packageName))
                                 }
                             }
@@ -207,14 +223,14 @@ fun AppListPage(
 }
 
 @Composable
-private fun AppRowItem(row: AppRow, shape: Shape, onClick: () -> Unit) {
+private fun AppRowItem(row: AppRow, clip: Modifier, onClick: () -> Unit) {
     val icon = row.icon
     BasicComponent(
         // The rows stack without gaps and only the outer edges are rounded, so the whole list
         // reads as one long card while each row still composes and recycles on its own.
         modifier = Modifier
             .padding(horizontal = 12.dp)
-            .clip(shape)
+            .then(clip)
             .background(COUITheme.colorScheme.surfaceContainer),
         title = row.app.appName,
         summary = row.app.packageName,

@@ -24,6 +24,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
@@ -89,7 +90,7 @@ fun LikeCard(item: Entity, modifier: Modifier = Modifier) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(rememberSquircleShape(12.dp))
                     .background(COUITheme.colorScheme.surface)
                     .clickable { openLink(item.url, "") }
                     .padding(10.dp),

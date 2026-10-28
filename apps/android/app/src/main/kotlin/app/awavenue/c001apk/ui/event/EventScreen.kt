@@ -49,6 +49,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
@@ -397,7 +398,7 @@ private fun SponsorItem(sponsor: Entity, onOpenUser: (String) -> Unit) {
     Column(
         modifier = Modifier
             .width(76.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rememberSquircleShape(12.dp))
             .clickable(enabled = uid.isNotBlank(), onClick = onClick)
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

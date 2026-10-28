@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import app.awavenue.c001apk.BuildConfig
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toImageBitmap
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.rememberPageListState
@@ -136,7 +136,7 @@ fun AboutScreen() {
                             modifier = Modifier
                                 .width(96.dp)
                                 .height(96.dp)
-                                .clip(RoundedCornerShape(24.dp)),
+                                .clip(rememberSquircleShape(24.dp)),
                         )
                     }
                     Text("c001apk", fontSize = COUITheme.textStyles.title1.fontSize)

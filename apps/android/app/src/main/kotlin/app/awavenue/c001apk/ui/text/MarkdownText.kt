@@ -55,6 +55,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.ui.common.openCoolapkLink
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -66,7 +67,6 @@ import io.github.suqi8.coui.kmp.icon.extended.Photos
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val emojiPattern = Regex("\\[[^\\]]+\\]")
-private val ImageShape = RoundedCornerShape(12.dp)
 private const val LONG_IMAGE_RATIO = 22f / 9f
 
 /**
@@ -407,7 +407,7 @@ private fun MarkdownImage(
                 Modifier
                     .width(imageWidth)
                     .height(imageHeight)
-                    .clip(ImageShape)
+                    .clip(rememberSquircleShape(12.dp))
                     .clickable { onOpenImage(url) },
             ) {
                 NetworkImage(

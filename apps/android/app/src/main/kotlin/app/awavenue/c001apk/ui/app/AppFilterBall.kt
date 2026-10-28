@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
@@ -36,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -161,6 +161,7 @@ fun AppFilterSearchPanel(
         exit = fadeOut(tween(100)),
     ) {
         Box(Modifier.fillMaxSize()) {
+            val panelShape = rememberSquircleShape(14.dp)
             Box(
                 Modifier
                     .fillMaxSize()
@@ -176,14 +177,14 @@ fun AppFilterSearchPanel(
                     .padding(bottom = if (keyboardUp) 8.dp else bottomPadding + 8.dp)
                     .width(SearchPanelWidth)
                     .dropShadow(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = panelShape,
                         shadow = Shadow(
                             radius = 16.dp,
                             color = Color.Black.copy(alpha = 0.18f),
                             offset = DpOffset(0.dp, 6.dp),
                         ),
                     )
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(panelShape)
                     .background(if (isDark) Color(0xFF333333) else Color.White)
                     .padding(12.dp),
             ) {

@@ -50,6 +50,7 @@ import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.openCoolapkLink
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
@@ -509,7 +510,7 @@ private fun InsetBlock(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rememberSquircleShape(12.dp))
             .background(COUITheme.colorScheme.surface)
             .then(
                 if (onClick != null || onLongClick != null) {

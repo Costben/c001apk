@@ -28,6 +28,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.image.imageOrigin
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -78,7 +79,6 @@ data class FeedArticle(
 
 private val LONG_IMAGE_RATIO = 22f / 9f
 private val ImageCornerRadius = 12.dp
-private val ImageShape = RoundedCornerShape(ImageCornerRadius)
 
 @Composable
 fun ArticleBody(
@@ -122,7 +122,7 @@ fun ArticleBody(
                 modifier
                     .padding(horizontal = 16.dp)
                     .fillMaxWidth()
-                    .clip(ImageShape)
+                    .clip(rememberSquircleShape(ImageCornerRadius))
                     .background(COUITheme.colorScheme.surfaceContainer)
                     .clickable(onClick = rememberHapticClick { openLink(article.url, article.title) })
                     .padding(10.dp),
@@ -152,7 +152,7 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                 Modifier
                     .size(imageWidth, imageHeight)
                     .imageOrigin(url, ImageCornerRadius)
-                    .clip(ImageShape)
+                    .clip(rememberSquircleShape(ImageCornerRadius))
                     .clickable(
                         onClick = rememberHapticClick {
                             navigator.push(Route.ImageView(images, images.indexOf(url).coerceAtLeast(0)))
