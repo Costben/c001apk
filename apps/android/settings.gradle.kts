@@ -35,7 +35,13 @@ plugins {
 }
 
 // coui17 is consumed from source: its io.github.suqi8.coui.kmp modules replace the
-// published coordinates, so the app always builds against the submodule's ColorOS 17 work.
-includeBuild("../../third_party/coui17")
+// published coordinates. A `coui` checkout next to this repository (the fork being worked on locally)
+// wins over the submodule, so local builds follow its latest state while CI stays on the submodule's
+// pinned commit.
+val siblingCoui = rootDir.resolve("../../../coui")
+includeBuild(
+    if (siblingCoui.resolve("settings.gradle.kts").isFile) siblingCoui
+    else rootDir.resolve("../../third_party/coui17"),
+)
 
 include(":app")
