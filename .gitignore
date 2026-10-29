@@ -62,3 +62,6 @@ MEMORY.md
 **/android/key.properties
 *.jks
 *.keystore
+
+# Paseo 项目图标（仅本地显示用）
+/assets/favicon.png
