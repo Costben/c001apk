@@ -31,8 +31,8 @@ android {
         applicationId = "app.awavenue.c001apk.coui"
         minSdk = 23
         targetSdk = 37
-        versionCode = 20104
-        versionName = "2.1.4-pre"
+        versionCode = 20105
+        versionName = "2.1.5-pre"
     }
 
     signingConfigs {
