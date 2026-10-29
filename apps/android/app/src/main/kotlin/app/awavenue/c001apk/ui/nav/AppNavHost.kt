@@ -145,6 +145,8 @@ fun AppNavHost(
     var gestureProgress by remember { mutableFloatStateOf(1f) }
     var gestureEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
+    var committingEntry by remember { mutableStateOf<BackStackEntry?>(null) }
+    var interruptedEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     // Bumped by every back callback, so the ease-back started by one callback can tell that a later
     // one has taken the gesture over and stand down instead of fighting it.
     var gestureRun by remember { mutableStateOf(0) }
@@ -177,20 +179,50 @@ fun AppNavHost(
         PredictiveBackHandler(enabled = paneEntry == null) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
+
+            // If a previous return animation is still playing when another back gesture arrives,
+            // immediately finish the previous animation and pop it, then swallow this new gesture
+            // so it doesn't trigger a second return on the screen underneath (e.g. image return or desktop).
+            val interrupting = committingEntry ?: interruptedEntry
+            if (interrupting != null) {
+                committingEntry = null
+                interruptedEntry = null
+                interrupting.previewed = true
+                if (navigator.stack.lastOrNull() === interrupting) {
+                    navigator.pop()
+                }
+                gestureEntry = null
+                gestureProgress = 1f
+                try {
+                    progress.collect { }
+                } catch (_: CancellationException) { }
+                return@PredictiveBackHandler
+            }
+
             if (navigator.stack.size <= 1) {
                 gestureEntry = null
                 gestureProgress = 1f
                 // Nothing to preview: back either returns the main screen to its first tab or
                 // backgrounds the app, and neither happens until the gesture is released.
-                progress.collect { }
-                if (navigator.onMainBack?.invoke() != true) (context as? Activity)?.moveTaskToBack(true)
+                try {
+                    progress.collect { }
+                } catch (_: CancellationException) {
+                    return@PredictiveBackHandler
+                }
+                val justPopped = System.currentTimeMillis() - navigator.lastPopTime < 350L
+                if (!justPopped) {
+                    if (navigator.onMainBack?.invoke() != true) (context as? Activity)?.moveTaskToBack(true)
+                }
                 return@PredictiveBackHandler
             }
             val run = ++gestureRun
             val top = navigator.stack.last()
             gestureEntry = top
+            var committed = false
             try {
                 progress.collect { event -> gestureProgress = 1f - event.progress }
+                committed = true
+                committingEntry = top
                 // Released past the threshold: the page finishes leaving from wherever the finger
                 // left it, then goes. Popping it while it is still only part way out would make it
                 // disappear from mid-air.
@@ -220,25 +252,42 @@ fun AppNavHost(
                     }
                     top.previewed = true
                 }
-                navigator.pop()
+                if (navigator.stack.lastOrNull() === top) {
+                    navigator.pop()
+                }
             } catch (e: CancellationException) {
-                // Released early: the page eases back under the finger — unless a later callback
-                // has already taken the gesture over, in which case easing back would fight it.
-                settleJob = scope.launch {
-                    withFrameNanos { }
-                    if (run != gestureRun) return@launch
-                    animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
-                        gestureProgress = value
+                if (!committed) {
+                    // Released early: the page eases back under the finger — unless a later callback
+                    // has already taken the gesture over, in which case easing back would fight it.
+                    settleJob = scope.launch {
+                        withFrameNanos { }
+                        if (run != gestureRun) return@launch
+                        animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
+                            gestureProgress = value
+                        }
+                        if (gestureEntry === top) {
+                            gestureEntry = null
+                            gestureProgress = 1f
+                        }
                     }
-                    if (gestureEntry === top) {
-                        gestureEntry = null
-                        gestureProgress = 1f
+                    return@PredictiveBackHandler
+                } else {
+                    // Interrupted during commit by another back gesture: fast-finish immediately.
+                    top.previewed = true
+                    interruptedEntry = top
+                    if (navigator.stack.lastOrNull() === top) {
+                        navigator.pop()
                     }
                 }
-                return@PredictiveBackHandler
+            } finally {
+                if (committingEntry === top) {
+                    committingEntry = null
+                }
+                if (gestureEntry === top) {
+                    gestureEntry = null
+                    gestureProgress = 1f
+                }
             }
-            gestureEntry = null
-            gestureProgress = 1f
         }
 
         Box(Modifier.fillMaxSize().background(COUITheme.colorScheme.surface)) {

@@ -90,6 +90,10 @@ class BackStackEntry internal constructor(
 class Navigator {
     val stack: SnapshotStateList<BackStackEntry> = mutableStateListOf(BackStackEntry(Route.Main))
 
+    /** Timestamp of the most recent pop, used to debounce rapid repeated back gestures. */
+    var lastPopTime: Long = 0L
+        private set
+
     /** True while a route is stacked above the main screen. */
     val hasOverlay: Boolean get() = stack.size > 1
 
@@ -131,12 +135,16 @@ class Navigator {
 
     fun pop(): Boolean {
         if (stack.size <= 1) return false
+        lastPopTime = System.currentTimeMillis()
         stack[stack.lastIndex].popped = true
         stack.removeAt(stack.lastIndex).remove()
         return true
     }
 
     fun popToMain() {
+        if (stack.size > 1) {
+            lastPopTime = System.currentTimeMillis()
+        }
         while (stack.size > 1) {
             stack[stack.lastIndex].popped = true
             stack.removeAt(stack.lastIndex).remove()
