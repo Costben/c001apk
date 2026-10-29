@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,52 +39,75 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.awavenue.c001apk.data.InAppUpdateState
+import app.awavenue.c001apk.data.InAppUpdater
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import io.github.suqi8.coui.kmp.basic.Checkbox
+import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.layout.DialogButtonBar
 import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
 import io.github.suqi8.coui.kmp.layout.DialogDefaults
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.window.WindowDialog
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+private enum class UpdateDialogAction {
+    DISMISS,
+    SKIP,
+    BROWSER_DOWNLOAD,
+}
 
 /**
  * 更新提示。release notes 按 Markdown 渲染，可能有几十行，正文自己滚动、封顶 260dp，别把按钮顶出屏幕。
  * 「跳过本次更新」是个勾选框：勾上后不管点稍后还是点外面关掉，都记成跳过这个版本；点下载更新则照常下载。
- * 三个出口等窗口收完再分发，避免和关闭动画抢时序。
+ * 支持应用内下载与系统安装器调起，并在界面上实时呈现 COUI 进度条与状态。
  */
 @Composable
 fun UpdateDialog(
     version: String,
     prerelease: Boolean,
     notes: String,
+    inAppUpdate: Boolean = false,
+    downloadState: InAppUpdateState = InAppUpdateState.Idle,
     onDismiss: () -> Unit,
     onSkip: () -> Unit,
-    onDownload: () -> Unit,
+    onStartInAppUpdate: () -> Unit = {},
+    onCancelInAppUpdate: () -> Unit = {},
+    onInstall: () -> Unit = {},
+    onBrowserDownload: () -> Unit = {},
 ) {
     var show by remember { mutableStateOf(false) }
-    var download by remember { mutableStateOf(false) }
+    var action by remember { mutableStateOf<UpdateDialogAction?>(null) }
     var skip by remember { mutableStateOf(false) }
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { show = true }
     val haptic = LocalHapticFeedback.current
     val textMargin = DialogDefaults.insideMargin.width
+
     WindowDialog(
         show = show,
         title = "发现新版本 $version",
         summary = if (prerelease) "预发布版本" else "正式版本",
         outsideMargin = DpSize(16.dp, 8.dp),
-        onDismissRequest = { show = false },
+        onDismissRequest = {
+            if (downloadState !is InAppUpdateState.Downloading) {
+                show = false
+            }
+        },
         onDismissFinished = {
             if (!settled) {
                 settled = true
-                when {
-                    download -> onDownload()
-                    skip -> onSkip()
-                    else -> onDismiss()
+                when (action) {
+                    UpdateDialogAction.BROWSER_DOWNLOAD -> onBrowserDownload()
+                    UpdateDialogAction.SKIP -> onSkip()
+                    UpdateDialogAction.DISMISS, null -> {
+                        if (skip) onSkip() else onDismiss()
+                    }
                 }
             }
         },
@@ -99,68 +123,233 @@ fun UpdateDialog(
                         .padding(horizontal = textMargin),
                 )
             }
-            Row(
-                // 和 COUI 安全对话框的勾选行一致：起点让圆圈的内环对齐上面正文的左缘。
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = textMargin, top = 12.dp)
-                    .toggleable(
-                        value = skip,
-                        interactionSource = null,
-                        indication = null,
-                        role = Role.Checkbox,
-                        onValueChange = {
-                            skip = it
-                            haptic.performHapticFeedback(
-                                if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+
+            when (val state = downloadState) {
+                is InAppUpdateState.Idle -> {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = textMargin, top = 12.dp)
+                            .toggleable(
+                                value = skip,
+                                interactionSource = null,
+                                indication = null,
+                                role = Role.Checkbox,
+                                onValueChange = {
+                                    skip = it
+                                    haptic.performHapticFeedback(
+                                        if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                                    )
+                                },
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(state = ToggleableState(skip), onClick = null)
+                        Text(
+                            "跳过本次更新",
+                            fontSize = 14.sp,
+                            color = COUITheme.colorScheme.onBackgroundVariant,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+
+                    DialogButtonBar(
+                        negative = DialogButtonBarAction(text = "稍后", onClick = { show = false }),
+                        positive = DialogButtonBarAction(
+                            text = if (inAppUpdate) "应用内更新" else "下载更新",
+                            recommended = true,
+                            onClick = {
+                                if (inAppUpdate) {
+                                    onStartInAppUpdate()
+                                } else {
+                                    action = UpdateDialogAction.BROWSER_DOWNLOAD
+                                    show = false
+                                }
+                            },
+                        ),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                is InAppUpdateState.Downloading -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = textMargin)
+                            .padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val downloadedStr = InAppUpdater.formatBytes(state.downloadedBytes)
+                            val totalStr = if (state.totalBytes > 0) InAppUpdater.formatBytes(state.totalBytes) else "未知大小"
+                            Text(
+                                "正在下载 $downloadedStr / $totalStr",
+                                fontSize = 13.sp,
+                                color = COUITheme.colorScheme.onBackgroundVariant,
                             )
-                        },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(state = ToggleableState(skip), onClick = null)
-                Text(
-                    "跳过本次更新",
-                    fontSize = 14.sp,
-                    color = COUITheme.colorScheme.onBackgroundVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
+                            if (state.progress >= 0f) {
+                                Text(
+                                    "${(state.progress * 100).toInt()}%",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = COUITheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        LinearProgressIndicator(
+                            progress = if (state.progress >= 0f) state.progress else null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    DialogButtonBar(
+                        negative = DialogButtonBarAction(
+                            text = "取消",
+                            onClick = { onCancelInAppUpdate() },
+                        ),
+                        positive = DialogButtonBarAction(
+                            text = if (state.progress >= 0f) "下载中 ${(state.progress * 100).toInt()}%" else "下载中…",
+                            enabled = false,
+                            onClick = {},
+                        ),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                is InAppUpdateState.ReadyToInstall -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = textMargin)
+                            .padding(top = 12.dp),
+                    ) {
+                        Text(
+                            "安装包已下载完成，正在调起系统安装器…",
+                            fontSize = 13.sp,
+                            color = COUITheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+
+                    DialogButtonBar(
+                        negative = DialogButtonBarAction(text = "关闭", onClick = { show = false }),
+                        positive = DialogButtonBarAction(
+                            text = "立即安装",
+                            recommended = true,
+                            onClick = { onInstall() },
+                        ),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                is InAppUpdateState.Error -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = textMargin)
+                            .padding(top = 12.dp),
+                    ) {
+                        Text(
+                            state.message,
+                            fontSize = 13.sp,
+                            color = COUITheme.colorScheme.error,
+                        )
+                    }
+
+                    DialogButtonBar(
+                        negative = DialogButtonBarAction(
+                            text = "浏览器下载",
+                            onClick = {
+                                action = UpdateDialogAction.BROWSER_DOWNLOAD
+                                show = false
+                            },
+                        ),
+                        positive = DialogButtonBarAction(
+                            text = "重试",
+                            recommended = true,
+                            onClick = { onStartInAppUpdate() },
+                        ),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
-            DialogButtonBar(
-                negative = DialogButtonBarAction(text = "稍后", onClick = { show = false }),
-                positive = DialogButtonBarAction(
-                    text = "下载更新",
-                    recommended = true,
-                    onClick = {
-                        download = true
-                        show = false
-                    },
-                ),
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
     }
 }
 
-/** 发现新版本: 稍后 closes, 跳过 silences this version for the automatic check, 更新 opens the APK. */
+/** 发现新版本: 稍后 closes, 跳过 silences this version for the automatic check, 更新 triggers in-app or browser update. */
 @Composable
 fun AppUpdateDialog(update: UpdateResult.Available, onDismiss: () -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val release = update.release
     val isPrerelease = release.version.preRelease != null
+
+    val abis = remember { Build.SUPPORTED_ABIS.toList() }
+    val apkUrl = remember(release) { release.apkDownloadUrl(abis) }
+    val inAppUpdateEnabled = app.settings.inAppUpdate && !apkUrl.isNullOrBlank()
+
+    var downloadState by remember { mutableStateOf<InAppUpdateState>(InAppUpdateState.Idle) }
+    var downloadJob by remember { mutableStateOf<Job?>(null) }
+
+    fun startDownload() {
+        val targetUrl = apkUrl ?: return
+        downloadJob?.cancel()
+        downloadJob = scope.launch {
+            InAppUpdater.downloadApk(
+                context = context,
+                url = targetUrl,
+                version = release.version.toString(),
+                onProgress = { state ->
+                    downloadState = state
+                    if (state is InAppUpdateState.ReadyToInstall) {
+                        InAppUpdater.installApk(context, state.apkFile)
+                    }
+                },
+            )
+        }
+    }
+
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        downloadState = InAppUpdateState.Idle
+    }
 
     UpdateDialog(
         version = release.version.toString(),
         prerelease = isPrerelease,
         notes = release.notes,
-        onDismiss = onDismiss,
+        inAppUpdate = inAppUpdateEnabled,
+        downloadState = downloadState,
+        onDismiss = {
+            cancelDownload()
+            onDismiss()
+        },
         onSkip = {
+            cancelDownload()
             app.settings.skipAppUpdate(release.version.toString())
             onDismiss()
         },
-        onDownload = {
-            context.openBrowser(release.downloadFor(Build.SUPPORTED_ABIS.toList()))
+        onStartInAppUpdate = {
+            startDownload()
+        },
+        onCancelInAppUpdate = {
+            cancelDownload()
+        },
+        onInstall = {
+            (downloadState as? InAppUpdateState.ReadyToInstall)?.let {
+                InAppUpdater.installApk(context, it.apkFile)
+            }
+        },
+        onBrowserDownload = {
+            cancelDownload()
+            context.openBrowser(release.downloadFor(abis))
             onDismiss()
         },
     )

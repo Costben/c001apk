@@ -99,16 +99,23 @@ class AppRelease private constructor(
 ) {
     /**
      * The APK for this device, preferring its ABIs in order, then a universal APK, then the release
-     * page. Only Compose builds (`c001apk-coui-…`) qualify: the Flutter APKs are a different app.
+     * page.
      */
-    fun downloadFor(abis: List<String>): String {
+    fun downloadFor(abis: List<String>): String = apkDownloadUrl(abis) ?: page
+
+    /**
+     * Finds the direct download URL for an APK asset in this release, if one exists.
+     * Prefers device ABI, then universal APK matching either `c001apk-coui-*` or `c001apk-*`,
+     * and falls back to any APK asset attached to this release.
+     */
+    fun apkDownloadUrl(abis: List<String>): String? {
         val version = Regex.escape(version.toString())
         val patterns = abis.filter { it in SUPPORTED_ABIS }.map { "-android-${Regex.escape(it)}" } + ""
         for (suffix in patterns) {
-            val pattern = Regex("^c001apk-coui-$version(?:\\+\\d+)?$suffix\\.apk$")
+            val pattern = Regex("^(c001apk-coui|c001apk)-$version(?:\\+\\d+)?$suffix\\.apk$")
             assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
         }
-        return page
+        return assets.entries.firstOrNull { it.key.endsWith(".apk", ignoreCase = true) }?.value
     }
 
     companion object {

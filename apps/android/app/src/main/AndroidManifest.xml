@@ -15,6 +15,7 @@
     <!-- Without it Android 13 hides the progress and completion notifications of a download. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".C001apkApp"

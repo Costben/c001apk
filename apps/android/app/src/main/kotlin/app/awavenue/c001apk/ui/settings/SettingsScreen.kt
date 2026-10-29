@@ -429,6 +429,13 @@ fun SettingsScreen() {
                             onCheckedChange = settings::updateAcceptPrereleaseUpdates,
                             startAction = { PreferenceStartIcon(COUIIcons.Update) },
                         )
+                        SwitchPreference(
+                            title = "应用内更新",
+                            summary = "开启后在应用内拉取 APK 并发起安装请求；关闭时通过浏览器下载",
+                            checked = settings.inAppUpdate,
+                            onCheckedChange = settings::updateInAppUpdate,
+                            startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                        )
                         ArrowPreference(
                             title = if (checkingUpdate) "正在检查更新…" else "检查更新",
                             summary = if (settings.acceptPrereleaseUpdates) {

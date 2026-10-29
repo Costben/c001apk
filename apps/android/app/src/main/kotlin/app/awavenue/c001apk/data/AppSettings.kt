@@ -118,6 +118,10 @@ class AppSettings(context: Context) {
     var acceptPrereleaseUpdates by mutableStateOf(prefs.getBoolean(KEY_ACCEPT_PRERELEASE_UPDATES, false))
         private set
 
+    /** Whether to download APK and trigger installation in-app instead of opening browser. */
+    var inAppUpdate by mutableStateOf(prefs.getBoolean(KEY_IN_APP_UPDATE, true))
+        private set
+
     var skippedAppUpdateVersion by mutableStateOf(prefs.getString(KEY_SKIPPED_APP_UPDATE, "").orEmpty())
         private set
 
@@ -197,6 +201,9 @@ class AppSettings(context: Context) {
 
     fun updateAcceptPrereleaseUpdates(value: Boolean) =
         put { putBoolean(KEY_ACCEPT_PRERELEASE_UPDATES, value) }.also { acceptPrereleaseUpdates = value }
+
+    fun updateInAppUpdate(value: Boolean) =
+        put { putBoolean(KEY_IN_APP_UPDATE, value) }.also { inAppUpdate = value }
 
     fun skipAppUpdate(version: String) =
         put { putString(KEY_SKIPPED_APP_UPDATE, version) }.also { skippedAppUpdateVersion = version }
@@ -292,6 +299,7 @@ class AppSettings(context: Context) {
         const val KEY_CHECK_UPDATE = "checkUpdate"
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
         const val KEY_ACCEPT_PRERELEASE_UPDATES = "acceptPrereleaseUpdates"
+        const val KEY_IN_APP_UPDATE = "inAppUpdate"
         const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"
         const val KEY_SZLM_ID = "szlmId"
         const val KEY_ONBOARDING_DONE = "onboardingDone"
