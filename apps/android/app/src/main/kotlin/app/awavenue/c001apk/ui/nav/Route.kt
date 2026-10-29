@@ -85,6 +85,8 @@ sealed interface Route {
     ) : Route
     data class History(val type: HistoryType) : Route
     data class Blacklist(val type: BlacklistType) : Route
+    /** 内容过滤: the keyword, user and topic rules applied to every list. */
+    data object ContentFilter : Route
     data class Chat(val ukey: String, val uid: String, val username: String) : Route
     data class Copy(val text: String) : Route
 }

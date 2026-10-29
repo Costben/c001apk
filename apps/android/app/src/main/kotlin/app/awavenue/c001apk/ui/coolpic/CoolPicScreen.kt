@@ -87,6 +87,7 @@ fun CoolPicScreen(title: String) {
                         PageLoader { p, first, last ->
                             app.repository.coolPic(decodedTitle, type, p, first, last)
                         },
+                        app::contentGate,
                     )
                 }
                 FeedList(

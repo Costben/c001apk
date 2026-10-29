@@ -1,26 +1,49 @@
 package app.awavenue.c001apk.ui.search
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.AppBarTitleSize
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -31,6 +54,8 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -40,7 +65,8 @@ import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
-import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -48,6 +74,7 @@ import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.overlay.OverlayCascadingListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 private enum class SearchContentType(val label: String, val type: String) {
     Feed("动态", "feed"),
@@ -90,6 +117,23 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     val scope = rememberCoroutineScope()
     val scrollBehavior = rememberPageScrollBehavior("search-result")
     val backdrop = rememberGlassBackdrop()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    // The bar's title is the live query: editing it and submitting re-runs the search in place,
+    // keeping the tab, the content type and the order the user already chose. The field keeps its
+    // own draft so typing does not reload the list on every keystroke.
+    var query by remember(keyword) { mutableStateOf(keyword) }
+    var draft by remember(keyword) { mutableStateOf(keyword) }
+
+    fun submit(text: String) {
+        val next = text.trim()
+        if (next.isEmpty()) return
+        focusManager.clearFocus()
+        keyboard?.hide()
+        if (next == query) return
+        app.searchHistory.add(next)
+        query = next
+    }
 
     var searchType by remember { mutableStateOf(SearchType.All) }
     var sortType by remember { mutableStateOf(SearchSortType.Dateline) }
@@ -125,36 +169,91 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
         )
     }
 
+    // The bar never collapses; pinning the range keeps the nested-scroll connection from eating
+    // the list's drags for a height change this page does not draw.
+    SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
+
     Scaffold(
         edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                SmallTopAppBar(
-                    title = keyword,
-                    gradientGlass = true,
-                    subtitle = if (title.isEmpty()) "" else "${scopeLabel(pageType)}：$title",
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        TopBarIconButton(onClick = { navigator.pop() }) {
-                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                        }
-                    },
-                    actions = {
-                        if (pagerState.currentPage == 0) {
-                            Box {
-                                TopBarIconButton(onClick = { menuOpen = true }) {
-                                    Icon(COUIIcons.More, contentDescription = "菜单")
-                                }
-                                OverlayCascadingListPopup(
-                                    show = menuOpen,
-                                    entries = menuEntries,
-                                    alignment = PopupPositionProvider.Align.BottomEnd,
-                                    onDismissRequest = { menuOpen = false },
+                val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val density = LocalDensity.current
+                val materialScrollFraction = remember(scrollBehavior, density) {
+                    {
+                        AppBarBlurOverlayDefaults.scrollAlpha(
+                            abs(scrollBehavior.state.contentOffset),
+                            density,
+                        )
+                    }
+                }
+                AppBarBlurOverlay(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = COUITheme.colorScheme.surface,
+                    backdrop = backdrop,
+                    scrollFraction = materialScrollFraction,
+                    extraHeight = AppBarBlurOverlayDefaults.ExtraHeight,
+                ) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.height(statusBar))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = TopAppBarDefaults.CollapsedHeight)
+                                .padding(start = 16.dp, end = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TopBarIconButton(onClick = { navigator.pop() }) {
+                                Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = TopAppBarDefaults.NavigationIconGap, end = 4.dp),
+                            ) {
+                                // The title is the field itself, so tapping it puts the caret where
+                                // the eye already is instead of opening a second page.
+                                BasicTextField(
+                                    value = draft,
+                                    onValueChange = { draft = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "搜索关键词，点击编辑" },
+                                    textStyle = TextStyle(
+                                        fontSize = with(density) { AppBarTitleSize.toSp() },
+                                        fontWeight = FontWeight.Medium,
+                                        color = COUITheme.colorScheme.onSurface,
+                                    ),
+                                    singleLine = true,
+                                    cursorBrush = SolidColor(COUITheme.colorScheme.primary),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(onSearch = { submit(draft) }),
                                 )
+                                if (title.isNotEmpty()) {
+                                    Text(
+                                        text = "${scopeLabel(pageType)}：$title",
+                                        modifier = Modifier.padding(top = TopAppBarDefaults.SubtitleMarginTop),
+                                        style = COUITheme.textStyles.body2,
+                                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            if (pagerState.currentPage == 0) {
+                                Box {
+                                    TopBarIconButton(onClick = { menuOpen = true }) {
+                                        Icon(COUIIcons.More, contentDescription = "菜单")
+                                    }
+                                    OverlayCascadingListPopup(
+                                        show = menuOpen,
+                                        entries = menuEntries,
+                                        alignment = PopupPositionProvider.Align.BottomEnd,
+                                        onDismissRequest = { menuOpen = false },
+                                    )
+                                }
                             }
                         }
-                    },
-                    bottomContent = {
                         if (title.isEmpty()) {
                             // ColorOS 17's segment control paints an opaque capsule, so the tabs
                             // sit on their own surface instead of the page showing through.
@@ -179,8 +278,8 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                 )
                             }
                         }
-                    },
-                )
+                    }
+                }
             }
         },
     ) { innerPadding ->
@@ -194,14 +293,14 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                 val feedType = searchType.feedType
                 val sort = sortType.sort
                 val isStrict = sortType.isStrict
-                val viewModel = viewModel(key = "search-$keyword-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
+                val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
                     FeedListViewModel(
                         PageLoader { p, first, last ->
                             app.repository.search(
                                 type = contentType.type,
                                 feedType = feedType,
                                 sort = sort,
-                                searchValue = keyword,
+                                searchValue = query,
                                 isStrict = isStrict,
                                 pageType = pageType,
                                 pageParam = pageParam,
@@ -210,6 +309,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                 lastItem = last,
                             )
                         },
+                        app::contentGate,
                     )
                 }
                 // A new view model means a new search: start the list from the top instead of

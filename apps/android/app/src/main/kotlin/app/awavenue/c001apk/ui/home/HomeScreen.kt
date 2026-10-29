@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.CoolapkRepository
+import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.app.AppListPage
 import app.awavenue.c001apk.ui.common.NetworkImage
@@ -113,6 +114,18 @@ enum class HomeTab(val label: String) {
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
 private val TOP_BAR_ROW_HEIGHT = 52.dp
+
+/**
+ * The header cards the 首页内容 switches own: the banner, the channel shortcuts, and the rows of
+ * recommended topics and 数码 entries. Everything else in the stream always shows.
+ */
+private fun homeHeaderVisible(item: Entity, carousel: Boolean, channels: Boolean, topics: Boolean): Boolean =
+    when (item.entityTemplate) {
+        "imageCarouselCard_1" -> carousel
+        "iconLinkGridCard" -> channels
+        "iconMiniScrollCard", "iconMiniGridCard" -> topics
+        else -> true
+    }
 
 /**
  * The bar material's alpha when the top row is fully expanded. The material stays on at rest so the
@@ -194,6 +207,18 @@ fun HomeScreen(
     val navigator = LocalNavigator.current
     // Hiding every tab would leave the pager with no page, so an empty set falls back to all.
     val tabs = HomeTab.entries.filterNot { it.name in settings.hiddenHomeTabs }.ifEmpty { HomeTab.entries }
+    // Flipping a 首页内容 switch redraws the stream at once: the fetched page keeps its cards, only
+    // the draw filter changes, so turning one back on needs no refresh. Only 动态 has these headers.
+    val homeHeaderFilter: (Entity) -> Boolean = remember(
+        settings.showHomeCarousel,
+        settings.showHomeChannels,
+        settings.showHomeTopics,
+    ) {
+        val carousel = settings.showHomeCarousel
+        val channels = settings.showHomeChannels
+        val topics = settings.showHomeTopics
+        { item: Entity -> homeHeaderVisible(item, carousel, channels, topics) }
+    }
     val selectedTabIndex = pagerState.currentPage.coerceIn(0, tabs.lastIndex)
     var showTabEditor by remember { mutableStateOf(false) }
     val openTabEditor = rememberHapticClick { showTabEditor = true }
@@ -434,12 +459,13 @@ fun HomeScreen(
                         // Every stream is personalised, so its cached page is only valid for one account.
                         val key = "home-${tab.name}-${app.session.uid}"
                         val loader = tab.loader(app.repository)
-                        val viewModel = viewModel(key = key) { FeedListViewModel(loader!!) }
+                        val viewModel = viewModel(key = key) { FeedListViewModel(loader!!, app::contentGate) }
                         FeedList(
                             viewModel = viewModel,
                             scrollBehavior = scrollBehavior,
                             returnTop = returnTopHere,
                             contentPadding = pageContentPadding,
+                            itemFilter = if (tab == HomeTab.Feed) homeHeaderFilter else null,
                         )
                     }
                 }

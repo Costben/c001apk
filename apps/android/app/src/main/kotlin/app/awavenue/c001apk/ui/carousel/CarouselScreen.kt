@@ -22,10 +22,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.model.Entity
+import app.awavenue.c001apk.model.catalogListUrl
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.ItemPadding
@@ -145,8 +147,42 @@ private fun CarouselBody(
                     includeConfigCard = isInit,
                 )
             },
+            app::contentGate,
         )
     }
+    val openLink = rememberLinkOpener()
+    // A digital category page opens with its brands and its orders. Both are drawn above the list
+    // and survive the reload a new order starts, since the rows are kept by the view model.
+    val catalogHeader: (@Composable () -> Unit)? =
+        if (viewModel.catalogBrands.isEmpty() && viewModel.catalogSorts.isEmpty()) {
+            null
+        } else {
+            {
+                CatalogHeader(
+                    brands = viewModel.catalogBrands,
+                    sorts = viewModel.catalogSorts,
+                    selectedSort = viewModel.selectedCatalogSort,
+                    onBrand = { entry -> openLink(entry.url, entry.title) },
+                    onSort = { entry ->
+                        val next = entry.url.catalogListUrl()
+                        viewModel.selectCatalogSort(entry.url)
+                        viewModel.switchList(
+                            PageLoader { page, first, last ->
+                                app.repository.dataList(
+                                    url = next,
+                                    title = title,
+                                    page = page,
+                                    firstItem = first,
+                                    lastItem = last,
+                                    includeConfigCard = isInit,
+                                )
+                            },
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = itemPadding),
+                )
+            }
+        }
     var titleReported by remember(url, title) { mutableStateOf(false) }
 
     // The card's page title overrides the one the caller passed, and only on the first page.
@@ -168,6 +204,7 @@ private fun CarouselBody(
                 scrollBehavior = scrollBehavior,
                 contentPadding = contentPadding,
                 itemPadding = itemPadding,
+                header = catalogHeader,
             )
         } else {
             NestedTabs(nested, contentPadding, scrollBehavior)

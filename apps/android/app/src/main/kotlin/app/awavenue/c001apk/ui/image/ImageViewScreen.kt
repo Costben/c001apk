@@ -66,6 +66,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -84,9 +85,11 @@ import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.openBrowser
+import app.awavenue.c001apk.ui.common.originalImageUrl
 import app.awavenue.c001apk.ui.common.saveOriginalImage
 import app.awavenue.c001apk.ui.common.saveLivePhoto
 import app.awavenue.c001apk.ui.common.shareImage
+import app.awavenue.c001apk.ui.common.SUFFIX_THUMBNAIL
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ActionSheetItem
@@ -117,6 +120,13 @@ import kotlinx.coroutines.launch
 private val ChromeColor = Color.Black.copy(alpha = 0.45f)
 private const val MaxZoom = 5f
 private const val DoubleTapZoom = 2.5f
+
+// A picture narrower than this (width over height) is a long strip: fitted to the screen it decodes
+// to a few dozen pixels across, so it is decoded at screen width instead and stays readable zoomed.
+private const val LongImageAspect = 9f / 22f
+
+// Ceiling on a long strip's decoded pixels, so that a very long one cannot exhaust the heap.
+private const val MaxDecodePixels = 12_000_000
 
 // The bars come in over the last part of the opening and are gone early in the closing, so they
 // never ride along with the shrinking frame.
@@ -457,6 +467,20 @@ private fun ZoomablePage(
     val remote = url.startsWith("http://") || url.startsWith("https://")
     var loaded by remember(url) { mutableStateOf(false) }
     var failed by remember(url) { mutableStateOf(false) }
+    // The list hands over a display variant of the picture. When that one will not load, the
+    // original file behind it usually still does, so the viewer falls back instead of going blank.
+    val baseUrl = remember(url) { if (url.contains(SUFFIX_THUMBNAIL)) originalImageUrl(url) else url }
+    val originalUrl = remember(baseUrl) { originalImageUrl(baseUrl) }
+    var useOriginal by remember(url) { mutableStateOf(false) }
+    val source = if (useOriginal) originalUrl else baseUrl
+    // A long strip is decoded at the screen's width rather than fitted to it, so zooming in shows
+    // detail instead of a stretched handful of pixels.
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
+    val decodeSize = frame.aspectOf(url)?.takeIf { it < LongImageAspect }?.let { aspect ->
+        val width = screenWidthPx.coerceAtLeast(1)
+        val height = (width / aspect).toInt().coerceAtLeast(1)
+        coil3.size.Size(width, minOf(height, (MaxDecodePixels / width).coerceAtLeast(1)))
+    }
     // The full picture's own alpha, so it eases in over the thumbnail instead of snapping in.
     var reveal by remember(url) { mutableFloatStateOf(0f) }
     val live = remember(url) { LivePhotoState() }
@@ -552,7 +576,8 @@ private fun ZoomablePage(
             }
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(url.takeIf { remote })
+                    .data(source.takeIf { remote })
+                    .apply { decodeSize?.let { size(it) } }
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
@@ -562,7 +587,9 @@ private fun ZoomablePage(
                     val picture = state.painter.intrinsicSize
                     if (picture.width > 0f && picture.height > 0f) frame.aspects[url] = picture.width / picture.height
                 },
-                onError = { failed = true },
+                onError = {
+                    if (!useOriginal && originalUrl != baseUrl) useOriginal = true else failed = true
+                },
             )
             if (live.playing && player != null) {
                 val fit = shown()

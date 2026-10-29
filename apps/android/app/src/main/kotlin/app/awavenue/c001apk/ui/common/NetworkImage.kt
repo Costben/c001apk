@@ -29,11 +29,15 @@ fun NetworkImage(
     val context = LocalPlatformContext.current
     val placeholder = Modifier.background(COUITheme.colorScheme.secondaryContainer)
     // A dropped connection used to leave the slot blank until the card was composed again.
-    // One quiet retry covers those transient failures; a permanently missing URL fails twice.
+    // One quiet retry covers those transient failures; after that the address is tried without its
+    // size suffix, because a thumbnail that has expired often still resolves as the original.
+    val original = remember(url) { originalImageUrl(url) }
+    val lastAttempt = if (original == url) 1 else 2
     var attempt by remember(url) { mutableIntStateOf(0) }
     var retry by remember(url) { mutableStateOf(false) }
-    val request = remember(context, url, crossfade, attempt) {
-        url.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    val address = if (attempt >= 2) original else url
+    val request = remember(context, address, crossfade, attempt) {
+        address.takeIf { it.startsWith("http://") || it.startsWith("https://") }
             ?.let { ImageRequest.Builder(context).data(it).crossfade(crossfade).build() }
     }
     AsyncImage(
@@ -41,7 +45,7 @@ fun NetworkImage(
         contentDescription = contentDescription,
         contentScale = contentScale,
         modifier = modifier.then(placeholder),
-        onError = { if (attempt == 0) retry = true },
+        onError = { if (attempt < lastAttempt) retry = true },
     )
     LaunchedEffect(retry) {
         if (!retry) return@LaunchedEffect

@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,7 +36,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.model.CatalogCategory
+import app.awavenue.c001apk.model.CatalogEntry
 import app.awavenue.c001apk.model.Entity
+import app.awavenue.c001apk.model.catalogCategories
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
@@ -55,7 +57,9 @@ private const val TOPIC_LIST_URL = "/v6/page/dataList?url=V11_VERTICAL_TOPIC&tit
 
 private val RailWidth = 84.dp
 private val RailItemHeight = 42.dp
+private val RailChildHeight = 34.dp
 private val RailLabelInset = 22.dp
+private val RailChildInset = 34.dp
 private val RailIndicatorInset = 10.dp
 
 /** Trailing space the rail needs so its last rows can clear the floating bottom bar. */
@@ -74,7 +78,9 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
     val scope = rememberCoroutineScope()
     var entries by remember(tabType) { mutableStateOf<List<Entity>?>(null) }
     var error by remember(tabType) { mutableStateOf<String?>(null) }
-    var selected by remember(tabType) { mutableIntStateOf(if (tabType == HomeTopicTab.Topic) 1 else 0) }
+    // The selection is the destination's own url: an "other" subcategory can share its parent's
+    // id and differ only by a flag, so an index or an id would not tell them apart.
+    var selected by remember(tabType) { mutableStateOf("") }
 
     suspend fun load() {
         error = null
@@ -84,7 +90,6 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                 HomeTopicTab.Product -> app.repository.productCategoryList()
             }.orEmpty()
             entries = data
-            selected = selected.coerceAtMost((data.size - 1).coerceAtLeast(0))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -107,8 +112,37 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
         }
 
         else -> {
-            val selectedIndex = if (selected in list.indices) selected else 0
-            val current = list[selectedIndex]
+            val categories = remember(list, tabType) {
+                if (tabType == HomeTopicTab.Product) {
+                    catalogCategories(list)
+                } else {
+                    list.map { CatalogCategory(CatalogEntry(it.title, it.url), emptyList()) }
+                }
+            }
+            if (categories.isEmpty()) {
+                StateBox(contentPadding) {
+                    EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = { scope.launch { load() } })
+                }
+                return
+            }
+            val defaultUrl = categories.getOrNull(if (tabType == HomeTopicTab.Topic) 1 else 0)?.entry?.url
+                ?: categories.first().entry.url
+            val selectedUrl = selected.ifEmpty { defaultUrl }
+            // The sidebar expands only the parent the selection belongs to, so the rail stays one
+            // level deep and switching parents collapses the previous children.
+            val parent = categories.firstOrNull {
+                it.entry.url == selectedUrl || it.children.any { child -> child.url == selectedUrl }
+            } ?: categories.first()
+            val current = parent.children.firstOrNull { it.url == selectedUrl } ?: parent.entry
+            val rows = buildList {
+                categories.forEach { category ->
+                    add(RailRow(category.entry.title, category.entry.url, child = false))
+                    if (category === parent) {
+                        category.children.forEach { add(RailRow(it.title, it.url, child = true)) }
+                    }
+                }
+            }
+            val selectedIndex = rows.indexOfFirst { it.url == current.url }.coerceAtLeast(0)
             // The bar's height reaches [contentPadding] in the measure phase, so everything derived
             // from it stays a delegate that is read in measure: reading the top padding here would
             // recompose this page on every scroll frame and show the bar's previous height.
@@ -128,9 +162,9 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                 Modifier.fillMaxSize(),
             ) {
                 CategoryRail(
-                    titles = list.map { it.title },
+                    rows = rows,
                     selectedIndex = selectedIndex,
-                    onSelected = { selected = it },
+                    onSelected = { index -> rows.getOrNull(index)?.let { selected = it.url } },
                     scrollBehavior = scrollBehavior,
                     topInset = railTopInset,
                 )
@@ -153,9 +187,11 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
  * The vertical category list on the left. The home bar above already carries the tab row, so this
  * is the page's only navigator: a second row of tabs would just repeat it.
  */
+private class RailRow(val title: String, val url: String, val child: Boolean)
+
 @Composable
 private fun CategoryRail(
-    titles: List<String>,
+    rows: List<RailRow>,
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
     scrollBehavior: ScrollBehavior,
@@ -164,7 +200,7 @@ private fun CategoryRail(
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     LaunchedEffect(selectedIndex) {
-        if (selectedIndex in titles.indices) {
+        if (selectedIndex in rows.indices) {
             // Keep the selected row clear of the bar: a plain scroll-to-item would park it at the
             // very top, behind the material. The inset is read once per selection, so the bar
             // collapsing does not restart the scroll.
@@ -194,10 +230,11 @@ private fun CategoryRail(
         // floating bar and needs the bar's height as trailing space to stay reachable.
         contentPadding = railPadding,
     ) {
-        itemsIndexed(titles) { index, title ->
+        itemsIndexed(rows) { index, row ->
             RailItem(
-                title = title,
+                title = row.title,
                 selected = index == selectedIndex,
+                child = row.child,
                 onClick = { onSelected(index) },
             )
         }
@@ -205,7 +242,7 @@ private fun CategoryRail(
 }
 
 @Composable
-private fun RailItem(title: String, selected: Boolean, onClick: () -> Unit) {
+private fun RailItem(title: String, selected: Boolean, child: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pressAlpha by animateFloatAsState(
@@ -217,7 +254,7 @@ private fun RailItem(title: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(RailItemHeight)
+            .height(if (child) RailChildHeight else RailItemHeight)
             .clip(RoundedCornerShape(topEnd = 13.dp, bottomEnd = 13.dp))
             // A ripple would paint a square over the row, so the press feedback is the same
             // translucent pill the rest of the app uses.
@@ -242,8 +279,8 @@ private fun RailItem(title: String, selected: Boolean, onClick: () -> Unit) {
             text = title,
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = RailLabelInset, end = 8.dp),
-            style = COUITheme.textStyles.footnote1,
+                .padding(start = if (child) RailChildInset else RailLabelInset, end = 8.dp),
+            style = if (child) COUITheme.textStyles.footnote2 else COUITheme.textStyles.footnote1,
             fontWeight = if (selected) FontWeight.SemiBold else null,
             color = if (selected) accent else COUITheme.colorScheme.onSurfaceSecondary,
             maxLines = 1,

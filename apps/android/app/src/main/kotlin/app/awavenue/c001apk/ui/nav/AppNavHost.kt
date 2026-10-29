@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.nav
 
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterExitState
@@ -16,8 +17,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
@@ -46,11 +51,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.account.AccountsScreen
@@ -80,6 +87,7 @@ import app.awavenue.c001apk.ui.notification.NotificationScreen
 import app.awavenue.c001apk.ui.search.SearchResultScreen
 import app.awavenue.c001apk.ui.search.SearchScreen
 import app.awavenue.c001apk.ui.settings.AboutScreen
+import app.awavenue.c001apk.ui.settings.ContentFilterScreen
 import app.awavenue.c001apk.ui.settings.ParamsScreen
 import app.awavenue.c001apk.ui.settings.SettingsScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
@@ -144,6 +152,12 @@ fun AppNavHost(
     // The page under the top one is only worth drawing while a gesture actually has the top page
     // pulled away. Derived so a running gesture does not recompose the host on every event.
     val revealing by remember { derivedStateOf { gestureProgress < 1f } }
+    // Wide windows read a feed beside the list instead of over it. Only the reading pages take the
+    // pane; settings, search, the image viewer and the like still cover the window as a whole.
+    val wide = LocalConfiguration.current.screenWidthDp >= WideLayoutMinWidthDp
+    val paneEntry = navigator.stack.lastOrNull()?.takeIf { wide && it.route is Route.Feed }
+    val readingSidebar = remember { ReadingSidebar() }
+    val paneOpen = paneEntry != null && !readingSidebar.hidden
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
@@ -156,7 +170,11 @@ fun AppNavHost(
             deepLinks.collect { url -> openCoolapkLink(context, navigator, url, "", openInBrowser) }
         }
 
-        PredictiveBackHandler(enabled = true) { progress ->
+        // A pane is closed by back directly: there is no page to pull across the window, and the
+        // list beside it is already in place.
+        BackHandler(enabled = paneEntry != null) { navigator.pop() }
+
+        PredictiveBackHandler(enabled = paneEntry == null) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
             if (navigator.stack.size <= 1) {
@@ -224,7 +242,37 @@ fun AppNavHost(
         }
 
         Box(Modifier.fillMaxSize().background(COUITheme.colorScheme.surface)) {
-            MainScreen()
+            Row(Modifier.fillMaxSize()) {
+                // The list keeps its composition even when the reader hides it, so its scroll
+                // position and tabs are still there when it comes back; at zero width it also
+                // stops taking touches.
+                Box(
+                    Modifier
+                        .then(
+                            when {
+                                paneEntry == null -> Modifier.fillMaxWidth()
+                                !paneOpen -> Modifier.width(0.dp)
+                                else -> Modifier.weight(ListPaneWeight)
+                            },
+                        )
+                        .fillMaxHeight(),
+                ) { MainScreen() }
+                if (paneOpen && paneEntry != null) {
+                    Box(Modifier.weight(DetailPaneWeight).fillMaxHeight()) {
+                        CompositionLocalProvider(LocalReadingSidebar provides readingSidebar) {
+                            PaneRoute(paneEntry)
+                        }
+                        // The two panes share one surface colour, so a hairline is what tells the
+                        // reader where the list ends.
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .width(1.dp)
+                                .background(COUITheme.colorScheme.dividerLine),
+                        )
+                    }
+                }
+            }
 
             // The page under the top one is drawn while a gesture is pulling the top one away; when
             // the main screen is what sits underneath it is already composed above.
@@ -234,7 +282,9 @@ fun AppNavHost(
                 RevealedRoute(below)
             }
 
-            val overlay = navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
+            // A page in the pane is already on screen beside the list; sliding it in as well would
+            // cover the very list it is meant to sit next to.
+            val overlay = if (paneEntry != null) null else navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
             AnimatedContent(
                 targetState = overlay,
                 transitionSpec = {
@@ -492,11 +542,52 @@ private suspend fun alignCardBelowBar(origin: ExpandOrigin?, barBottom: () -> Fl
     }
 }
 
+/**
+ * Hosts the page in the wide-screen detail pane. It owns its ViewModel store, saved state and page
+ * memory the way any stacked page does, so the feed keeps its place while the list beside it
+ * scrolls, and comes back to the same place after a full-screen page covered it.
+ */
+@Composable
+private fun PaneRoute(entry: BackStackEntry) = key(entry) {
+    DisposableEffect(entry) {
+        entry.attach()
+        onDispose { entry.detach() }
+    }
+    val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
+    val settled = remember { RouteTransition(progress = SettledGesture, exiting = { false }) }
+    CompositionLocalProvider(
+        LocalViewModelStoreOwner provides entry,
+        LocalSaveableStateRegistry provides saveableState,
+        LocalRouteTransition provides settled,
+        LocalPageMemory provides entry.memory,
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0),
+        ) {
+            Box(Modifier.fillMaxSize()) { RouteHost(entry.route) }
+        }
+    }
+    DisposableEffect(saveableState) {
+        onDispose { entry.savedState = saveableState.performSave() }
+    }
+}
+
 /** How long a page takes to slide a full width in or out. */
 private const val RouteSlideMillis = 320
 
 /** How far the covered page trails the incoming one, as a fraction of the screen width. */
 private const val RouteParallaxDivisor = 4
+
+/** Width at which a feed reads beside the list instead of over it. */
+private const val WideLayoutMinWidthDp = 600
+
+/**
+ * The list's share of a wide window. Weights are relative: 0.72 against the pane's 1 leaves the
+ * list about 42% — roughly 250dp on a 600dp window, 350dp on a tablet.
+ */
+private const val ListPaneWeight = 0.72f
+private const val DetailPaneWeight = 1f
 
 /** How long the page takes to ease back under the finger when a gesture is released early. */
 private const val GestureSettleMillis = 200
@@ -674,6 +765,7 @@ private fun RouteHost(route: Route) {
         is Route.FFFList -> FFFListScreen(type = route.type, uid = route.uid, id = route.id, title = route.title)
         is Route.History -> HistoryScreen(type = route.type)
         is Route.Blacklist -> BlacklistScreen(type = route.type)
+        is Route.ContentFilter -> ContentFilterScreen()
         is Route.Chat -> ChatScreen(ukey = route.ukey, uid = route.uid, username = route.username)
         is Route.Copy -> CopyScreen(text = route.text)
     }

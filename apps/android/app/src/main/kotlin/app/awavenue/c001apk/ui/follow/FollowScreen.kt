@@ -233,6 +233,7 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                             PageLoader { page, first, last ->
                                 app.repository.dataList(followUrl(selection), selection.label, page, first, last)
                             },
+                            app::contentGate,
                         )
                     }
                     FeedList(

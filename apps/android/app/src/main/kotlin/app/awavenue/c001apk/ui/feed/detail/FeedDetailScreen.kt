@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,7 @@ import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.returnTopOnClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.feed.AccountCollectionsSheet
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.feed.ListStatus
@@ -68,6 +70,7 @@ import app.awavenue.c001apk.ui.feed.ReplyCard
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalReadingSidebar
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
@@ -111,13 +114,14 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val viewModel = viewModel(key = "feed-detail-$id-$replyId") {
-        FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist, replyId)
+        FeedDetailViewModel(id, app.repository, app.settings, app.history, app.blacklist, app.contentFilter, replyId)
     }
     val backdrop = rememberGlassBackdrop()
     val scrollBehavior = rememberPageScrollBehavior("feed-detail")
     val listState = rememberPageListState("feed-detail")
 
     var menuOpen by remember { mutableStateOf(false) }
+    var collectionsOpen by remember { mutableStateOf(false) }
     var showSource by remember { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
@@ -192,6 +196,18 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                         }
                     },
                     actions = {
+                        // Only present when this page sits in the wide-screen pane, where there is
+                        // a list beside it to give the width to.
+                        val readingSidebar = LocalReadingSidebar.current
+                        if (readingSidebar != null) {
+                            TopBarIconButton(onClick = readingSidebar::toggle) {
+                                Icon(
+                                    COUIIcons.ChevronBackward,
+                                    contentDescription = if (readingSidebar.hidden) "显示信息流" else "收起信息流",
+                                    modifier = Modifier.rotate(if (readingSidebar.hidden) 0f else 180f),
+                                )
+                            }
+                        }
                         if (viewModel.feed != null) {
                             if (viewModel.isPublic && app.session.isLogin) {
                                 TopBarIconButton(
@@ -217,6 +233,13 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                         add("复制" to { context.copyText(viewModel.shareUrl) })
                                         add("分享" to { context.shareText(viewModel.shareUrl) })
                                         add((if (viewModel.isFav) "取消收藏" else "收藏") to viewModel::toggleFav)
+                                        add("收藏到账号收藏夹" to {
+                                            if (app.session.isLogin) {
+                                                collectionsOpen = true
+                                            } else {
+                                                context.toast("请先登录后使用账号收藏夹")
+                                            }
+                                        })
                                         add((if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock)
                                         if (viewModel.hasMarkdown) {
                                             add((if (showSource) "格式化显示" else "查看原文") to { showSource = !showSource })
@@ -440,6 +463,13 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                 replyTarget = null
                 viewModel.refreshReplies()
             },
+        )
+    }
+
+    if (collectionsOpen) {
+        AccountCollectionsSheet(
+            feedId = viewModel.id,
+            onDismiss = { collectionsOpen = false },
         )
     }
 }
@@ -710,6 +740,10 @@ private fun ReplyFooter(status: FooterStatus, onRetry: () -> Unit) {
                 "没有更多了",
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = onRetry,
             )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
         }

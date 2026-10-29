@@ -81,6 +81,19 @@ class AppSettings(context: Context) {
     var showEmoji by mutableStateOf(prefs.getBoolean(KEY_SHOW_EMOJI, true))
         private set
 
+    /**
+     * The header cards of the 动态 stream. Hiding one only drops it while drawing; the fetched page
+     * keeps it, so turning it back on needs no refresh.
+     */
+    var showHomeCarousel by mutableStateOf(prefs.getBoolean(KEY_SHOW_HOME_CAROUSEL, true))
+        private set
+
+    var showHomeChannels by mutableStateOf(prefs.getBoolean(KEY_SHOW_HOME_CHANNELS, true))
+        private set
+
+    var showHomeTopics by mutableStateOf(prefs.getBoolean(KEY_SHOW_HOME_TOPICS, true))
+        private set
+
     var hapticFeedback by mutableStateOf(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true))
         private set
 
@@ -155,6 +168,15 @@ class AppSettings(context: Context) {
         put { putInt(KEY_HISTORY_CARD_MODE, value.ordinal) }.also { historyCardMode = value }
 
     fun updateShowEmoji(value: Boolean) = put { putBoolean(KEY_SHOW_EMOJI, value) }.also { showEmoji = value }
+
+    fun updateShowHomeCarousel(value: Boolean) =
+        put { putBoolean(KEY_SHOW_HOME_CAROUSEL, value) }.also { showHomeCarousel = value }
+
+    fun updateShowHomeChannels(value: Boolean) =
+        put { putBoolean(KEY_SHOW_HOME_CHANNELS, value) }.also { showHomeChannels = value }
+
+    fun updateShowHomeTopics(value: Boolean) =
+        put { putBoolean(KEY_SHOW_HOME_TOPICS, value) }.also { showHomeTopics = value }
 
     fun updateHapticFeedback(value: Boolean) =
         put { putBoolean(KEY_HAPTIC_FEEDBACK, value) }.also { hapticFeedback = value }
@@ -260,6 +282,9 @@ class AppSettings(context: Context) {
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_HISTORY_CARD_MODE = "historyCardMode"
         const val KEY_SHOW_EMOJI = "showEmoji"
+        const val KEY_SHOW_HOME_CAROUSEL = "showHomeCarousel"
+        const val KEY_SHOW_HOME_CHANNELS = "showHomeChannels"
+        const val KEY_SHOW_HOME_TOPICS = "showHomeTopics"
         const val KEY_HAPTIC_FEEDBACK = "hapticFeedback"
         const val KEY_CUSTOM_HAPTICS = "customHaptics"
         const val KEY_REVERSE_HAPTIC_EFFECTS = "reverseHapticEffects"

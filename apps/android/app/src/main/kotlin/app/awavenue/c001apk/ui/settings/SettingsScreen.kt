@@ -40,6 +40,7 @@ import app.awavenue.c001apk.data.HapticStrength
 import app.awavenue.c001apk.data.HistoryCardMode
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
+import app.awavenue.c001apk.model.ContentFilterPreferences
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
@@ -271,6 +272,12 @@ fun SettingsScreen() {
                             onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
                         )
                         ArrowPreference(
+                            title = "内容过滤",
+                            summary = contentFilterSummary(app.contentFilter.preferences),
+                            startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                            onClick = rememberHapticClick { navigator.push(Route.ContentFilter) },
+                        )
+                        ArrowPreference(
                             title = "字体大小",
                             summary = "${scaleText(settings.fontScale)}x",
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
@@ -310,6 +317,32 @@ fun SettingsScreen() {
                             checked = settings.checkUpdate,
                             onCheckedChange = settings::updateCheckUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                        )
+                    }
+                }
+                item {
+                    SmallTitle("首页内容")
+                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        SwitchPreference(
+                            title = "显示轮播横幅",
+                            summary = "首页动态顶部的大图推荐和活动横幅",
+                            checked = settings.showHomeCarousel,
+                            onCheckedChange = settings::updateShowHomeCarousel,
+                            startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                        )
+                        SwitchPreference(
+                            title = "显示频道快捷入口",
+                            summary = "值得看、热闻、活动等入口",
+                            checked = settings.showHomeChannels,
+                            onCheckedChange = settings::updateShowHomeChannels,
+                            startAction = { PreferenceStartIcon(COUIIcons.ListView) },
+                        )
+                        SwitchPreference(
+                            title = "显示推荐话题与数码入口",
+                            summary = "机型、话题等横向或网格入口",
+                            checked = settings.showHomeTopics,
+                            onCheckedChange = settings::updateShowHomeTopics,
+                            startAction = { PreferenceStartIcon(COUIIcons.Recent) },
                         )
                     }
                 }
@@ -575,6 +608,13 @@ private suspend fun clearCache(context: Context): Long {
 }
 
 private fun scaleText(value: Float): String = String.format(Locale.US, "%.2f", value)
+
+/** The 内容过滤 row: how many rules are saved, and whether they are on. */
+private fun contentFilterSummary(preferences: ContentFilterPreferences): String = when {
+    preferences.rules.isEmpty() -> "按关键词、用户或话题隐藏列表内容"
+    !preferences.enabled -> "${preferences.rules.size} 条规则（未启用）"
+    else -> "${preferences.rules.size} 条规则"
+}
 
 /** Byte size the way the Flutter client prints it. */
 private fun formatSize(value: Long): String {

@@ -399,6 +399,10 @@ private fun ChatFooter(status: FooterStatus, onRetry: () -> Unit) {
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
             )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = onRetry,
+            )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
         }
     }

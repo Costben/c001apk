@@ -95,7 +95,7 @@ fun LocalFollowFeed(returnTop: ReturnTopController, scrollBehavior: ScrollBehavi
             ),
         )
     }
-    val viewModel = viewModel(key = "local-follow") { FeedListViewModel(holder.loader) }
+    val viewModel = viewModel(key = "local-follow") { FeedListViewModel(holder.loader, app::contentGate) }
     val listState = rememberLazyListState()
 
     // The list is read from the device, so editing it or blocking someone re-reads from the top.
@@ -194,7 +194,7 @@ fun LocalFollowFeed(returnTop: ReturnTopController, scrollBehavior: ScrollBehavi
                             key = { it.id },
                             contentType = { it.entityType },
                         ) { item -> EntityItem(item) }
-                        item(contentType = "footer") { Footer(viewModel.footer, viewModel::retryFooter) }
+                        item(contentType = "footer") { Footer(viewModel.footer, viewModel::retryFooter, viewModel::continueFiltered) }
                     }
                 }
             }
@@ -208,7 +208,7 @@ private fun Notice(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
+private fun Footer(status: FooterStatus, onRetry: () -> Unit, onContinue: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         when (status) {
             FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
@@ -216,6 +216,10 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
                 "没有更多了",
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = onContinue,
             )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
         }

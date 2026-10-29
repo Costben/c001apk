@@ -85,6 +85,7 @@ fun DyhScreen(id: String, title: String) {
                 val viewModel = viewModel(key = "dyh-$id-$type") {
                     FeedListViewModel(
                         PageLoader { p, first, last -> app.repository.dyhDetail(id, type, p, first, last) },
+                        app::contentGate,
                     )
                 }
                 FeedList(

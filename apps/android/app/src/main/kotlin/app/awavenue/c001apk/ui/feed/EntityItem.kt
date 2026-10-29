@@ -106,6 +106,8 @@ fun EntityItem(
         item.entityTemplate == "imageTextScrollCard" -> ImageTextScrollCard(item, padded)
         item.entityTemplate == "iconScrollCard" -> IconScrollCard(item, padded)
         item.entityTemplate == "titleCard" -> TitleCard(item, padded)
+        // The sub-tab's reference price; it names the feed it was read from and opens it.
+        item.entityTemplate == "subTabFeedCard6" -> PurchasePriceSummaryCard(item, padded)
         // Page metadata: the carousel reads its title and tabs from this card, it has no body.
         item.entityTemplate == "configCard" -> Unit
         item.entityTemplate in setOf("noMoreDataCard", "refreshCard", "messageCard") -> Text(

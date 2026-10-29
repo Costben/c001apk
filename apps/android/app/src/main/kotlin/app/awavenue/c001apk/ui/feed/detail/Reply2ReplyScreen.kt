@@ -200,6 +200,10 @@ private fun Reply2ReplyFooter(status: FooterStatus, onRetry: () -> Unit) {
         when (status) {
             FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
             FooterStatus.End -> Unit
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = onRetry,
+            )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
         }
     }
@@ -264,7 +268,7 @@ private class Reply2ReplyViewModel(
                     page = requestPage,
                     firstItem = if (refresh) null else firstItem,
                     lastItem = if (refresh) null else lastItem,
-                )
+                ).filterNot { blacklist.isUserBlocked(it.uid) }
                 if (rows.isEmpty()) {
                     isEnd = true
                     when {

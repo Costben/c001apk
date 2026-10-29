@@ -28,6 +28,13 @@ class ActionResult(val message: String, val data: JsonElement?) {
         is JsonObject -> (data["count"] as? JsonPrimitive)?.content.orEmpty()
         else -> ""
     }
+
+    /** The account-collection endpoints answer `{"collect": 1}` once the relation is written. */
+    val collect: Int? get() = when (val payload = data) {
+        is JsonPrimitive -> payload.content.toIntOrNull()
+        is JsonObject -> (payload["collect"] as? JsonPrimitive)?.content?.toIntOrNull()
+        else -> null
+    }
 }
 
 /** What the login page needs before it can submit: the SESSID cookie and the form's hash. */
@@ -42,7 +49,6 @@ class LoginOutcome(val success: Boolean, val message: String)
 class CoolapkRepository(
     private val api: ApiClient,
     private val settings: AppSettings,
-    private val blacklist: BlacklistStore,
     private val session: SessionStore,
     private val accounts: AccountStore,
 ) {
@@ -262,6 +268,53 @@ class CoolapkRepository(
 
     suspend fun collectionItems(id: String, page: Int, firstItem: String?, lastItem: String?): List<Entity> =
         listFromUrl("/v6/collection/itemList", pageParams(page, firstItem, lastItem) + ("id" to id))
+
+    /**
+     * The collections a feed may be saved to, each row flagged with this account's membership.
+     * `uid` stays empty on purpose: the server then answers for the signed-in account.
+     */
+    suspend fun feedCollections(feedId: String, page: Int, lastItem: String?): List<Entity> =
+        listFromUrl(
+            "/v6/collection/list",
+            pageParams(page, null, lastItem) +
+                mapOf("uid" to "", "id" to feedId, "type" to "feed", "showDefault" to 1),
+        )
+
+    /** Adds [ids] and removes [cancelIds]; the answer carries `collect` for the resulting state. */
+    suspend fun saveFeedCollections(feedId: String, ids: Set<String>, cancelIds: Set<String>): ActionResult =
+        actionResult(
+            readActionObject(
+                api.post(
+                    Api.COLLECTION_ADD_ITEM,
+                    body = Body.Form(
+                        listOf(
+                            "id" to ids.joinToString(","),
+                            "cancelId" to cancelIds.joinToString(","),
+                            "targetId" to feedId,
+                            "type" to "feed",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    /** Creates a collection; the answer is the new row, id included. */
+    suspend fun createCollection(title: String, isOpen: Boolean): Entity {
+        val response = api.post(
+            Api.COLLECTION_CREATE,
+            body = Body.Multipart(
+                listOf(
+                    "title" to title,
+                    "isOpen" to if (isOpen) "1" else "0",
+                    "description" to "",
+                    "pic" to "",
+                    "sourceId" to "",
+                ),
+                emptyList(),
+            ),
+        )
+        return dataObject(readApiObject(response))
+    }
 
     suspend fun userList(url: String, uid: String?, id: String?, page: Int, firstItem: String?, lastItem: String?): List<Entity> =
         listFromUrl(
@@ -530,7 +583,7 @@ class CoolapkRepository(
     // ---- parsing -----------------------------------------------------------------------------
 
     private fun parse(response: HttpResponse, includeConfigCard: Boolean = false): List<Entity> =
-        parseList(readApiObject(response), blacklist, includeConfigCard)
+        parseList(readApiObject(response), includeConfigCard)
 
     private fun mapOfNotNull(vararg pairs: Pair<String, Any?>?): Map<String, Any?> =
         pairs.filterNotNull().toMap()
@@ -550,7 +603,7 @@ class CoolapkRepository(
             "imageCarouselCard_1", "iconLinkGridCard", "iconMiniScrollCard", "iconMiniGridCard",
             "imageSquareScrollCard", "titleCard", "iconScrollCard", "imageTextScrollCard",
             "iconTabLinkGridCard", "verticalColumnsFullPageCard", "noMoreDataCard", "time", "messageCard",
-            "sortSelectCard",
+            "sortSelectCard", "subTabFeedCard6", "iconGridHorizonCard",
         )
 
         /** `data-request-hash` sits on the login page's `<Body>` element. */
@@ -576,23 +629,18 @@ class CoolapkRepository(
         }
 
         /**
-         * Flattens nested list cards, then keeps the entity kinds the client can render and
-         * drops anything on the user's block list.
+         * Flattens nested list cards, then keeps the entity kinds the client can render. The block
+         * list and the content rules are applied by the list that shows the rows, not here, so a
+         * hidden row can be counted and a page that is all hidden can be filled from the next one.
          */
-        fun parseList(response: JsonObject, blacklist: BlacklistStore? = null, includeConfigCard: Boolean = false): List<Entity> {
+        fun parseList(response: JsonObject, includeConfigCard: Boolean = false): List<Entity> {
             val data = response["data"] as? JsonArray ?: return emptyList()
             val templates = if (includeConfigCard) supportedTemplates + "configCard" else supportedTemplates
             return expandListCards(data)
                 .mapNotNull { (it as? JsonObject)?.let(::Entity) }
                 .filter { item ->
                     if (item.entityTemplate == "refreshCard" && "没有" in item.title) return@filter true
-                    (item.entityType in supportedTypes || item.entityTemplate in templates) &&
-                        blacklist?.isUserBlocked(item.uid) != true &&
-                        blacklist?.isTopicBlocked(
-                            item.tags,
-                            item.ttitle,
-                            item.relationRows.firstOrNull()?.title.orEmpty(),
-                        ) != true
+                    item.entityType in supportedTypes || item.entityTemplate in templates
                 }
         }
 

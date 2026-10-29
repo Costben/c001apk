@@ -320,6 +320,7 @@ private fun EventTabPage(tab: Entity, contentPadding: PaddingValues, scrollBehav
                     PageLoader { page, first, last ->
                         app.repository.dataList(dataUrl, title, page, first, last)
                     },
+                    app::contentGate,
                 )
             }
             FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = contentPadding)

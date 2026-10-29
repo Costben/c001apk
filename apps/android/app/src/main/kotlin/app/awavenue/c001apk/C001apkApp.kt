@@ -4,6 +4,8 @@ import android.app.Application
 import app.awavenue.c001apk.data.AccountStore
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
+import app.awavenue.c001apk.data.ContentFilterStore
+import app.awavenue.c001apk.data.ContentGate
 import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.DraftStore
 import app.awavenue.c001apk.data.HistoryStore
@@ -36,6 +38,8 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var blacklist: BlacklistStore
         private set
+    lateinit var contentFilter: ContentFilterStore
+        private set
     lateinit var history: HistoryStore
         private set
     lateinit var drafts: DraftStore
@@ -60,16 +64,23 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         accounts = AccountStore(this, session)
         localFollow = LocalFollowStore(this)
         blacklist = BlacklistStore(this)
+        contentFilter = ContentFilterStore(this)
         history = HistoryStore(this)
         drafts = DraftStore(this)
         searchHistory = SearchHistoryStore(this)
         productComparison = ProductComparisonStore()
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
-        repository = CoolapkRepository(apiClient, settings, blacklist, session, accounts)
+        repository = CoolapkRepository(apiClient, settings, session, accounts)
         unread = UnreadStore(this, repository, session)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
         MessageCheckWorker.schedule(this)
     }
+
+    /**
+     * The block list and the content rules as one per-row decision, compiled for the preferences
+     * in effect right now. Lists build it per page, so a rule change applies on the next load.
+     */
+    fun contentGate(): ContentGate = ContentGate(blacklist, contentFilter.preferences)
 
     // image.coolapk.com answers generic client agents with HTTP 567, so images go out with the
     // same CoolMarket agent as API calls.

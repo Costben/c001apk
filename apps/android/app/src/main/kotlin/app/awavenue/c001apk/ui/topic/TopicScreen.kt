@@ -625,6 +625,7 @@ private fun TopicPage(tag: String?, id: String?) {
                 val viewModel = viewModel(key = viewModelKey) {
                     FeedListViewModel(
                         PageLoader { p, first, last -> app.repository.dataList(url, listTitle, p, first, last) },
+                        app::contentGate,
                     )
                 }
                 val onSortSelected: ((Entity) -> Unit)? = if (discuss) {
@@ -948,6 +949,10 @@ private fun TopicFooter(viewModel: FeedListViewModel) {
                 "没有更多了",
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = viewModel::continueFiltered,
             )
             is FooterStatus.Error -> TextButton(
                 text = "${status.message}，点击重试",

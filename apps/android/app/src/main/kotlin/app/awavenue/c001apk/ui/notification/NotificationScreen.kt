@@ -106,6 +106,7 @@ fun NotificationScreen(
             PageLoader { page, first, last ->
                 app.repository.notificationList(type.endpoint, page, first, last)
             },
+            app::contentGate,
         )
     }
 
@@ -241,7 +242,7 @@ private fun NotificationList(
                         else -> EntityItem(item)
                     }
                 }
-                item(contentType = "footer") { Footer(viewModel.footer, viewModel::retryFooter) }
+                item(contentType = "footer") { Footer(viewModel.footer, viewModel::retryFooter, viewModel::continueFiltered) }
             }
         }
     }
@@ -256,7 +257,7 @@ private fun CenterBox(contentPadding: PaddingValues, content: @Composable () -> 
 }
 
 @Composable
-private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
+private fun Footer(status: FooterStatus, onRetry: () -> Unit, onContinue: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         when (status) {
             FooterStatus.Idle, FooterStatus.Loading -> InfiniteProgressIndicator()
@@ -264,6 +265,10 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
                 "没有更多了",
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = onContinue,
             )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = onRetry)
         }

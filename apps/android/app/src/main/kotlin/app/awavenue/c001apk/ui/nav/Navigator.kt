@@ -101,7 +101,21 @@ class Navigator {
 
     /** [origin] is the element the page grows out of, and shrinks back into on pop. */
     fun push(route: Route, origin: ExpandOrigin? = null) {
+        if (route is Route.Feed) trimReadingStack()
         stack.add(BackStackEntry(route, origin))
+    }
+
+    /**
+     * Reading a feed can lead to another one, and the stack would otherwise grow for as long as the
+     * reader keeps tapping. The oldest reading page drops off; the main screen at the bottom and
+     * everything opened from a feed stay.
+     */
+    private fun trimReadingStack() {
+        val reading = stack.filter { it.route is Route.Feed }
+        if (reading.size < MaxReadingStack) return
+        val oldest = reading.first()
+        stack.remove(oldest)
+        oldest.remove()
     }
 
     /** Replaces the top route, so a search can turn into a result without stacking twice. */
@@ -131,6 +145,9 @@ class Navigator {
 }
 
 val LocalNavigator = staticCompositionLocalOf<Navigator> { error("Navigator not provided") }
+
+/** How many reading pages the back stack keeps; older ones drop off as new ones open. */
+private const val MaxReadingStack = 8
 
 @Composable
 fun rememberNavigator(): Navigator = androidx.compose.runtime.remember { Navigator() }

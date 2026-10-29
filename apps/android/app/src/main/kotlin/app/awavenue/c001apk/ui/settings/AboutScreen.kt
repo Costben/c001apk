@@ -171,6 +171,12 @@ fun AboutScreen() {
                         onClick = { uriHandler.openUri(Protocol.URL_UPSTREAM) },
                     )
                     ArrowPreference(
+                        title = "功能参考 KiritoXDone/c001apk",
+                        summary = "https://github.com/KiritoXDone/c001apk",
+                        startAction = { PreferenceStartIcon(COUIIcons.Link) },
+                        onClick = { uriHandler.openUri("https://github.com/KiritoXDone/c001apk") },
+                    )
+                    ArrowPreference(
                         title = "界面组件 coui17",
                         summary = "ColorOS 风格 Compose 组件库",
                         startAction = { PreferenceStartIcon(COUIIcons.Link) },

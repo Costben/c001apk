@@ -294,6 +294,7 @@ fun UserScreen(uid: String) {
                         val feed = viewModel(key = "user-feed-$resolvedUid") {
                             FeedListViewModel(
                                 PageLoader { page, first, last -> app.repository.userFeed(resolvedUid, page, first, last) },
+                                app::contentGate,
                             )
                         }
                         UserFeed(
@@ -469,6 +470,10 @@ private fun FeedFooter(viewModel: FeedListViewModel) {
                 "没有更多了",
                 style = COUITheme.textStyles.footnote1,
                 color = COUITheme.colorScheme.onSurfaceVariantSummary,
+            )
+            is FooterStatus.Filtered -> TextButton(
+                text = "已过滤 ${status.count} 条，点击继续加载",
+                onClick = viewModel::continueFiltered,
             )
             is FooterStatus.Error -> TextButton(text = "${status.message}，点击重试", onClick = viewModel::retryFooter)
         }

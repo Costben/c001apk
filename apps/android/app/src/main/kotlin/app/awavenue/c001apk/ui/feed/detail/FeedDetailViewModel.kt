@@ -9,11 +9,14 @@ import androidx.lifecycle.viewModelScope
 import app.awavenue.c001apk.BuildConfig
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
+import app.awavenue.c001apk.data.ContentGate
+import app.awavenue.c001apk.data.ContentFilterStore
 import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.FavHistoryItem
 import app.awavenue.c001apk.data.HistoryStore
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
+import app.awavenue.c001apk.model.FilterScope
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.feed.FooterStatus
@@ -45,8 +48,12 @@ class FeedDetailViewModel(
     private val settings: AppSettings,
     private val history: HistoryStore,
     private val blacklist: BlacklistStore,
+    private val contentFilter: ContentFilterStore,
     private val targetReplyId: String = "",
 ) : ViewModel() {
+
+    /** The comment scope of the block list and the content rules, as of this request. */
+    private fun replyGate(): ContentGate = ContentGate(blacklist, contentFilter.preferences)
 
     // ---- feed body -----------------------------------------------------------------------------
 
@@ -396,24 +403,43 @@ class FeedDetailViewModel(
         val generation = ++replyGeneration
         replyJob = viewModelScope.launch {
             try {
-                val rows = repository.feedReply(
-                    id = id,
-                    listType = listType,
-                    page = requestPage,
-                    firstItem = requestFirst,
-                    lastItem = requestLast,
-                    discussMode = 1,
-                    feedType = "feed",
-                    blockStatus = 0,
-                    fromFeedAuthor = fromFeedAuthor,
-                )
+                // The block list and the content rules used to run inside the response parser, so a
+                // page could arrive already emptied. They run here now: a page whose comments are all
+                // hidden is topped up from the next one, for a bounded number of requests.
+                val gate = replyGate()
+                var fetchPage = requestPage
+                var fetchFirst = requestFirst
+                var fetchLast = requestLast
+                var attempts = 0
+                var raw: List<Entity> = emptyList()
+                var rows: List<Entity> = emptyList()
+                while (true) {
+                    raw = repository.feedReply(
+                        id = id,
+                        listType = listType,
+                        page = fetchPage,
+                        firstItem = fetchFirst,
+                        lastItem = fetchLast,
+                        discussMode = 1,
+                        feedType = "feed",
+                        blockStatus = 0,
+                        fromFeedAuthor = fromFeedAuthor,
+                    )
+                    attempts++
+                    if (raw.isEmpty()) break
+                    fetchFirst = fetchFirst ?: raw.first().id
+                    fetchLast = raw.last().id
+                    rows = raw.filter { gate.isVisible(it, FilterScope.Comment) }
+                    if (rows.isNotEmpty() || attempts >= FilteredReplyRequests) break
+                    fetchPage++
+                }
                 if (refresh) {
                     page = 1
                     firstItem = null
                     lastItem = null
                     isEnd = false
                 }
-                if (rows.isEmpty()) {
+                if (raw.isEmpty()) {
                     isEnd = true
                     if (refresh) {
                         replies = emptyList()
@@ -421,16 +447,28 @@ class FeedDetailViewModel(
                     } else {
                         replyFooter = FooterStatus.End
                     }
+                } else if (rows.isEmpty()) {
+                    // Every comment in the batch was hidden: keep the cursor moving so the reader's
+                    // next scroll asks for the following page instead of the same one.
+                    firstItem = firstItem ?: fetchFirst
+                    lastItem = fetchLast
+                    page = requestPage + attempts
+                    if (refresh) {
+                        replies = emptyList()
+                        replyStatus = ListStatus.Empty
+                    } else {
+                        replyFooter = FooterStatus.Idle
+                    }
                 } else {
                     firstItem = firstItem ?: rows.first().id
-                    lastItem = rows.last().id
+                    lastItem = fetchLast ?: rows.last().id
                     val decorated = decorate(rows, requestPage)
                     val merged = if (refresh) decorated else replies + decorated
                     val seen = HashSet<String>()
                     replies = merged.filter { it.entityId.isEmpty() || seen.add(it.entityId) }
                     replyStatus = ListStatus.Content
                     replyFooter = FooterStatus.Idle
-                    page = requestPage + 1
+                    page = requestPage + attempts
                     // Only the first arrival jumps; a later refresh keeps the anchor listed but
                     // leaves the reader where they are.
                     if (refresh && anchor != null && !anchorJumped) {
@@ -559,3 +597,6 @@ private fun Entity.withLike(count: String, liked: Boolean): Entity {
     )
     return Entity(JsonObject(json + ("likenum" to JsonPrimitive(count)) + ("userAction" to action)))
 }
+
+/** Requests one reply load may spend topping up a page whose comments were all hidden. */
+private const val FilteredReplyRequests = 3

@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -144,8 +145,13 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     // The pager itself keeps every tab composed; only its layer fades, so lists keep their state.
     val fade = remember { Animatable(1f) }
     val switchJob = remember { mutableStateOf<Job?>(null) }
+    val navigator = LocalNavigator.current
+    // A wide window shows the detail beside the list, so leaving the list's section closes it:
+    // the feed on the right would otherwise belong to a section the user has already left.
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
     val switchTo: (Int) -> Unit = { index ->
         if (pagerState.currentPage != index) {
+            if (wide && navigator.hasOverlay) navigator.popToMain()
             switchJob.value?.cancel()
             switchJob.value = scope.launch {
                 fade.animateTo(0f, tween(TabFadeOutMillis, easing = LinearEasing))
@@ -157,7 +163,6 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val backdrop = rememberGlassBackdrop()
     val returnTop = remember { ReturnTopController() }
     val followReturnTop = remember { ReturnTopController() }
-    val navigator = LocalNavigator.current
     val onHome = pagerState.currentPage == MainTab.Home.ordinal
     val app = LocalApp.current
     val session = app.session

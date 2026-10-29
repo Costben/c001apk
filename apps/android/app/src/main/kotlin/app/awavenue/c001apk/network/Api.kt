@@ -44,6 +44,8 @@ object Api {
 
     const val COLLECTION_LIST = "$API/v6/collection/list"
     const val COLLECTION_ITEM_LIST = "$API/v6/collection/itemList"
+    const val COLLECTION_ADD_ITEM = "$API/v6/collection/addItem"
+    const val COLLECTION_CREATE = "$API/v6/collection/create"
 
     const val APK_DETAIL = "$API/v6/apk/detail"
     const val APK_DOWNLOAD = "$API/v6/apk/download"

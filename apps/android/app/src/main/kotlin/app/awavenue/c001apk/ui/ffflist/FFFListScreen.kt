@@ -200,6 +200,7 @@ private fun FFFContent(
             PageLoader { page, first, last ->
                 app.repository.userList(fffUrl(type), uid, id, page, first, last)
             },
+            app::contentGate,
         )
     }
     FeedList(viewModel = viewModel, scrollBehavior = scrollBehavior, contentPadding = contentPadding)

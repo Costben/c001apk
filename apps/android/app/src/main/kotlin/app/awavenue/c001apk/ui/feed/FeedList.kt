@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -57,12 +58,26 @@ fun FeedList(
     returnTop: ReturnTopController? = null,
     itemPadding: Dp = ItemPadding,
     onSortSelected: ((Entity) -> Unit)? = null,
+    itemFilter: ((Entity) -> Boolean)? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val openLink = rememberLinkOpener()
     val listState = rememberPageListState(viewModel)
+    // Hidden cards stay in the fetched page, so a switch flipped in 设置 takes effect on the list
+    // already on screen and needs no refresh to come back. The content gate is rebuilt when the
+    // rules change for the same reason: a new rule drops the rows it matches without a reload.
+    val gate = remember(app.blacklist.userBlacklist, app.blacklist.topicBlacklist, app.contentFilter.preferences) {
+        app.contentGate()
+    }
+    val shownItems = remember(viewModel.items, itemFilter, gate) {
+        viewModel.items
+            .filterNot { FeedActions.isHidden(it) }
+            .filter { gate.isVisible(it) }
+            .filter { itemFilter?.invoke(it) ?: true }
+    }
 
     val onBlock: (String, String?) -> Unit = { uid, _ ->
         app.blacklist.blockUser(uid)
@@ -144,7 +159,17 @@ fun FeedList(
         when (status) {
             ListStatus.Loading -> CenterBox(contentPadding) { InfiniteProgressIndicator() }
             ListStatus.Empty -> CenterBox(contentPadding) {
-                EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+                val filtered = viewModel.filteredCount
+                if (filtered > 0) {
+                    EmptyState(
+                        title = "内容已被过滤",
+                        subtitle = "已过滤 $filtered 条，可调整规则后刷新",
+                        actionText = "刷新",
+                        onActionClick = viewModel::refresh,
+                    )
+                } else {
+                    EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = viewModel::refresh)
+                }
             }
             is ListStatus.Error -> CenterBox(contentPadding) {
                 EmptyState(title = "加载失败", subtitle = status.message, actionText = "重试", onActionClick = viewModel::refresh)
@@ -180,8 +205,11 @@ fun FeedList(
                                 }
                             }
                         }
+                        if (header != null) {
+                            item(key = "catalog-header", contentType = "catalog-header") { header() }
+                        }
                         itemsIndexed(
-                            viewModel.items.filterNot { FeedActions.isHidden(it) },
+                            shownItems,
                             contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
                         ) { _, item ->
                             EntityItem(
@@ -192,7 +220,13 @@ fun FeedList(
                                 horizontalPadding = itemPadding,
                             )
                         }
-                        item(contentType = "footer") { Footer(viewModel.footer, onRetry = viewModel::retryFooter) }
+                        item(contentType = "footer") {
+                            Footer(
+                                status = viewModel.footer,
+                                onRetry = viewModel::retryFooter,
+                                onContinue = viewModel::continueFiltered,
+                            )
+                        }
                     }
                 }
             }
@@ -206,7 +240,7 @@ private fun CenterBox(contentPadding: PaddingValues, content: @Composable () -> 
 }
 
 @Composable
-private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
+private fun Footer(status: FooterStatus, onRetry: () -> Unit, onContinue: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         // The retry button is the tallest state; reserving its height keeps the footer, and thus the
         // list end, from moving when the state changes.
@@ -219,6 +253,7 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
                 when (it) {
                     FooterStatus.Idle, FooterStatus.Loading -> "loading"
                     FooterStatus.End -> "end"
+                    is FooterStatus.Filtered -> "filtered"
                     is FooterStatus.Error -> "error"
                 }
             },
@@ -232,6 +267,10 @@ private fun Footer(status: FooterStatus, onRetry: () -> Unit) {
                     "没有更多了",
                     style = COUITheme.textStyles.footnote1,
                     color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                )
+                is FooterStatus.Filtered -> TextButton(
+                    text = "已过滤 ${current.count} 条，点击继续加载",
+                    onClick = onContinue,
                 )
                 is FooterStatus.Error -> TextButton(text = "${current.message}，点击重试", onClick = onRetry)
             }

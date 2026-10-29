@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
+import app.awavenue.c001apk.model.priceDisplay
+import app.awavenue.c001apk.model.tradeLink
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
@@ -48,6 +50,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.openCoolapkLink
+import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -243,6 +246,14 @@ fun FeedCard(
                     },
                 ),
             )
+        }
+        // A purchase-price or second-hand feed states its price above the text, the way the
+        // official card does; a feed without one draws nothing.
+        val price = remember(feed) { feed.priceDisplay() }
+        val tradeLink = remember(feed) { feed.tradeLink() }
+        if (price != null || tradeLink != null) {
+            Spacer(Modifier.height(10.dp))
+            FeedPriceRow(price, tradeLink, onOpenLink = { context.openBrowser(it) })
         }
         // Title and body sizes follow the Flutter feed card: 16sp, title bold.
         if (feed.messageTitle.isNotEmpty()) {
