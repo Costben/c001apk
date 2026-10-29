@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.isGifUrl
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -142,8 +143,9 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
         val ratioHW = if (width <= 0f) 1f else height / width
         val imageWidth = maxWidth
         val imageHeight = imageWidth * minOf(ratioHW, LONG_IMAGE_RATIO)
+        val isGif = isGifUrl(url)
         val badge = when {
-            url.endsWith(".gif") -> "GIF"
+            isGif -> "GIF"
             ratioHW >= LONG_IMAGE_RATIO -> "长图"
             else -> null
         }
@@ -159,7 +161,7 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                         },
                     ),
             ) {
-                NetworkImage(thumbnail(url), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                NetworkImage(if (isGif) url else thumbnail(url), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                 if (badge != null) {
                     Text(
                         badge,

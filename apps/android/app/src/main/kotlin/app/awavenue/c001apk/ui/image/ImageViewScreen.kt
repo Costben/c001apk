@@ -83,6 +83,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.isGifUrl
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.originalImageUrl
@@ -476,7 +477,7 @@ private fun ZoomablePage(
     // A long strip is decoded at the screen's width rather than fitted to it, so zooming in shows
     // detail instead of a stretched handful of pixels.
     val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
-    val decodeSize = frame.aspectOf(url)?.takeIf { it < LongImageAspect }?.let { aspect ->
+    val decodeSize = frame.aspectOf(url)?.takeIf { it < LongImageAspect && !isGifUrl(url) }?.let { aspect ->
         val width = screenWidthPx.coerceAtLeast(1)
         val height = (width / aspect).toInt().coerceAtLeast(1)
         coil3.size.Size(width, minOf(height, (MaxDecodePixels / width).coerceAtLeast(1)))
@@ -567,7 +568,7 @@ private fun ZoomablePage(
             // itself and not an empty frame.
             if (!loaded || reveal < 1f) {
                 AsyncImage(
-                    model = (if (url.isLivePhotoUrl()) url else thumbnail(url))
+                    model = (if (url.isLivePhotoUrl() || isGifUrl(url)) url else thumbnail(url))
                         .takeIf { it.startsWith("http://") || it.startsWith("https://") },
                     contentDescription = null,
                     contentScale = ContentScale.Fit,

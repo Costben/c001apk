@@ -57,6 +57,14 @@ fun NetworkImage(
 
 const val SUFFIX_THUMBNAIL = ".s.jpg"
 
+/** Whether the given URL points to a GIF file (even if it has a thumbnail suffix or query parameters). */
+fun isGifUrl(url: String): Boolean {
+    if (url.isEmpty()) return false
+    val path = url.substringBefore('?')
+    return path.endsWith(".gif", ignoreCase = true) ||
+        path.removeSuffix(SUFFIX_THUMBNAIL).endsWith(".gif", ignoreCase = true)
+}
+
 /** Inserts the thumbnail suffix before any query string, so `…jpg?t=1` stays a valid URL. */
 fun thumbnail(url: String): String {
     if (url.isEmpty()) return url
@@ -69,7 +77,8 @@ fun thumbnail(url: String): String {
 /**
  * The address of the original file behind a Coolapk picture: the app is handed a display variant
  * with a `@WxH` size suffix, and lists ask for the smaller `.s.jpg` thumbnail on top of it.
- * Anything that is not a Coolapk address is left untouched.
+ * Anything that is not a Coolapk address is left untouched. Note that GIF files on Coolapk CDN
+ * incorporate the `@WxH.gif` in the actual object name and will 404 if stripped.
  */
 fun originalImageUrl(url: String): String {
     if (url.isEmpty() || !url.contains("coolapk.com")) return url
@@ -77,7 +86,9 @@ fun originalImageUrl(url: String): String {
     var base = if (query >= 0) url.substring(0, query) else url
     val suffix = if (query >= 0) url.substring(query) else ""
     if (base.endsWith(SUFFIX_THUMBNAIL)) base = base.removeSuffix(SUFFIX_THUMBNAIL)
-    base = base.replace(Regex("""@\d+x\d+(?=\.[A-Za-z0-9]+$)"""), "")
+    if (!base.endsWith(".gif", ignoreCase = true)) {
+        base = base.replace(Regex("""@\d+x\d+(?=\.[A-Za-z0-9]+$)"""), "")
+    }
     return base + suffix
 }
 

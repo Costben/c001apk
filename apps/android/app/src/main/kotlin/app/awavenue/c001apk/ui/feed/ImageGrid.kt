@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.min
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
+import app.awavenue.c001apk.ui.common.isGifUrl
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.image.imageOrigin
@@ -80,7 +81,7 @@ private fun GridImage(url: String, width: Dp, height: Dp, more: Int = 0, onClick
     val (w, h) = imageSize(url)
     val badge = when {
         url.isLivePhotoUrl() -> "实况"
-        url.endsWith(".gif") -> "GIF"
+        isGifUrl(url) -> "GIF"
         h / w >= LONG_IMAGE_RATIO -> "长图"
         else -> null
     }

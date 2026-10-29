@@ -1,6 +1,7 @@
 package app.awavenue.c001apk
 
 import android.app.Application
+import android.os.Build
 import app.awavenue.c001apk.data.AccountStore
 import app.awavenue.c001apk.data.AppSettings
 import app.awavenue.c001apk.data.BlacklistStore
@@ -20,6 +21,8 @@ import app.awavenue.c001apk.platform.MessageCheckWorker
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.util.DebugLogger
 import okhttp3.OkHttpClient
@@ -96,7 +99,14 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
             }
             .build()
         return ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { imageClient })) }
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { imageClient }))
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(AnimatedImageDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
             .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
             .build()
     }
