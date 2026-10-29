@@ -1,41 +1,146 @@
 package app.awavenue.c001apk.ui.settings
 
 import android.os.Build
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.openBrowser
-import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.LocalNavigator
-import app.awavenue.c001apk.ui.text.MarkdownBody
+import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.layout.DialogButtonBar
+import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
+import io.github.suqi8.coui.kmp.layout.DialogDefaults
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import java.time.Instant
-import java.time.ZoneId
+import io.github.suqi8.coui.kmp.window.WindowDialog
+
+/**
+ * 更新提示。release notes 按 Markdown 渲染，可能有几十行，正文自己滚动、封顶 260dp，别把按钮顶出屏幕。
+ * 「跳过本次更新」是个勾选框：勾上后不管点稍后还是点外面关掉，都记成跳过这个版本；点下载更新则照常下载。
+ * 三个出口等窗口收完再分发，避免和关闭动画抢时序。
+ */
+@Composable
+fun UpdateDialog(
+    version: String,
+    prerelease: Boolean,
+    notes: String,
+    onDismiss: () -> Unit,
+    onSkip: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    var show by remember { mutableStateOf(false) }
+    var download by remember { mutableStateOf(false) }
+    var skip by remember { mutableStateOf(false) }
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { show = true }
+    val haptic = LocalHapticFeedback.current
+    val textMargin = DialogDefaults.insideMargin.width
+    WindowDialog(
+        show = show,
+        title = "发现新版本 $version",
+        summary = if (prerelease) "预发布版本" else "正式版本",
+        outsideMargin = DpSize(16.dp, 8.dp),
+        onDismissRequest = { show = false },
+        onDismissFinished = {
+            if (!settled) {
+                settled = true
+                when {
+                    download -> onDownload()
+                    skip -> onSkip()
+                    else -> onDismiss()
+                }
+            }
+        },
+    ) {
+        Column {
+            if (notes.isNotBlank()) {
+                MarkdownText(
+                    notes,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = textMargin),
+                )
+            }
+            Row(
+                // 和 COUI 安全对话框的勾选行一致：起点让圆圈的内环对齐上面正文的左缘。
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = textMargin, top = 12.dp)
+                    .toggleable(
+                        value = skip,
+                        interactionSource = null,
+                        indication = null,
+                        role = Role.Checkbox,
+                        onValueChange = {
+                            skip = it
+                            haptic.performHapticFeedback(
+                                if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                            )
+                        },
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(state = ToggleableState(skip), onClick = null)
+                Text(
+                    "跳过本次更新",
+                    fontSize = 14.sp,
+                    color = COUITheme.colorScheme.onBackgroundVariant,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            DialogButtonBar(
+                negative = DialogButtonBarAction(text = "稍后", onClick = { show = false }),
+                positive = DialogButtonBarAction(
+                    text = "下载更新",
+                    recommended = true,
+                    onClick = {
+                        download = true
+                        show = false
+                    },
+                ),
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
 
 /** 发现新版本: 稍后 closes, 跳过 silences this version for the automatic check, 更新 opens the APK. */
 @Composable
@@ -43,71 +148,229 @@ fun AppUpdateDialog(update: UpdateResult.Available, onDismiss: () -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val release = update.release
+    val isPrerelease = release.version.preRelease != null
 
-    val notesShape = rememberSquircleShape(12.dp)
-    OverlayDialog(show = true, title = "发现新版本", onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                Text("${update.current} → ${release.version}", style = COUITheme.textStyles.headline1)
-                release.publishedAt?.let {
-                    val date = Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).toLocalDate()
-                    Text("发布于 $date", style = COUITheme.textStyles.footnote1)
-                }
-            }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .heightIn(max = 280.dp)
-                    .clip(notesShape)
-                    .background(COUITheme.colorScheme.surfaceContainer)
-                    .border(1.dp, COUITheme.colorScheme.dividerLine, notesShape),
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(14.dp),
-                ) {
-                    MarkdownBody(
-                        release.notes,
-                        fontSize = 14.sp,
-                        explicit = true,
-                        coolapk = false,
-                        showEmoji = false,
+    UpdateDialog(
+        version = release.version.toString(),
+        prerelease = isPrerelease,
+        notes = release.notes,
+        onDismiss = onDismiss,
+        onSkip = {
+            app.settings.skipAppUpdate(release.version.toString())
+            onDismiss()
+        },
+        onDownload = {
+            context.openBrowser(release.downloadFor(Build.SUPPORTED_ABIS.toList()))
+            onDismiss()
+        },
+    )
+}
+
+/**
+ * 只认 release notes 里用得到的那部分 Markdown：`#` 标题、`-`/`*`/`1.` 列表、`>` 引用、
+ * ``` 代码块，行内 `**粗**`、`*斜*`、`` `代码` ``、`[文字](链接)`。其余原样当正文显示。
+ */
+@Composable
+fun MarkdownText(
+    markdown: String,
+    modifier: Modifier = Modifier,
+    color: Color = COUITheme.colorScheme.onBackgroundVariant,
+    headingColor: Color = COUITheme.colorScheme.onBackground,
+) {
+    val blocks = remember(markdown) { parseBlocks(markdown) }
+    val linkColor = COUITheme.colorScheme.primary
+    val codeBackground = headingColor.copy(alpha = 0.08f)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        blocks.forEachIndexed { index, block ->
+            when (block) {
+                is MdBlock.Heading -> Text(
+                    inline(block.text, linkColor, codeBackground),
+                    fontSize = if (block.level <= 2) 15.sp else 14.sp,
+                    lineHeight = 21.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = headingColor,
+                    modifier = Modifier.padding(top = if (index == 0) 0.dp else 6.dp),
+                )
+                is MdBlock.Paragraph -> Text(
+                    inline(block.text, linkColor, codeBackground),
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = color,
+                )
+                is MdBlock.Item -> Row(Modifier.padding(start = (block.depth * 12).dp)) {
+                    Text(
+                        block.marker,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = color,
+                        modifier = Modifier.widthIn(min = 14.dp),
+                    )
+                    Text(
+                        inline(block.text, linkColor, codeBackground),
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = color,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-            }
-            TextButton(
-                text = "查看发布页面",
-                modifier = Modifier.padding(horizontal = 12.dp),
-                onClick = { context.openBrowser(release.page) },
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-            ) {
-                TextButton(text = "稍后", onClick = onDismiss)
-                TextButton(
-                    text = "跳过",
-                    onClick = {
-                        app.settings.skipAppUpdate(release.version.toString())
-                        onDismiss()
-                    },
+                is MdBlock.Quote -> Text(
+                    inline(block.text, linkColor, codeBackground),
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = color.copy(alpha = color.alpha * 0.8f),
+                    modifier = Modifier.padding(start = 10.dp),
                 )
-                TextButton(
-                    text = "更新",
-                    onClick = {
-                        context.openBrowser(release.downloadFor(Build.SUPPORTED_ABIS.toList()))
-                        onDismiss()
-                    },
+                is MdBlock.Code -> Text(
+                    block.text,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = color,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
 }
+
+private sealed interface MdBlock {
+    data class Heading(val level: Int, val text: String) : MdBlock
+    data class Paragraph(val text: String) : MdBlock
+    data class Item(val marker: String, val text: String, val depth: Int) : MdBlock
+    data class Quote(val text: String) : MdBlock
+    data class Code(val text: String) : MdBlock
+}
+
+private val headingRegex = Regex("^(#{1,6})\\s+(.*?)\\s*#*$")
+private val bulletRegex = Regex("^(\\s*)[-*+]\\s+(.*)$")
+private val orderedRegex = Regex("^(\\s*)(\\d+)[.)]\\s+(.*)$")
+private val ruleRegex = Regex("^\\s*([-*_])(\\s*\\1){2,}\\s*$")
+
+private fun parseBlocks(markdown: String): List<MdBlock> {
+    val blocks = mutableListOf<MdBlock>()
+    val paragraph = StringBuilder()
+    fun flush() {
+        if (paragraph.isNotBlank()) blocks += MdBlock.Paragraph(paragraph.toString().trim())
+        paragraph.clear()
+    }
+    val lines = markdown.replace("\r\n", "\n").lines()
+    var i = 0
+    while (i < lines.size) {
+        val line = lines[i]
+        val trimmed = line.trim()
+        when {
+            trimmed.startsWith("```") -> {
+                flush()
+                val code = StringBuilder()
+                i++
+                while (i < lines.size && !lines[i].trim().startsWith("```")) {
+                    if (code.isNotEmpty()) code.append('\n')
+                    code.append(lines[i])
+                    i++
+                }
+                blocks += MdBlock.Code(code.toString())
+            }
+            trimmed.isEmpty() || ruleRegex.matches(line) -> flush()
+            headingRegex.matches(trimmed) -> {
+                flush()
+                val m = headingRegex.find(trimmed)!!
+                blocks += MdBlock.Heading(m.groupValues[1].length, m.groupValues[2])
+            }
+            bulletRegex.matches(line) -> {
+                flush()
+                val m = bulletRegex.find(line)!!
+                blocks += MdBlock.Item("•", m.groupValues[2], m.groupValues[1].length / 2)
+            }
+            orderedRegex.matches(line) -> {
+                flush()
+                val m = orderedRegex.find(line)!!
+                blocks += MdBlock.Item("${m.groupValues[2]}.", m.groupValues[3], m.groupValues[1].length / 2)
+            }
+            trimmed.startsWith(">") -> {
+                flush()
+                blocks += MdBlock.Quote(trimmed.removePrefix(">").trim())
+            }
+            // 列表项的续行直接接在上一项后面，不另起段落。
+            paragraph.isEmpty() && blocks.lastOrNull() is MdBlock.Item && line.startsWith(" ") -> {
+                val last = blocks.removeAt(blocks.lastIndex) as MdBlock.Item
+                blocks += last.copy(text = last.text + " " + trimmed)
+            }
+            else -> {
+                if (paragraph.isNotEmpty()) paragraph.append('\n')
+                paragraph.append(trimmed)
+            }
+        }
+        i++
+    }
+    flush()
+    return blocks
+}
+
+/** 行内语法：粗体、斜体、行内代码、链接。没配对的标记原样留着。 */
+private fun inline(text: String, linkColor: Color, codeBackground: Color): AnnotatedString =
+    buildAnnotatedString {
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                c == '\\' && i + 1 < text.length -> {
+                    append(text[i + 1])
+                    i += 2
+                }
+                c == '`' -> {
+                    val end = text.indexOf('`', i + 1)
+                    if (end < 0) { append(c); i++ } else {
+                        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    }
+                }
+                text.startsWith("**", i) -> {
+                    val end = text.indexOf("**", i + 2)
+                    if (end < 0) { append("**"); i += 2 } else {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                            append(inline(text.substring(i + 2, end), linkColor, codeBackground))
+                        }
+                        i = end + 2
+                    }
+                }
+                // 下划线不当强调：版本说明里常有 snake_case 之类的标识符。
+                c == '*' && i + 1 < text.length && !text[i + 1].isWhitespace() -> {
+                    val end = text.indexOf(c, i + 1)
+                    if (end < 0) { append(c); i++ } else {
+                        withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(inline(text.substring(i + 1, end), linkColor, codeBackground))
+                        }
+                        i = end + 1
+                    }
+                }
+                c == '[' -> {
+                    val close = text.indexOf("](", i + 1)
+                    val end = if (close < 0) -1 else text.indexOf(')', close + 2)
+                    if (end < 0) { append(c); i++ } else {
+                        val label = text.substring(i + 1, close)
+                        val url = text.substring(close + 2, end).trim()
+                        withLink(
+                            LinkAnnotation.Url(
+                                url,
+                                TextLinkStyles(
+                                    style = SpanStyle(color = linkColor),
+                                    pressedStyle = SpanStyle(color = linkColor.copy(alpha = linkColor.alpha * 0.3f)),
+                                ),
+                            ),
+                        ) { append(inline(label, linkColor, codeBackground)) }
+                        i = end + 1
+                    }
+                }
+                else -> {
+                    append(c)
+                    i++
+                }
+            }
+        }
+    }
 
 /**
  * The once-per-cold-start check. It only prompts on the main screen, so it never interrupts a
@@ -128,3 +391,4 @@ fun AutomaticUpdateCheck() {
         AppUpdateDialog(pending, onDismiss = { update = null })
     }
 }
+

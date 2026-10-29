@@ -207,7 +207,7 @@ class UpdateService(
     private val checking = AtomicBoolean(false)
     private val automaticChecked = AtomicBoolean(false)
 
-    suspend fun check(automatic: Boolean = false): UpdateResult {
+    suspend fun check(automatic: Boolean = false, forceShow: Boolean = false): UpdateResult {
         if (automatic && (!settings.autoCheckAppUpdate || automaticChecked.get())) return UpdateResult.Suppressed
         if (!checking.compareAndSet(false, true)) return UpdateResult.Busy
         if (automatic) automaticChecked.set(true)
@@ -249,7 +249,7 @@ class UpdateService(
             if (automatic && (!settings.autoCheckAppUpdate || settings.skippedAppUpdateVersion == release.version.toString())) {
                 return UpdateResult.Suppressed
             }
-            return if (release.version > current) UpdateResult.Available(release, currentVersion) else UpdateResult.UpToDate
+            return if (forceShow || release.version > current) UpdateResult.Available(release, currentVersion) else UpdateResult.UpToDate
         } catch (e: CancellationException) {
             throw e
         } catch (_: IOException) {

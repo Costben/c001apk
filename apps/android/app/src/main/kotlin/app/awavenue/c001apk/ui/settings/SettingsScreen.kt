@@ -83,6 +83,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.icon.extended.Link
 import io.github.suqi8.coui.kmp.icon.extended.ListView
 import io.github.suqi8.coui.kmp.icon.extended.More
+import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.icon.extended.Photos
 import io.github.suqi8.coui.kmp.icon.extended.Refresh
 import io.github.suqi8.coui.kmp.icon.extended.Recent
@@ -446,6 +447,23 @@ fun SettingsScreen() {
                                         is UpdateResult.Failed -> context.toast(result.message)
                                         UpdateResult.Busy -> context.toast("正在检查更新，请稍候")
                                         UpdateResult.Suppressed -> Unit
+                                    }
+                                    checkingUpdate = false
+                                }
+                            },
+                        )
+                        ArrowPreference(
+                            title = "版本更新说明",
+                            summary = "查看最新版本的更新日志与发布说明",
+                            startAction = { PreferenceStartIcon(COUIIcons.Notes) },
+                            enabled = !checkingUpdate,
+                            onClick = rememberHapticClick {
+                                scope.launch {
+                                    checkingUpdate = true
+                                    when (val result = app.updates.check(forceShow = true)) {
+                                        is UpdateResult.Available -> update = result
+                                        is UpdateResult.Failed -> context.toast(result.message)
+                                        else -> context.toast("获取更新说明失败")
                                     }
                                     checkingUpdate = false
                                 }
