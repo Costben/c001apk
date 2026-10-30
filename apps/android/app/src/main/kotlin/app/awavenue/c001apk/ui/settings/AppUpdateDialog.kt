@@ -20,7 +20,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -45,14 +51,16 @@ import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Checkbox
+import io.github.suqi8.coui.kmp.basic.CheckboxDefaults
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.layout.DialogButtonBar
 import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
 import io.github.suqi8.coui.kmp.layout.DialogDefaults
+import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import io.github.suqi8.coui.kmp.window.WindowDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -66,6 +74,10 @@ private enum class UpdateDialogAction {
  * 更新提示。release notes 按 Markdown 渲染，可能有几十行，正文自己滚动、封顶 260dp，别把按钮顶出屏幕。
  * 「跳过本次更新」是个勾选框：勾上后不管点稍后还是点外面关掉，都记成跳过这个版本；点下载更新则照常下载。
  * 支持应用内下载与系统安装器调起，并在界面上实时呈现 COUI 进度条与状态。
+ *
+ * 面板用 [OverlayDialog] 而不是 `WindowDialog`：只有前者挂在根 Scaffold 上，能读到页面的
+ * backdrop，磨砂半透明底与按钮胶囊的材质才和 COUI 单行输入对话框一致；窗口级对话框拿不到
+ * backdrop，只能退回不透明底色，浅色主题下按钮胶囊和面板几乎同色，看不出边界。
  */
 @Composable
 fun UpdateDialog(
@@ -88,8 +100,24 @@ fun UpdateDialog(
     LaunchedEffect(Unit) { show = true }
     val haptic = LocalHapticFeedback.current
     val textMargin = DialogDefaults.insideMargin.width
+    val isDark = COUITheme.colorScheme.background.luminance() < 0.5f
 
-    WindowDialog(
+    // 推荐按钮固定 COUI 蓝。动态取色下 primary 可能被壁纸带成中性灰，蓝胶囊会退化成和磨砂面板
+    // 同色的白灰块，两个按钮就都看不出边界了。次级胶囊沿用 COUI 原配方（面板提亮 67% 白）。
+    val recommendColors = ButtonDefaults.textButtonColorsPrimary(
+        color = if (isDark) Color(0xFF1A8CFF) else Color(0xFF0080FF),
+    )
+
+    // 未勾选的复选框描边默认取 colorScheme.secondary（浅色 #E5E5E5），那是给不透明白卡用的；
+    // 磨砂面板本身已经压到 #EAEAEA，两者只差几个色阶，勾选框等于消失。这里改用正文副色的
+    // 45% 不透明度，浅色落到 #818181：比标签文字浅一档，与面板的对比约 3.1:1，过得了非文本
+    // 控件的 3:1 门槛。
+    val checkboxColors = CheckboxDefaults.checkboxColors(
+        uncheckedBackgroundColor = COUITheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f),
+    )
+    val notesScroll = rememberScrollState()
+
+    OverlayDialog(
         show = show,
         title = "发现新版本 $version",
         summary = if (prerelease) "预发布版本" else "正式版本",
@@ -114,12 +142,30 @@ fun UpdateDialog(
     ) {
         Column {
             if (notes.isNotBlank()) {
+                // 正文封顶 260dp 后自己滚动，但滚到底之前没有任何提示，最后一行会被面板边缘硬切
+                // 成半句话。这里把视口底部的内容淡出：DstOut 打在独立离屏层上，只挖掉正文自己，
+                // 露出来的是面板，所以和磨砂底色无关。滚到底后 canScrollForward 变 false，淡出消失。
                 MarkdownText(
                     notes,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 260.dp)
-                        .verticalScroll(rememberScrollState())
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            if (notesScroll.canScrollForward) {
+                                val fade = 32.dp.toPx()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black),
+                                        startY = size.height - fade,
+                                        endY = size.height,
+                                    ),
+                                    blendMode = BlendMode.DstOut,
+                                )
+                            }
+                        }
+                        .verticalScroll(notesScroll)
                         .padding(horizontal = textMargin),
                 )
             }
@@ -144,7 +190,7 @@ fun UpdateDialog(
                             ),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(state = ToggleableState(skip), onClick = null)
+                        Checkbox(state = ToggleableState(skip), onClick = null, colors = checkboxColors)
                         Text(
                             "跳过本次更新",
                             fontSize = 14.sp,
@@ -167,6 +213,7 @@ fun UpdateDialog(
                                 }
                             },
                         ),
+                        recommendColors = recommendColors,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -216,6 +263,7 @@ fun UpdateDialog(
                             enabled = false,
                             onClick = {},
                         ),
+                        recommendColors = recommendColors,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -242,6 +290,7 @@ fun UpdateDialog(
                             recommended = true,
                             onClick = { onInstall() },
                         ),
+                        recommendColors = recommendColors,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
@@ -273,6 +322,7 @@ fun UpdateDialog(
                             recommended = true,
                             onClick = { onStartInAppUpdate() },
                         ),
+                        recommendColors = recommendColors,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
