@@ -51,6 +51,7 @@ import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalPageMemory
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
@@ -105,10 +106,23 @@ private enum class SearchSortType(val label: String, val sort: String, val isStr
     Strict("精确匹配", "", 1),
 }
 
+/**
+ * The live query, the content type and the order the page is showing, kept on the back stack entry.
+ *
+ * The route only carries the keyword the search was opened with, and the page is disposed while a
+ * result sits on top of it. Coming back therefore rebuilt it from that keyword, so an in-place
+ * refinement ("APK" → "APK微博") fell back to the first search. These are choices about this page,
+ * not transient ones, so they live in the entry's page memory like a topic's sort order.
+ */
+private const val SEARCH_QUERY_KEY = "search-query"
+private const val SEARCH_CONTENT_TYPE_KEY = "search-content-type"
+private const val SEARCH_SORT_KEY = "search-sort"
+
 @Composable
 fun SearchResultScreen(keyword: String, title: String, pageType: String?, pageParam: String?) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
+    val pageMemory = LocalPageMemory.current
     val tabs = if (title.isEmpty()) SearchContentType.entries else listOf(SearchContentType.Feed)
     val pagerState = rememberPagerState(
         initialPage = pageMemoryPage("search-result", fallback = 0),
@@ -122,8 +136,13 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     // The bar's title is the live query: editing it and submitting re-runs the search in place,
     // keeping the tab, the content type and the order the user already chose. The field keeps its
     // own draft so typing does not reload the list on every keystroke.
-    var query by remember(keyword) { mutableStateOf(keyword) }
-    var draft by remember(keyword) { mutableStateOf(keyword) }
+    var query by remember(keyword) {
+        mutableStateOf(pageMemory?.selections?.get(SEARCH_QUERY_KEY) as? String ?: keyword)
+    }
+    var draft by remember(keyword) { mutableStateOf(query) }
+    // Read in the composition so this page is subscribed to its own choices; the list reads them
+    // too and would otherwise keep the ones it had when the page was last built.
+    val recordedQuery = query
 
     fun submit(text: String) {
         val next = text.trim()
@@ -135,8 +154,21 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
         query = next
     }
 
-    var searchType by remember { mutableStateOf(SearchType.All) }
-    var sortType by remember { mutableStateOf(SearchSortType.Dateline) }
+    var searchType by remember {
+        mutableStateOf(
+            pageMemory?.selections?.get(SEARCH_CONTENT_TYPE_KEY) as? SearchType ?: SearchType.All,
+        )
+    }
+    var sortType by remember {
+        mutableStateOf(
+            pageMemory?.selections?.get(SEARCH_SORT_KEY) as? SearchSortType ?: SearchSortType.Dateline,
+        )
+    }
+    SideEffect {
+        pageMemory?.selections?.put(SEARCH_QUERY_KEY, recordedQuery)
+        pageMemory?.selections?.put(SEARCH_CONTENT_TYPE_KEY, searchType)
+        pageMemory?.selections?.put(SEARCH_SORT_KEY, sortType)
+    }
     var menuOpen by remember { mutableStateOf(false) }
     // Each overflow row owns its options as `children`, so the library shrinks the primary panel
     // and morphs a second panel out of the row, matching the native ColorOS cascade.
