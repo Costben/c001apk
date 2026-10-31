@@ -164,4 +164,25 @@ class LongPostTemplateTest {
         )
         assertEquals(listOf("一加", "开箱", "数码"), template.topics)
     }
+
+    @Test
+    fun typeDefaultsToAFeed() {
+        val template = ok("---\ntitle: 上手\n---\n正文。")
+        assertEquals(PostKind.Feed, template.postKind)
+        assertEquals(PostKind.Feed, ok("---\ntitle: 上手\ntype: feed\n---\n正文。").postKind)
+    }
+
+    @Test
+    fun anArticleIsRefusedRatherThanPostedAsAFeed() {
+        val reason = failure("---\ntitle: 长文\ntype: article\n---\n正文。")
+        assertTrue(reason.contains("article"))
+        assertTrue(reason.contains("动态"))
+    }
+
+    @Test
+    fun anUnknownTypeIsReportedAndTreatedAsAFeed() {
+        val reported = warnings("---\ntitle: 上手\ntype: moment\n---\n正文。")
+        assertEquals(1, reported.size)
+        assertTrue(reported[0].contains("type"))
+    }
 }

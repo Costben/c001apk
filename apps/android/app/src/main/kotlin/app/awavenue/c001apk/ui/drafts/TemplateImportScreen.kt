@@ -2,6 +2,7 @@ package app.awavenue.c001apk.ui.drafts
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,11 +38,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Draft
 import app.awavenue.c001apk.data.DraftImage
+import app.awavenue.c001apk.data.LongPostPackage
+import app.awavenue.c001apk.data.LongPostPackageSpec
 import app.awavenue.c001apk.data.LongPostTemplate
 import app.awavenue.c001apk.data.LongPostTemplateSpec
 import app.awavenue.c001apk.data.TemplateImage
 import app.awavenue.c001apk.data.TemplateParse
 import app.awavenue.c001apk.data.parseLongPostTemplate
+import app.awavenue.c001apk.data.readLongPostPackage
+import app.awavenue.c001apk.data.resolvePackageImages
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassSource
@@ -104,17 +109,47 @@ fun TemplateImportScreen() {
     var progress by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Draft?>(null) }
 
+    /** Where a zip was unpacked; relative picture paths in [source] resolve against it. */
+    var baseDir by remember { mutableStateOf<File?>(null) }
+
+    // Any MIME type on purpose: the system picker's MIME matching hides a .zip from `text/*` and, on
+    // the ColorOS build this was tried on, from `application/zip` too — filtering would make the
+    // package unreachable. The reader decides by signature instead: zip magic, else text.
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val text = runCatching {
-            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-        }.getOrNull()
-        if (text.isNullOrBlank()) {
-            context.toast("这个文件读不出内容")
-            return@rememberLauncherForActivityResult
+        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "模板"
+        scope.launch {
+            progress = "正在读取 $name"
+            val read = withContext(Dispatchers.IO) {
+                val bytes = readPackageBytes(context, uri)
+                if (bytes == null) null else readLongPostPackage(bytes, name, File(context.cacheDir, "longpost"))
+            }
+            progress = null
+            when (read) {
+                null -> context.toast("这个文件读不出内容")
+                is LongPostPackage.Failed -> result = TemplateParse.Failed(read.reason)
+                is LongPostPackage.Ok -> {
+                    source = read.document
+                    baseDir = read.baseDir
+                    result = TemplateParse.Ok(read.template, read.warnings)
+                    context.toast(
+                        if (read.baseDir == null) "已读取模板" else "已从压缩包读取 ${read.template.images.size} 张图",
+                    )
+                }
+            }
         }
-        source = text
-        result = parseLongPostTemplate(text)
+    }
+
+    /** Parses what is in the field, resolving relative pictures against the package they came from. */
+    fun reparse() {
+        val parsed = parseLongPostTemplate(source)
+        val directory = baseDir
+        result = if (parsed is TemplateParse.Ok && directory != null) {
+            val (template, warnings) = resolvePackageImages(parsed.template, directory)
+            TemplateParse.Ok(template, parsed.warnings + warnings)
+        } else {
+            parsed
+        }
     }
 
     /** Fetches, describes and stages the template's pictures; unreadable ones are reported, not fatal. */
@@ -231,15 +266,15 @@ fun TemplateImportScreen() {
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { pickFile.launch(arrayOf("text/*", "application/octet-stream")) },
+                            onClick = { pickFile.launch(arrayOf("*/*")) },
                             modifier = Modifier.weight(1f).height(44.dp),
                         ) {
                             Icon(COUIIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("选择文件")
+                            Text("导入文件")
                         }
                         Button(
-                            onClick = { result = parseLongPostTemplate(source) },
+                            onClick = { reparse() },
                             enabled = source.isNotBlank(),
                             modifier = Modifier.weight(1f).height(44.dp),
                             colors = ButtonDefaults.buttonColorsPrimary(),
@@ -251,7 +286,7 @@ fun TemplateImportScreen() {
 
                 when (val parsed = result) {
                     null -> Text(
-                        "把按规范写好的模板贴进来，或者从文件导入。",
+                        "贴一份按规范写好的模板，或者导入一个压缩包（正文 + 图片 + type）。",
                         modifier = Modifier.padding(horizontal = 6.dp),
                         style = COUITheme.textStyles.footnote1,
                         color = COUITheme.colorScheme.onSurfaceVariantSummary,
@@ -310,9 +345,18 @@ private fun SpecCard() {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "头部可选，认 title / visibility(public|self) / topics；" +
+            "头部可选，认 title / visibility(public|self) / topics / type(feed|article)；" +
                 "正文空行分段，图片写成 ![说明](路径或链接)，按出现顺序进图集（最多 " +
                 "${LongPostTemplateSpec.MAX_IMAGES} 张）；标题作正文首行，话题追加在末尾。",
+            style = COUITheme.textStyles.footnote1,
+            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "压缩包：放一份 ${LongPostPackageSpec.DOCUMENT_NAME}，图片放进去，正文里写相对路径即可，" +
+                "比如 ![外观](images/01.png)；整个包最多 " +
+                "${LongPostPackageSpec.MAX_PACKAGE_BYTES / 1024 / 1024}MB。" +
+                "目前只能发动态，type 写 article 会被拒绝。",
             style = COUITheme.textStyles.footnote1,
             color = COUITheme.colorScheme.onSurfaceVariantSummary,
         )
@@ -411,6 +455,27 @@ private fun TemplatePreview(
 // ---- pictures -------------------------------------------------------------------------------
 
 private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/**
+ * Reads the picked file whole, refusing anything larger than a package may be.
+ *
+ * The document picker hands over a stream, not a file: a template may come from a chat app's cache
+ * or a cloud provider, so the size is counted as it is read rather than asked for up front.
+ */
+private fun readPackageBytes(context: Context, uri: Uri): ByteArray? = runCatching {
+    val limit = LongPostPackageSpec.MAX_PACKAGE_BYTES
+    context.contentResolver.openInputStream(uri)?.use { stream ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        while (true) {
+            val read = stream.read(buffer)
+            if (read < 0) break
+            if (output.size() + read > limit) return null
+            output.write(buffer, 0, read)
+        }
+        output.toByteArray()
+    }
+}.getOrNull()
 
 private val imageClient = OkHttpClient.Builder()
     .connectTimeout(8, TimeUnit.SECONDS)

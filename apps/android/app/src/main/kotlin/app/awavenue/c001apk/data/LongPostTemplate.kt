@@ -10,6 +10,13 @@ data class TemplateImage(val caption: String, val source: String) {
 }
 
 /**
+ * What a template says it should become. The client publishes feeds and replies; an article has
+ * its own endpoint and body format (see `ArticleBody`), which is not wired up yet, so a document
+ * that asks for one is refused at parse time rather than silently posted as a feed.
+ */
+enum class PostKind { Feed, Article }
+
+/**
  * A long post written to the template spec: a title, the body, the topics it belongs to, the
  * pictures it shows and the scope it is published under.
  *
@@ -23,6 +30,7 @@ data class LongPostTemplate(
     val topics: List<String>,
     val body: String,
     val images: List<TemplateImage>,
+    val postKind: PostKind = PostKind.Feed,
 ) {
     /** Exactly what the composer will hold: the title line, the body, then the topics line. */
     val message: String
@@ -59,14 +67,16 @@ object LongPostTemplateSpec {
     const val TITLE = "title"
     const val VISIBILITY = "visibility"
     const val TOPICS = "topics"
+    const val TYPE = "type"
 
-    val KEYS = setOf(TITLE, VISIBILITY, TOPICS)
+    val KEYS = setOf(TITLE, VISIBILITY, TOPICS, TYPE)
 
     /** The spec as it is shown in the app, so the rules and the parser cannot drift apart. */
     const val DOCUMENT = """---
 title: 一加 Ace 7 上手体验
 visibility: public
 topics: 一加Ace7, 开箱
+type: feed
 ---
 正文第一段。
 
@@ -84,9 +94,9 @@ private val TOPIC_SEPARATOR = Regex("""[,，、;；]""")
  * Reads a template document.
  *
  * The header is optional: without it the first `# ` heading is the title and the post is public.
- * With it, `title`, `visibility` (public / self) and `topics` are understood; any other key is
- * reported back so a typo does not disappear. Pictures are pulled out in document order, and the
- * body is left with the words only.
+ * With it, `title`, `visibility` (public / self), `topics` and `type` (feed / article) are
+ * understood; any other key is reported back so a typo does not disappear. Pictures are pulled out
+ * in document order, and the body is left with the words only.
  */
 fun parseLongPostTemplate(source: String): TemplateParse {
     val text = source.replace("\r\n", "\n").replace('\r', '\n')
@@ -163,12 +173,33 @@ fun parseLongPostTemplate(source: String): TemplateParse {
         .map { it.trim().removePrefix("#").removeSuffix("#") }
         .filter { it.isNotEmpty() }
 
+    val postKind = when (val kind = header[LongPostTemplateSpec.TYPE].orEmpty().lowercase()) {
+        "", "feed", "动态" -> PostKind.Feed
+        "article", "文章" -> PostKind.Article
+        else -> {
+            warnings += "type 只认 feed / article，已按 feed 处理"
+            PostKind.Feed
+        }
+    }
+    if (postKind == PostKind.Article) {
+        return TemplateParse.Failed(
+            "这份模板要发文章（type: article），客户端目前只能发动态；把 type 改成 feed 再导入。",
+        )
+    }
+
     if (body.isEmpty() && images.isEmpty()) return TemplateParse.Failed("正文是空的")
     if (images.size > LongPostTemplateSpec.MAX_IMAGES) {
         return TemplateParse.Failed("图片最多 ${LongPostTemplateSpec.MAX_IMAGES} 张，这份模板有 ${images.size} 张")
     }
 
-    val template = LongPostTemplate(title = title, onlySelf = onlySelf, topics = topics, body = body, images = images)
+    val template = LongPostTemplate(
+        title = title,
+        onlySelf = onlySelf,
+        topics = topics,
+        body = body,
+        images = images,
+        postKind = postKind,
+    )
     if (template.charCount > LongPostTemplateSpec.MAX_MESSAGE) {
         warnings += "正文 ${template.charCount} 字，超过 ${LongPostTemplateSpec.MAX_MESSAGE} 字上限，发布会被拒绝"
     }
