@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// Same credential sources as the Flutter Android project: environment first, then key.properties.
+// Signing credentials: environment first, then key.properties.
 val keystoreProperties = Properties().apply {
     rootProject.file("key.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
 }
@@ -27,7 +27,7 @@ android {
     buildToolsVersion = "37.0.0"
 
     defaultConfig {
-        // Installs beside the Flutter package until the Compose app reaches feature parity.
+        // Keep this applicationId stable: changing it breaks in-place upgrades and local data.
         applicationId = "app.awavenue.c001apk.coui"
         minSdk = 23
         targetSdk = 37

@@ -7,9 +7,10 @@
 **轻量、简体中文的非官方酷安客户端**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-607D8B?style=flat-square)](LICENSE)
-[![Flutter](https://img.shields.io/badge/Flutter-3.24.5-02569B?style=flat-square&logo=flutter&logoColor=white)](docs/DEVELOPMENT.md)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](docs/DEVELOPMENT.md)
+[![Jetpack Compose](https://img.shields.io/badge/-Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](docs/DEVELOPMENT.md)
 [![Build](https://github.com/Costben/c001apk/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Costben/c001apk/actions/workflows/build.yml)
-![Platforms](https://img.shields.io/badge/平台-Android%20%7C%20Windows-486B78?style=flat-square)
+![Platforms](https://img.shields.io/badge/平台-Android-486B78?style=flat-square)
 ![Status](https://img.shields.io/badge/状态-持续维护中-6E8B74?style=flat-square)
 
 [下载](https://github.com/Costben/c001apk/releases) · [反馈问题](https://github.com/Costben/c001apk/issues) · [参与开发](docs/DEVELOPMENT.md)
@@ -18,7 +19,7 @@
 
 ## 关于
 
-基于 [c001apk-flutter](https://github.com/bggRGjQaUbCoE/c001apk-flutter) 继续维护，修复 API、完善中文体验，让日常浏览保持轻巧。
+Fork 自 [c001apk-flutter](https://github.com/bggRGjQaUbCoE/c001apk-flutter) 的 Compose 分支，并在其基础上继续维护：修复 API、完善中文体验，让日常浏览保持轻巧。客户端使用 Kotlin / Jetpack Compose，界面采用 [coui17](https://github.com/Costben/coui17) ColorOS 风格组件库。
 
 <table align="center">
   <thead>
@@ -47,7 +48,7 @@
   </tbody>
 </table>
 
-## 界面预览（2026-10-20，Android 2.0.2 / Windows 1.2.5）
+## 界面预览（2026-10-20，Android 2.0.2）
 
 <p align="center">
   <img src="docs/media/screenshots/android-home-2.0.2.avif" width="44%" alt="Android 首页：搜索胶囊、分类标签与动态信息流">
@@ -61,16 +62,6 @@
 </p>
 <p align="center"><sub>Android · 搜索与筛选 / 设置</sub></p>
 
-<p align="center">
-  <img src="docs/media/screenshots/windows-home-1.2.5.avif" width="96%" alt="Windows 桌面端首页：侧边导航与宽屏内容区域">
-</p>
-<p align="center"><sub>Windows · 桌面端首页（Flutter 1.2.5）</sub></p>
-
-<p align="center">
-  <img src="docs/media/screenshots/windows-settings-1.2.5.avif" width="96%" alt="Windows 分类设置：宽窗口下并排显示分类与外观选项">
-</p>
-<p align="center"><sub>Windows · 分类设置与宽窗口布局（Flutter 1.2.5）</sub></p>
-
 ## 下载安装
 
 正式安装包可从 [Releases](https://github.com/Costben/c001apk/releases) 获取，也可以参照 [开发指南](docs/DEVELOPMENT.md) 自行构建。
@@ -80,21 +71,20 @@
 ## 开发进度
 
 - [x] 更新公共 API 请求协议、签名与错误处理。
-- [x] 完成现有 Flutter 界面的一轮简体中文汉化。
+- [x] 完成一轮简体中文汉化。
 - [x] 恢复主要游客浏览流程，为部分受限动态、文章提供公开详情回退。
 - [x] 基本修复账号登录与状态管理，补齐验证码交互。
 - [x] 本地关注与悄悄关注、多账号管理及游客模式切换。
 - [x] 主导航与分类设置调整，新增 c001apk 自身更新检测。
 - [x] 修复评论完成验证后仍无法加载，更新检测改为每次冷启动检查一次。
 - [ ] 继续完善验证码放行与部分账号操作。
-- [x] Android 迁移到 Kotlin / Jetpack Compose，采用 [coui17](https://github.com/Costben/coui17) ColorOS 风格组件库：主导航、信息流、详情与回复、搜索与筛选、用户 / 应用 / 话题 / 酷图、浏览历史与设置均已接通，见 [开发指南](docs/DEVELOPMENT.md#android-compose-应用)。
-- [x] Android Compose 版补齐搜索内容类型与排序筛选、级联三点菜单、浏览历史原位展开、楼主置顶回复与缩略图加载修复。
-- [ ] 完善 Flutter 桌面端随窗口尺寸变化的自适应布局与图片保存。
+- [x] 客户端基于 Kotlin / Jetpack Compose 实现，采用 [coui17](https://github.com/Costben/coui17) ColorOS 风格组件库：主导航、信息流、详情与回复、搜索与筛选、用户 / 应用 / 话题 / 酷图、浏览历史与设置均已接通，见 [开发指南](docs/DEVELOPMENT.md)。
+- [x] 补齐搜索内容类型与排序筛选、级联三点菜单、浏览历史原位展开、楼主置顶回复与缩略图加载修复。
 
-当前重点维护 **Android 与 Windows**。Android 端已迁移到 Kotlin / Jetpack Compose，界面使用 coui17，包名为 `app.awavenue.c001apk.coui`；Windows 桌面端仍使用 Flutter。Linux 已通过云端 release 构建，iOS `arm64` 未签名 IPA 已随 [1.2.6-release](https://github.com/TG-Twilight/c001apk/releases/tag/1.2.6-release) 提供，安装前需自行签名。Linux / iOS 运行体验仍待验收。新包与旧包独立安装，登录及本地数据不会自动迁移。
+当前只维护 **Android**。客户端使用 Kotlin / Jetpack Compose，界面使用 coui17，包名为 `app.awavenue.c001apk.coui`，最低支持 Android 6.0（API 23），targetSdk 37。
 
 > [!NOTE]
-> 部分内容仍受登录、验证码和服务端接口限制，验证码放行与部分账号操作仍需继续完善。Windows 暂不支持应用内直接保存图片，可在浏览器中打开后保存。
+> 部分内容仍受登录、验证码和服务端接口限制，验证码放行与部分账号操作仍需继续完善。
 
 ## 参与与致谢
 

@@ -16,11 +16,10 @@ Compose 端（`apps/android/app/src/main/assets/emojis/`）直接复用同一批
 提交 `d44c471fb38fa600d28fa33b5dd7fcfd6abb7197` 的
 `ui/notification/NoticeViewModel.kt`、`logic/network/ApiService.kt`，
 该项目同样采用 AGPL-3.0（见本项目保留的根 LICENSE）。
-Flutter 状态管理、失败重试及会话刷新协调在本项目实现。
+状态管理、失败重试及会话刷新协调在本项目独立实现。
 
-`apps/flutter/lib/utils/token_util.dart` 中的 Token V3 兼容实现及
-`apps/flutter/lib/utils/token_v3_data.dart` 中的协议查找表（Compose 版移植为
-`apps/android/app/src/main/kotlin/app/awavenue/c001apk/data/TokenUtils.kt` 与 `TokenV3Data.kt`）参考自
+`apps/android/app/src/main/kotlin/app/awavenue/c001apk/data/TokenUtils.kt` 中的 Token V3 兼容实现及
+`TokenV3Data.kt` 中的协议查找表参考自
 [daimiaopeng/coolapk-desktop](https://github.com/daimiaopeng/coolapk-desktop)，
 来源提交 `3ef2ad4da6d171e118d2b29b0f18d7ffa6da9086`，文件
 `src-tauri/src/coolapk/auth.rs` 与 `auth_blob.b64`，采用日期 2026-10-14。
@@ -33,16 +32,16 @@ Flutter 状态管理、失败重试及会话刷新协调在本项目实现。
 
 2026-10-14，游客动态详情的官方分享页 JSON 请求方式参考同一提交的
 `src-tauri/src/coolapk/client.rs`（`fetch_external_page` 中的公开动态请求）。
-本项目独立实现 Flutter 请求和回退逻辑，并实测补齐该页面需要的客户端
+本项目独立实现该请求与回退逻辑，并实测补齐该页面需要的客户端
 签名头；上述 MIT 许可证及版权声明同样适用于这一协议调研来源。
 
-`apps/flutter/test/fixtures/token_v3.json` 为合成设备与固定时间的测试签名，使用独立
+`TokenUtilsTest` 中的 Token V3 测试签名为合成设备与固定时间，使用独立
 Node bcryptjs 实现生成，不含真实设备、账号凭据或用户 Token。
 
-2026-10-14，`captcha_challenge.dart`、`captcha_page.dart` 的验证码配置解析、
+2026-10-14，`network/CaptchaChallenge.kt`、`ui/feed/detail/CaptchaScreen.kt` 的验证码配置解析、
 `NEC` 验证凭证格式，以及点赞/回复的表单参数参考上述同一提交的
 `src/utils/neteaseCaptcha.ts` 与 `src-tauri/src/coolapk/client.rs`，适用上述 MIT 声明。
-Flutter 验证界面独立实现，运行时加载网易易盾官方 Web SDK，不把 SDK 打包到源码中。
+验证界面独立实现，运行时加载网易易盾官方 Web SDK，不把 SDK 打包到源码中。
 
 2026-10-16，空 `captchaField` 对应 `validate` Cookie 的协议语义经官方
 Android 16.6.4（2609291）客户端与游客只读响应对照核实。本项目独立实现
@@ -61,12 +60,12 @@ SDK 接入回调另核对 [网易易盾官方示例](https://github.com/yidun/ca
 提交 `868580c3edbe13f874583a3139b1f4d116d4cc0f` 的
 `lib/pages/setting/view.dart`、`lib/pages/setting/widgets/normal_item.dart`、
 `lib/utils/theme_utils.dart` 与账号管理相关实现。
-Flutter 页面和酷安多账号会话逻辑在本项目独立实现，沿用既有依赖及存储结构；
+页面与酷安多账号会话逻辑在本项目独立实现，沿用既有依赖及存储结构；
 参考项目的 GPL-3.0 许可证见上述链接。
 
-2026-10-15，c001apk 自身更新弹窗的更新说明、关闭提醒与分平台下载入口
+2026-10-15，c001apk 自身更新弹窗的更新说明、关闭提醒与下载入口
 参考同一项目提交 `d529e0a2d90a2a3a04ef9847e6c14187852ea6ee` 的
-`lib/utils/update.dart`。本项目独立实现语义版本比较、24 小时限频、跳过版本、
+`lib/utils/update.dart`。本项目独立实现语义版本比较、冷启动检测频率、跳过版本、
 独立网络请求及设置持久化；没有采用参考实现按构建时间判断版本的方式。
 参考项目的 GPL-3.0 许可证见上述链接。
 

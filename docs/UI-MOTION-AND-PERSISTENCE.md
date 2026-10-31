@@ -1,15 +1,13 @@
 # c001apk Compose 端页面过渡、底栏与内容持久化
 
 本文面向“在另一个 Android Compose 项目里复刻 c001apk”的场景，只描述 `apps/android`
-（Compose 主线，2.0.2）的真实实现。`apps/flutter` 是 GetX 旧端，仅在行为对照处标注。
+（Compose 主线，2.0.2）的真实实现。
 
 先说结论，避免按错误前提移植：
 
 - Compose 端没有使用 Navigation Compose，返回栈是 `SnapshotStateList<BackStackEntry>`。
-- Compose 端没有 GetX，没有 `Get.toNamed`，没有 `Transition.native`。
-- Compose 端没有 Hero，没有 `flightShuttleBuilder`。共享元素由 `ExpandOrigin` +
-  `ExpandFrame` 手工实现。
-- Compose 端没有 Hive，也没有信息流磁盘缓存。信息流只存在 ViewModel 的内存里。
+- 共享元素由 `ExpandOrigin` + `ExpandFrame` 手工实现，没有 Hero 式的转场框架。
+- 没有数据库，也没有信息流磁盘缓存。信息流只存在 ViewModel 的内存里。
 - 动态详情是“从被点卡片展开整页”，设置页是“整页从右滑入”，两者不是同一条过渡。
 
 关键文件：
@@ -117,10 +115,6 @@ suspend fun feedDetail(id: String, verify: Boolean = false): FeedDetail
   没有 `origin`，所以走整页滑入。
 - 浏览历史预览行：`ui/message/MessageScreen.kt:542` 传 `rememberExpandOrigin(0.dp, ...)`，
   圆角为 0，因为那一行本身是透明行。
-
-旧端对照：`apps/flutter/lib/components/cards/feed_card.dart:37` 是
-`Get.toNamed('/feed/${data.id}')`；`apps/flutter/lib/router/app_pages.dart:38` 统一设置
-`transition: Transition.native`。这不是 Compose 端的实现。
 
 ## 1.2 过渡选择状态机
 
@@ -459,7 +453,7 @@ fun ExpandFrame(
 
 没有 Hero，没有 tag，没有 `flightShuttleBuilder`。对应关系：
 
-| Flutter Hero 概念 | 本仓库实现 |
+| 共享元素概念 | 本仓库实现 |
 | --- | --- |
 | Hero tag | 不需要字符串 tag；`ExpandOrigin` 对象随 `Route.Feed` 一起入栈，按对象身份关联 |
 | flightShuttleBuilder | `ExpandFrame` 的 `graphicsLayer` + `drawWithContent` |
@@ -703,9 +697,6 @@ fun SettingsScreen() {
     )
 }
 ```
-
-旧端对照：Flutter 端在 `apps/flutter/lib/router/app_pages.dart` 注册 `/settings`，同样走
-`Transition.native`。Compose 端没有 `Get.toNamed`。
 
 ## 2.2 与动态详情的差异
 
@@ -1243,28 +1234,17 @@ BottomFloatingNavigationBar {
 
 # 四、内容持久化
 
-## 4.1 结论：没有 Hive，没有信息流磁盘缓存
+## 4.1 结论：没有数据库，没有信息流磁盘缓存
 
 Compose 端：
 
-- 没有 Hive，没有 Room，没有 SQLite，没有 DataStore。
+- 没有 Room，没有 SQLite，没有 DataStore。
 - 信息流、详情、评论、用户主页、搜索、消息列表都没有磁盘缓存。
 - 唯一的“缓存”是 ViewModel 内存状态和 `CoolapkRepository` 里 60 秒的详情缓存。
 - 持久化只用 `SharedPreferences`，存设置、收藏、历史、搜索历史、黑名单、会话、账号。
 
-`grep` 结果可以确认：`apps/android/app/src/main/kotlin` 下没有 `Hive`、`Room`、`SQLite`、
+`grep` 结果可以确认：`apps/android/app/src/main/kotlin` 下没有 `Room`、`SQLite`、
 `DataStore`。只有 Coil 的图片磁盘缓存和 `SharedPreferences`。
-
-旧端对照：Flutter 端确实用 Hive，但也没有信息流缓存。Hive box 只有：
-
-```dart
-// apps/flutter/lib/utils/storage_util.dart:128-132
-searchHistory = await Hive.openBox('searchHistory');
-historyFeed = await Hive.openBox('historyFeed');
-favFeed = await Hive.openBox('favFeed');
-blackList = await Hive.openBox('blackList');
-settings = await Hive.openBox('settings');
-```
 
 ## 4.2 信息流的生命周期
 
@@ -1441,18 +1421,6 @@ private const val FeedDetailTtlMillis = 60_000L
 - `verify = true` 时绕过缓存（`feedDetail` 里 `if (!verify) cachedDetail(...)`）。
 - 超过 32 条时先清理过期项，仍然超限就整体清空。
 
-旧端 Hive 对照：
-
-| box | key | 内容 |
-| --- | --- | --- |
-| `searchHistory` | `searchHistory` | 搜索关键词列表，最多 20 条（`search_page_controller.dart:17,26`） |
-| `historyFeed` | 动态 id | 浏览历史动态 JSON（`feed_controller.dart:137`） |
-| `favFeed` | 动态 id | 本地收藏动态 JSON（`feed_controller.dart:145`） |
-| `blackList` | `userBlackList` / `topicBlackList` | 屏蔽列表（`storage_util.dart:80,86`） |
-| `settings` | `SettingsBoxKey` 各键 | 设置项 |
-
-旧端同样没有信息流、详情、评论的 Hive 缓存，也没有 TTL。
-
 ## 4.5 滚动位置、当前 tab、已加载页数
 
 | 状态 | 是否持久化 | 存储方式 | 恢复方式 |
@@ -1518,7 +1486,7 @@ private var page = 1
 仓库没有这套实现。要加的话，最小改动点如下，不要改现有刷新语义：
 
 1. 在 `FeedListViewModel` 构造参数里加一个 `FeedCache` 接口，不要让 ViewModel 直接依赖
-   Hive/Room。
+   Room 之类的存储实现。
 2. `init` 先读快照，读到就先设 `items` / `status = Content`，再发网络请求；网络成功后覆盖。
 3. `load(isRefresh = true)` 成功后写快照；失败不写，保留旧快照。
 4. key 必须包含 `uid + tab/category`，例如 `home-Feed-<uid>`、`follow-User-<uid>`。
@@ -1722,4 +1690,3 @@ val labelLineHeight = 13.6.dp
 | 收藏/历史 | `data/HistoryStore.kt` | 73-75, 105-140 |
 | 搜索历史 | `data/SearchHistoryStore.kt` | 14, 31-37 |
 | 路由保存状态 | `ui/nav/AppNavHost.kt` | 340-392 |
-| 旧端 Hive | `apps/flutter/lib/utils/storage_util.dart` | 128-132 |
