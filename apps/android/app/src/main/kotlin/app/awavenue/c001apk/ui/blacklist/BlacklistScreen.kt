@@ -34,6 +34,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
@@ -110,7 +111,11 @@ fun BlacklistScreen(type: BlacklistType) {
         }.onSuccess { context.toast("导入成功") }.onFailure { context.toast("导入失败") }
     }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // A page revealed under a back gesture is a preview of the page the pop will land on, not the
+    // page the user is on: it must not take focus and pull the keyboard up over the gesture.
+    val preview = LocalRouteTransition.current?.preview == true
+
+    LaunchedEffect(Unit) { if (!preview) focusRequester.requestFocus() }
 
     Scaffold(
         edgeToEdge = true,

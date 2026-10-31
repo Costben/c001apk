@@ -36,6 +36,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -128,8 +129,12 @@ fun LoginScreen(onDone: () -> Unit) {
         }
     }
 
+    // A page revealed under a back gesture is a preview of the page the pop will land on, not the
+    // page the user is on: it must not take focus and pull the keyboard up over the gesture.
+    val preview = LocalRouteTransition.current?.preview == true
+
     LaunchedEffect(Unit) {
-        accountFocus.requestFocus()
+        if (!preview) accountFocus.requestFocus()
     }
 
     LaunchedEffect(app.session.generation) {

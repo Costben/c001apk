@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Card
@@ -58,6 +59,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
+    // True when this page was composed only to be revealed under a back gesture: a preview of the
+    // page the pop will land on, not the page the user is on, so it must not open the keyboard.
+    // Constant for this instance: the field clears its text when it collapses, so this cannot be
+    // something that changes while the page lives.
+    val preview = LocalRouteTransition.current?.preview == true
     var keyword by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
     val history = app.searchHistory.keywords
@@ -95,7 +101,7 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
                         query = keyword,
                         onQueryChange = { keyword = it },
                         onSearch = { submit(keyword.trim()) },
-                        expanded = true,
+                        expanded = !preview,
                         onExpandedChange = { },
                         label = if (title.isNotEmpty()) "在 $title 中搜索" else "搜索",
                         modifier = Modifier.fillMaxWidth(),

@@ -669,7 +669,7 @@ private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
 @Composable
 private fun ComposedRevealedRoute(entry: BackStackEntry) {
     val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
-    val settled = remember { RouteTransition(progress = SettledGesture, exiting = { false }) }
+    val settled = remember { RouteTransition(progress = SettledGesture, exiting = { false }, preview = true) }
     CompositionLocalProvider(
         LocalViewModelStoreOwner provides entry,
         LocalSaveableStateRegistry provides saveableState,
