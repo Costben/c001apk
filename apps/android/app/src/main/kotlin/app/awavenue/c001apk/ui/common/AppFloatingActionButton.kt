@@ -5,6 +5,7 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -84,6 +85,7 @@ fun AppFloatingActionButton(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
     backdrop: Backdrop? = LocalBackdrop.current,
+    onLongClick: (() -> Unit)? = null,
 ) {
     // The bar's own spring, response 0.55 / bounce 0.35.
     val melt = remember { Animatable(0f) }
@@ -161,9 +163,14 @@ fun AppFloatingActionButton(
                 translationX = leanX
                 translationY = leanY
             }
-            .pointerInput(Unit) {
+            .pointerInput(onLongClick) {
                 val maxLeanPx = MaxLean.toPx()
                 val maxStretchPx = MaxStretch.toPx()
+                val deadZonePx = if (onLongClick != null) {
+                    max(DeadZonePx, viewConfiguration.touchSlop)
+                } else {
+                    DeadZonePx
+                }
                 awaitPointerEventScope {
                     while (true) {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -175,7 +182,7 @@ fun AppFloatingActionButton(
                             if (change.changedToUpIgnoreConsumed()) break
                             val dx = change.position.x - start.x
                             val dy = change.position.y - start.y
-                            if (!dragging && (abs(dx) >= DeadZonePx || abs(dy) >= DeadZonePx)) {
+                            if (!dragging && (abs(dx) >= deadZonePx || abs(dy) >= deadZonePx)) {
                                 dragging = true
                             }
                             if (dragging) {
@@ -258,11 +265,23 @@ fun AppFloatingActionButton(
             modifier = Modifier
                 .fillMaxSize()
                 .semantics { this.contentDescription = label }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    role = Role.Button,
-                    onClick = onClick,
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onClick,
+                            onLongClick = onLongClick,
+                        )
+                    } else {
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onClick,
+                        )
+                    },
                 ),
         )
     }

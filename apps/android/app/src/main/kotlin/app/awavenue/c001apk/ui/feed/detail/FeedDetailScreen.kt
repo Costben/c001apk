@@ -28,6 +28,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -35,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,6 +104,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private val CardPadding = 12.dp
 
@@ -119,6 +123,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     val backdrop = rememberGlassBackdrop()
     val scrollBehavior = rememberPageScrollBehavior("feed-detail")
     val listState = rememberPageListState("feed-detail")
+    val scope = rememberCoroutineScope()
 
     var menuOpen by remember { mutableStateOf(false) }
     var collectionsOpen by remember { mutableStateOf(false) }
@@ -258,18 +263,34 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
             }
         },
         floatingActionButton = {
+            val haptic = LocalHapticFeedback.current
             AppFloatingActionButton(
-                visible = app.session.isLogin && viewModel.feed != null && fabVisible,
+                visible = viewModel.feed != null && fabVisible,
                 backdrop = backdrop,
                 onClick = {
-                    replyTarget = ReplyTarget(
-                        id = viewModel.id,
-                        type = "feed",
-                        targetType = "",
-                        targetId = "",
-                        title = viewModel.feedUsername,
-                        feedType = "feed",
-                    )
+                    if (app.session.isLogin) {
+                        replyTarget = ReplyTarget(
+                            id = viewModel.id,
+                            type = "feed",
+                            targetType = "",
+                            targetId = "",
+                            title = viewModel.feedUsername,
+                            feedType = "feed",
+                        )
+                    } else {
+                        context.toast("请先登录后回复")
+                    }
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val header = if (viewModel.articles.isEmpty()) 1 else viewModel.articles.size + 2
+                    scope.launch {
+                        listState.animateScrollToItem(header)
+                        val viewportHeight = listState.layoutInfo.viewportSize.height
+                        if (viewportHeight > 0) {
+                            scrollBehavior.state.contentOffset = -viewportHeight.toFloat()
+                        }
+                    }
                 },
                 icon = COUIIcons.Reply,
                 contentDescription = "回复",
