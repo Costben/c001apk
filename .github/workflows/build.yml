@@ -47,11 +47,11 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
-          cmdline-tools-version: '12266719'
+          cmdline-tools-version: '16111833' # 23.0; older tools cannot see API 37 packages
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools'
       - name: Install Android SDK packages
-        run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0'
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
       - name: Build debug APK
@@ -90,11 +90,11 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
-          cmdline-tools-version: '12266719'
+          cmdline-tools-version: '16111833' # 23.0; older tools cannot see API 37 packages
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools'
       - name: Install Android SDK packages
-        run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0'
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Restore and verify release keystore
         env:
           KEYSTORE: ${{ runner.temp }}/c001apk-signing/release.jks
