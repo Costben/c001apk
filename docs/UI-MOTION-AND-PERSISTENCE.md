@@ -1498,9 +1498,80 @@ private var page = 1
 
 ---
 
-# 五、验收清单
+# 五、发布面板：跟着键盘走的面板高度
 
-## 5.1 构建与安装
+`ReplyComposerSheet` 是唯一一个“高度由键盘决定”的界面。它的问题不是动画没做，而是
+**有一段几何量在收尾那一帧才变**，于是看起来像“先回落、再闪现长高”。
+
+## 5.1 面板怎么跟键盘
+
+- 面板是 `OverlayBottomSheet`，贴窗口底边；`insideMargin = DpSize(16.dp, bottomGap)` 里的
+  `bottomGap` 就是内容（发布胶囊）与面板底边之间的留白。
+- 库在 sheet 的 `Column` 上加了 `imePadding()`，所以键盘起来时整块面板骑在键盘上方，
+  面板底边 = 窗口底边 − IME 高度。
+- 编辑区高度不写死：`BoxWithConstraints` 拿到 sheet 剩下的高度，减掉图片行、表情面板、
+  工具行和发布胶囊，得到 `editorMax`，卡片再 `heightIn(max = editorMax)`。键盘越高卡片越矮，
+  最低 `MinEditorHeight = 88dp`（再低就没法打字了）。
+
+## 5.2 收尾跳变：12dp / 40dp 不能瞬间切
+
+原实现是：
+
+```kotlin
+val bottomGap = if (keyboard > 0.dp) KeyboardBottomInset else BottomInset  // 12dp / 40dp
+```
+
+`keyboard` 是 `WindowInsets.ime` 的当前值，键盘收起时它会逐帧掉到 0，所以这个 `if` 会在
+**最后一帧**翻转：面板的回落已经结束、`imePadding` 已经是 0，才把留白从 12dp 换成 40dp，
+整块面板连同编辑卡片、发布胶囊在同一帧里向上跳 28dp。
+
+实测（1240×2772，620dpi，即 3.875px/dp；微信输入法，键盘高 322dp）：
+
+| 帧 | 面板顶边 y | 编辑卡片高 | 发布胶囊顶 y |
+| --- | --- | --- | --- |
+| 键盘在（静止） | 140 | 96.0dp | 1318 |
+| 回落中 | 307 → 442 → 489 | 87 → 113dp | 2372 → 2508 → 2554 |
+| 落定后约 100ms | **381（−108px = −28dp）** | 114.3dp | **2446（−108px）** |
+
+回落本身是逐帧连续的（4 帧走完 349px），只有最后那一跳是离散的。观感就是“先回落到底、
+过一会儿闪现展开”。
+
+修法：让 `bottomGap` 变成 IME inset 的**连续函数**，在键盘行程的最后 80dp 里从 40dp 插值到
+12dp。这样面板的脚在整个回落过程里一直在动，没有“落定后补一帧”的机会。
+
+```kotlin
+val keyboardGapProgress = (keyboard / ComposerPanel.KeyboardGapRange).coerceIn(0f, 1f)
+val bottomGap = ComposerPanel.BottomInset +
+    (ComposerPanel.KeyboardBottomInset - ComposerPanel.BottomInset) * keyboardGapProgress
+```
+
+键盘完全收起时 `keyboard = 0`，留白正好是 40dp；键盘完全起来时大于 80dp，留白正好是 12dp。
+中间那 80dp 是过渡区，和键盘自己的动画同帧推进。
+
+## 5.3 为什么不用 animateDpAsState
+
+试过用 `animateDpAsState` 把 12/40 的切换补成动画，但它是在键盘**已经收完**之后才开始跑，
+问题从“跳变”变成“落定之后再长高”，还是两段；而且曲线和 IME 的动画对不齐，中途会看到
+面板和键盘脱节。绑到 inset 上，时序天然一致。
+
+同理，编辑卡片的高度不需要额外补动画：它由约束驱动，约束由 IME inset 逐帧驱动，本来就是
+连续的（上表里 87 → 113 → 114.3dp 就是逐帧长出来的）。
+
+## 5.4 怎么量
+
+1. `adb shell screenrecord --time-limit 5 /sdcard/rec.mp4`，操作触发过渡，然后 `adb pull`。
+2. `ffmpeg -i rec.mp4 -vsync 0 f/%03d.png` 拆帧。
+3. 用 PIL 按行扫描：面板表面（x 1050 附近）亮度 239/240，编辑卡片是纯白 253，发布胶囊是
+   蓝色（R<130、B>170）。打印每帧的 `panelTop / cardTop / cardHeight / capTop` 和逐帧 Δ。
+4. 判据：所有 Δ 应该分散在多帧上，任何一帧都不该出现 ≈28dp（108px）的单帧位移。
+
+坑：卡片和面板表面都是“白”，阈值不分开会量到面板背景，卡片高度会算成整个面板。
+
+---
+
+# 六、验收清单
+
+## 6.1 构建与安装
 
 按本仓库约定，165 设备只装 release 包，且必须非增量安装：
 
@@ -1522,7 +1593,7 @@ adb -s 192.168.31.165:5555 shell "pm path app.awavenue.c001apk.coui"
 
 `pm path` 的路径若落在 `incremental-fs` 挂载点下，必须用 `--no-incremental` 重装。
 
-## 5.2 逐项测量
+## 6.2 逐项测量
 
 ### 动态详情
 
@@ -1585,7 +1656,7 @@ adb -s 192.168.31.165:5555 shell "pm path app.awavenue.c001apk.coui"
 | 杀进程再启动 | 信息流重新请求；当前 tab 恢复；滚动位置不恢复 |
 | 账号切换 | 旧 ViewModelStore 清空，新账号重新请求 |
 
-## 5.3 常见坑
+## 6.3 常见坑
 
 1. **不要把 `ExpandFrame` 换成 `AnimatedContent` 的 `scaleIn`。**
    `scaleIn` 默认以中心为锚点，而且不会把卡片边界、圆角、遮罩和页面 alpha 串起来。
@@ -1639,6 +1710,12 @@ private const val SnapshotSettleMillis = 220L
 // 卡片圆角
 val cardCornerRadius = 17.dp
 
+// 发布面板
+val composerBottomInset = 40.dp          // 面板内容离窗口底边
+val composerKeyboardBottomInset = 12.dp  // 骑在键盘上时
+val composerKeyboardGapRange = 80.dp     // 上面两个值在这段键盘行程里插值
+val composerMinEditorHeight = 88.dp
+
 // 底栏
 val barHeight = 56.dp
 val barMinHeight = 88.dp
@@ -1678,6 +1755,8 @@ val labelLineHeight = 13.6.dp
 | 设置入口 | `ui/message/MessageScreen.kt` | 235 |
 | 设置宿主 | `ui/nav/AppNavHost.kt` | 580 |
 | 设置页 | `ui/settings/SettingsScreen.kt` | 113 |
+| 发布面板：留白插值 | `ui/feed/reply/ReplyComposerSheet.kt` | 378-390 |
+| 发布面板：几何常量 | `ui/feed/reply/ReplyComposerSheet.kt` | 684-790 |
 | 底栏调用 | `ui/main/MainScreen.kt` | 210-288 |
 | Tab 切换 | `ui/main/MainScreen.kt` | 73-75, 136-145 |
 | 首页 padding | `ui/home/HomeScreen.kt` | 461 |

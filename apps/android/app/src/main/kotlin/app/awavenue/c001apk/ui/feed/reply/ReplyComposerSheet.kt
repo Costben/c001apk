@@ -379,7 +379,13 @@ fun ReplyComposerSheet(
     val keyboard = with(density) { WindowInsets.ime.getBottom(density).toDp() }
     // The panel runs to the window edge and pads itself clear of the gesture bar; sitting on the
     // IME, the same gap would read as dead space, so it shrinks to the native keyboard spacing.
-    val bottomGap = if (keyboard > 0.dp) ComposerPanel.KeyboardBottomInset else ComposerPanel.BottomInset
+    // The two gaps are blended over the last stretch of the keyboard's travel instead of switched
+    // the moment the IME reaches zero. A switch lands on a frame of its own — the keyboard's inset
+    // has already finished animating by then, so the panel used to fall to the bottom and only
+    // then jump 28dp taller, reading as a flash instead of a grow.
+    val keyboardGapProgress = (keyboard / ComposerPanel.KeyboardGapRange).coerceIn(0f, 1f)
+    val bottomGap = ComposerPanel.BottomInset +
+        (ComposerPanel.KeyboardBottomInset - ComposerPanel.BottomInset) * keyboardGapProgress
 
     OverlayBottomSheet(
         show = shown,
@@ -696,6 +702,13 @@ private object ComposerPanel {
 
     /** The same gap while the sheet sits on the keyboard, where 40dp would read as dead space. */
     val KeyboardBottomInset = 12.dp
+
+    /**
+     * How much of the keyboard's travel the foot gap spends easing from [BottomInset] to
+     * [KeyboardBottomInset]. The gap is a continuous function of the IME inset, so the panel's
+     * foot keeps moving while the keyboard leaves instead of settling first and growing after.
+     */
+    val KeyboardGapRange = 80.dp
 
     /** Height of the close capsule and the overflow circle: 155px. */
     val ToolbarButtonHeight = 40.dp
