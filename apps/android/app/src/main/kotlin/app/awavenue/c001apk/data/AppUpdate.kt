@@ -105,17 +105,17 @@ class AppRelease private constructor(
 
     /**
      * Finds the direct download URL for an APK asset in this release, if one exists.
-     * Prefers device ABI, then universal APK matching either `c001apk-coui-*` or `c001apk-*`,
-     * and falls back to any APK asset attached to this release.
+     * Prefers the device ABI, then a universal APK. Only `c001apk-coui-*` assets are ours: an
+     * asset named `c001apk-*` belongs to the legacy Flutter package, which is a different app.
      */
     fun apkDownloadUrl(abis: List<String>): String? {
         val version = Regex.escape(version.toString())
         val patterns = abis.filter { it in SUPPORTED_ABIS }.map { "-android-${Regex.escape(it)}" } + ""
         for (suffix in patterns) {
-            val pattern = Regex("^(c001apk-coui|c001apk)-$version(?:\\+\\d+)?$suffix\\.apk$")
+            val pattern = Regex("^c001apk-coui-$version(?:\\+\\d+)?$suffix\\.apk$")
             assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
         }
-        return assets.entries.firstOrNull { it.key.endsWith(".apk", ignoreCase = true) }?.value
+        return null
     }
 
     companion object {
