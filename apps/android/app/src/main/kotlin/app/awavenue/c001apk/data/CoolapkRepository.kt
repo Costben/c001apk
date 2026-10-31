@@ -466,11 +466,7 @@ class CoolapkRepository(
     }
 
     suspend fun createFeed(fields: List<Pair<String, String>>, files: List<FilePart>): ActionResult {
-        // The server expects status to be 1 and a derived publish_status, as the Flutter client sends.
-        val normalized = fields.toMap().toMutableMap().apply {
-            putIfAbsent("publish_status", if (get("status") == "-1") "1" else "0")
-            put("status", "1")
-        }.toList()
+        val normalized = normalizeFeedFields(fields)
         val response = api.post(
             Api.FEED_CREATE,
             body = if (files.isEmpty()) Body.Form(normalized) else Body.Multipart(normalized, files),
@@ -662,3 +658,15 @@ class CoolapkRepository(
 
 /** How long a feed body stays reusable for a quick re-entry. */
 private const val FeedDetailTtlMillis = 60_000L
+
+/**
+ * Fills the publish form's two visibility fields the way the official client expects them: the
+ * review `status` stays "1", and 谁可以看 travels in `publish_status` ("1" only me, "0" public).
+ * The composer sends the scope as `status` = "-1", which is what the older clients did.
+ */
+internal fun normalizeFeedFields(fields: List<Pair<String, String>>): List<Pair<String, String>> {
+    val map = fields.toMap().toMutableMap()
+    map.putIfAbsent("publish_status", if (map["status"] == "-1") "1" else "0")
+    map["status"] = "1"
+    return map.toList()
+}

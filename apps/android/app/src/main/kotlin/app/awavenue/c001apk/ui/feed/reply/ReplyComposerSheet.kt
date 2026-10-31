@@ -104,9 +104,13 @@ import io.github.suqi8.coui.kmp.basic.materialShadowEdge
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Close
+import io.github.suqi8.coui.kmp.icon.extended.Community
+import io.github.suqi8.coui.kmp.icon.extended.Lock
+import io.github.suqi8.coui.kmp.icon.extended.Ok
 import io.github.suqi8.coui.kmp.icon.extended.Photos
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -169,6 +173,8 @@ fun ReplyComposerSheet(
     var onlySelf by remember { mutableStateOf(draft?.onlySelf == true) }
     var emojiPanel by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    // 谁可以看 is asked in a dialog over the panel, the way the reference client does it.
+    var visibilityMenu by remember { mutableStateOf(false) }
     var images by remember {
         mutableStateOf(
             draft?.images.orEmpty().map { image ->
@@ -257,6 +263,20 @@ fun ReplyComposerSheet(
     fun discardDraft() {
         askSave = false
         leave(onDismiss)
+    }
+
+    /** 谁可以看 opens with the keyboard out of the way; picking a scope puts the caret back. */
+    fun openVisibility() {
+        input.clearFocus()
+        focusManager.clearFocus()
+        visibilityMenu = true
+    }
+
+    /** Keeps the scope, closes the dialog and returns to the field. */
+    fun pickVisibility(selfOnly: Boolean) {
+        onlySelf = selfOnly
+        visibilityMenu = false
+        input.focus()
     }
 
     suspend fun publish() {
@@ -512,28 +532,62 @@ fun ReplyComposerSheet(
                 }
             }
             Spacer(Modifier.weight(1f))
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .clickable { onlySelf = !onlySelf }
-                    .padding(start = 4.dp, end = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
-                    onClick = null,
-                )
-                Spacer(Modifier.width(2.dp))
-                Text(
-                    if (activeTarget.id.isEmpty()) "仅自己可见" else "回复并转发",
-                    style = COUITheme.textStyles.body2,
-                    color = if (onlySelf) {
-                        COUITheme.colorScheme.onSurface
-                    } else {
-                        COUITheme.colorScheme.onSurfaceVariantSummary
-                    },
-                    maxLines = 1,
-                )
+            if (activeTarget.id.isEmpty()) {
+                // 谁可以看: the official publish form's visibility, shown as the current scope so the
+                // choice is visible without opening the sheet.
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { openVisibility() }
+                        .padding(start = 8.dp, end = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (onlySelf) COUIIcons.Lock else COUIIcons.Community,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = if (onlySelf) {
+                            COUITheme.colorScheme.onSurface
+                        } else {
+                            COUITheme.colorScheme.onSurfaceVariantSummary
+                        },
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (onlySelf) "仅自己可见" else "所有人可见",
+                        style = COUITheme.textStyles.body2,
+                        color = if (onlySelf) {
+                            COUITheme.colorScheme.onSurface
+                        } else {
+                            COUITheme.colorScheme.onSurfaceVariantSummary
+                        },
+                        maxLines = 1,
+                    )
+                }
+            } else {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { onlySelf = !onlySelf }
+                        .padding(start = 4.dp, end = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
+                        onClick = null,
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        "回复并转发",
+                        style = COUITheme.textStyles.body2,
+                        color = if (onlySelf) {
+                            COUITheme.colorScheme.onSurface
+                        } else {
+                            COUITheme.colorScheme.onSurfaceVariantSummary
+                        },
+                        maxLines = 1,
+                    )
+                }
             }
         }
         Spacer(Modifier.height(ComposerPanel.ActionGap))
@@ -558,6 +612,19 @@ fun ReplyComposerSheet(
         onConfirm = { saveToDrafts() },
     ) {
         BackHandler(enabled = askSave) { discardDraft() }
+    }
+
+    // 谁可以看: the publish form's visibility, asked as a dialog over the panel. Only a fresh feed
+    // has it; a reply carries 回复并转发 in the same corner instead.
+    if (visibilityMenu) {
+        VisibilityDialog(
+            onlySelf = onlySelf,
+            onPick = { pickVisibility(it) },
+            onDismiss = {
+                visibilityMenu = false
+                input.focus()
+            },
+        )
     }
 
     OverlayLoadingDialog(show = progress != null, text = progress)
@@ -1003,3 +1070,60 @@ private fun CaptchaDialog(
 }
 
 
+/**
+ * 谁可以看: the two scopes the official publish form accepts. `publish_status` is derived from the
+ * picked scope in the repository, so the sheet only carries the choice.
+ */
+@OptIn(ExperimentalCOUIApi::class)
+@Composable
+private fun VisibilityDialog(
+    onlySelf: Boolean,
+    onPick: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    OverlayDialog(show = true, title = "谁可以看", onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            VisibilityOption(
+                icon = COUIIcons.Community,
+                title = "所有人",
+                selected = !onlySelf,
+                onClick = { onPick(false) },
+            )
+            VisibilityOption(
+                icon = COUIIcons.Lock,
+                title = "仅自己",
+                selected = onlySelf,
+                onClick = { onPick(true) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun VisibilityOption(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(title, Modifier.weight(1f), style = COUITheme.textStyles.body1)
+        if (selected) {
+            Icon(
+                COUIIcons.Ok,
+                contentDescription = "已选择",
+                modifier = Modifier.size(20.dp),
+                tint = COUITheme.colorScheme.primary,
+            )
+        }
+    }
+}

@@ -101,6 +101,13 @@ class Entity(val json: JsonObject) {
     val collectionInfo get() = obj("collectionInfo")
     val status get() = string("status")
 
+    /**
+     * The official visibility of a feed: `"1"` means only the author can see it, `"0"` is public.
+     * It is independent of [status], which is the review state.
+     */
+    val publishStatus get() = string("publishStatus").ifEmpty { string("publish_status") }
+    val isSelfOnly get() = publishStatus == "1"
+
     override fun equals(other: Any?) = other is Entity && other.json == json
     override fun hashCode() = json.hashCode()
     override fun toString() = json.toString()

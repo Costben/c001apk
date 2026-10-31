@@ -35,4 +35,26 @@ class CoolapkRepositoryTest {
         assertEquals("7", ActionResult("", replyLike).count)
         assertEquals("", ActionResult("", null).count)
     }
+
+    @Test
+    fun mapsVisibilityScopeIntoPublishStatus() {
+        // 仅自己可见: the composer marks the scope on status, the form carries publish_status.
+        val selfOnly = normalizeFeedFields(listOf("message" to "正文", "status" to "-1")).toMap()
+        assertEquals("1", selfOnly["status"])
+        assertEquals("1", selfOnly["publish_status"])
+
+        val public = normalizeFeedFields(listOf("message" to "正文", "status" to "1")).toMap()
+        assertEquals("1", public["status"])
+        assertEquals("0", public["publish_status"])
+
+        val untouched = normalizeFeedFields(listOf("message" to "正文")).toMap()
+        assertEquals("0", untouched["publish_status"])
+    }
+
+    @Test
+    fun keepsAnExplicitPublishStatus() {
+        val fields = normalizeFeedFields(listOf("status" to "-1", "publish_status" to "0")).toMap()
+        assertEquals("0", fields["publish_status"])
+        assertEquals("1", fields["status"])
+    }
 }

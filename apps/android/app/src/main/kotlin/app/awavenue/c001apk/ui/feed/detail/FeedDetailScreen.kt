@@ -642,6 +642,7 @@ private fun FeedAuthorRow(feed: Entity, showDate: Boolean) {
             Text(feed.username, style = COUITheme.textStyles.body1.copy(fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val info = listOfNotNull(
                 fromToday(feed.dateline).takeIf { showDate && it.isNotEmpty() },
+                "仅自己可见".takeIf { feed.isSelfOnly },
                 stripHtml(feed.infoHtml).takeIf { it.isNotEmpty() },
                 stripHtml(feed.deviceTitle).takeIf { it.isNotEmpty() },
             )

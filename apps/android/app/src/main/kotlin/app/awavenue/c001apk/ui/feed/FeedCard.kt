@@ -537,13 +537,18 @@ private fun InsetBlock(
 @Composable
 private fun FeedFooter(feed: Entity, liked: Boolean, likeNum: String, onLike: (() -> Unit)?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            fromToday(feed.dateline),
-            modifier = Modifier.weight(1f),
-            style = COUITheme.textStyles.footnote1,
-            color = COUITheme.colorScheme.onSurfaceVariantSummary,
-            maxLines = 1,
-        )
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                fromToday(feed.dateline),
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+            )
+            if (feed.isSelfOnly) {
+                Spacer(Modifier.width(6.dp))
+                SelfOnlyBadge()
+            }
+        }
         if (feed.replyNum.isNotEmpty()) {
             CounterButton(AppIcons.ChatBubbleOutlined, feed.replyNum, highlighted = false, onClick = null)
         }
