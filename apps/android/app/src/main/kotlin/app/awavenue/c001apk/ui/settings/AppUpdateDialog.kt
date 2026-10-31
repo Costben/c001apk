@@ -202,7 +202,7 @@ fun UpdateDialog(
                     DialogButtonBar(
                         negative = DialogButtonBarAction(text = "稍后", onClick = { show = false }),
                         positive = DialogButtonBarAction(
-                            text = if (inAppUpdate) "应用内更新" else "下载更新",
+                            text = if (inAppUpdate) "开始更新" else "下载更新",
                             recommended = true,
                             onClick = {
                                 if (inAppUpdate) {
@@ -231,10 +231,13 @@ fun UpdateDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            val downloadedStr = InAppUpdater.formatBytes(state.downloadedBytes)
-                            val totalStr = if (state.totalBytes > 0) InAppUpdater.formatBytes(state.totalBytes) else "未知大小"
                             Text(
-                                "正在下载 $downloadedStr / $totalStr",
+                                if (state.totalBytes > 0) {
+                                    "正在下载 ${InAppUpdater.formatBytes(state.downloadedBytes)} / " +
+                                        InAppUpdater.formatBytes(state.totalBytes)
+                                } else {
+                                    "正在连接下载服务器…"
+                                },
                                 fontSize = 13.sp,
                                 color = COUITheme.colorScheme.onBackgroundVariant,
                             )
@@ -350,6 +353,11 @@ fun AppUpdateDialog(update: UpdateResult.Available, onDismiss: () -> Unit) {
     fun startDownload() {
         val targetUrl = apkUrl ?: return
         downloadJob?.cancel()
+        // Switch the panel to the progress layout on the click, not on the first byte: DNS, TLS and
+        // GitHub's redirect take a few hundred milliseconds, and while that ran the panel kept
+        // showing the two buttons, which read as the tap not having landed. The bar is indeterminate
+        // until a content length arrives.
+        downloadState = InAppUpdateState.Downloading(progress = -1f, downloadedBytes = 0, totalBytes = 0)
         downloadJob = scope.launch {
             InAppUpdater.downloadApk(
                 context = context,

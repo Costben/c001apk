@@ -105,15 +105,22 @@ class AppRelease private constructor(
 
     /**
      * Finds the direct download URL for an APK asset in this release, if one exists.
-     * Prefers the device ABI, then a universal APK. Only `c001apk-coui-*` assets are ours: an
-     * asset named `c001apk-*` belongs to the legacy Flutter package, which is a different app.
+     * Prefers the device ABI, then a universal APK.
+     *
+     * Two names are ours: the CI builds `c001apk-coui-<version>.apk`, but the release is published
+     * under `c001apk-<version>.apk`. Only the first used to be accepted, so every published release
+     * looked like it had no APK at all and in-app update silently fell back to the browser. Both are
+     * matched now, the CI's name first. An APK that turns out to belong to another app is caught
+     * when it is opened, not here.
      */
     fun apkDownloadUrl(abis: List<String>): String? {
         val version = Regex.escape(version.toString())
-        val patterns = abis.filter { it in SUPPORTED_ABIS }.map { "-android-${Regex.escape(it)}" } + ""
-        for (suffix in patterns) {
-            val pattern = Regex("^c001apk-coui-$version(?:\\+\\d+)?$suffix\\.apk$")
-            assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
+        val suffixes = abis.filter { it in SUPPORTED_ABIS }.map { "-android-${Regex.escape(it)}" } + ""
+        for (prefix in APK_PREFIXES) {
+            for (suffix in suffixes) {
+                val pattern = Regex("^$prefix-$version(?:\\+\\d+)?$suffix\\.apk$")
+                assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
+            }
         }
         return null
     }
@@ -121,6 +128,9 @@ class AppRelease private constructor(
     companion object {
         private const val REPOSITORY = "/${Protocol.REPOSITORY}/releases/"
         private val SUPPORTED_ABIS = setOf("arm64-v8a", "armeabi-v7a", "x86_64")
+
+        /** Asset name prefixes this app publishes under, most specific first. */
+        private val APK_PREFIXES = listOf("c001apk-coui", "c001apk")
         private val json = Json { ignoreUnknownKeys = true }
 
         private fun trusted(url: HttpUrl, prefix: String): Boolean =

@@ -188,6 +188,8 @@ private fun AppUpdateCard(
     val scope = rememberCoroutineScope()
     var expanded by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf<String?>(null) }
+    // Asking the API for the file takes a round trip; the button says so instead of looking dead.
+    var resolving by remember { mutableStateOf(false) }
 
     val packageName = app.string("packageName")
     val versionName = app.string("apkversionname")
@@ -235,20 +237,27 @@ private fun AppUpdateCard(
                         )
                     }
                     TextButton(
-                        text = "下载",
+                        text = if (resolving) "获取中…" else "下载",
+                        enabled = !resolving,
                         onClick = {
+                            if (resolving) return@TextButton
+                            resolving = true
                             scope.launch {
-                                val target = url ?: repository.appDownloadUrl(
-                                    packageName = packageName,
-                                    id = app.id.toIntOrNull() ?: 0,
-                                    versionCode = versionCode.toIntOrNull() ?: 0,
-                                )
-                                if (target.isNullOrEmpty()) {
-                                    context.toast("无法获取下载链接，请稍后重试")
-                                    return@launch
+                                try {
+                                    val target = url ?: repository.appDownloadUrl(
+                                        packageName = packageName,
+                                        id = app.id.toIntOrNull() ?: 0,
+                                        versionCode = versionCode.toIntOrNull() ?: 0,
+                                    )
+                                    if (target.isNullOrEmpty()) {
+                                        context.toast("无法获取下载链接，请稍后重试")
+                                        return@launch
+                                    }
+                                    url = target
+                                    download(target, "${app.title}-$versionName-$versionCode.apk")
+                                } finally {
+                                    resolving = false
                                 }
-                                url = target
-                                download(target, "${app.title}-$versionName-$versionCode.apk")
                             }
                         },
                     )

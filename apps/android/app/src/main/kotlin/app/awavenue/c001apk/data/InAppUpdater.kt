@@ -48,10 +48,7 @@ object InAppUpdater {
 
         // Reuse if already complete and valid
         if (apkFile.exists() && apkFile.length() > 1024 * 1024) {
-            val archive = runCatching {
-                context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
-            }.getOrNull()
-            if (archive != null) {
+            if (isThisApp(context, apkFile)) {
                 onProgress(InAppUpdateState.ReadyToInstall(apkFile))
                 return@withContext apkFile
             } else {
@@ -60,6 +57,10 @@ object InAppUpdater {
         }
 
         try {
+            // The UI already switched to the progress layout when the button was pressed; this
+            // second one covers the retry path, which starts from the error card.
+            onProgress(InAppUpdateState.Downloading(progress = -1f, downloadedBytes = 0, totalBytes = 0))
+
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", "c001apk-updater")
@@ -121,6 +122,16 @@ object InAppUpdater {
                 onProgress(InAppUpdateState.Error("下载的安装包校验失败，请重试"))
                 return@withContext null
             }
+            // The release publishes its APK under a name that used to belong to the legacy Flutter
+            // build, so the file is checked to be this very app before it is offered to the installer.
+            val archivePackage = archive.packageName.ifEmpty {
+                archive.applicationInfo?.packageName.orEmpty()
+            }
+            if (archivePackage.isNotEmpty() && archivePackage != context.packageName) {
+                apkFile.delete()
+                onProgress(InAppUpdateState.Error("下载到的不是这个应用的安装包，已停止"))
+                return@withContext null
+            }
 
             onProgress(InAppUpdateState.ReadyToInstall(apkFile))
             apkFile
@@ -132,6 +143,22 @@ object InAppUpdater {
             onProgress(InAppUpdateState.Error("下载出错：${e.message ?: "网络异常"}"))
             null
         }
+    }
+
+    /**
+     * True when [file] parses as an APK of this very app.
+     *
+     * The release publishes its APK under `c001apk-<version>.apk`, a name the legacy Flutter build
+     * also used, so a file is only offered to the installer once it says it is this package. A
+     * missing package name is let through: that means the parser could not read it, and the install
+     * itself will refuse.
+     */
+    private fun isThisApp(context: Context, file: File): Boolean {
+        val archive = runCatching {
+            context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+        }.getOrNull() ?: return false
+        val packageName = archive.packageName.ifEmpty { archive.applicationInfo?.packageName.orEmpty() }
+        return packageName.isEmpty() || packageName == context.packageName
     }
 
     /**

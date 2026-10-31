@@ -140,6 +140,9 @@ fun ApkScreen(packageName: String) {
     var menu by remember { mutableStateOf(false) }
     var compose by remember { mutableStateOf(false) }
     var downloadUrl by remember(packageName) { mutableStateOf<String?>(null) }
+    // The header's 下载 has to answer the tap before the download URL is in hand: resolving it is a
+    // request of its own and can take a second. Flip this synchronously and label the button.
+    var resolving by remember(packageName) { mutableStateOf(false) }
 
     LaunchedEffect(packageName) {
         localApp = withContext(Dispatchers.IO) { installedApp(context, packageName) }
@@ -210,20 +213,26 @@ fun ApkScreen(packageName: String) {
     }
 
     fun onDownloadClick() {
+        if (resolving) return
         val versionName = detail?.string("apkversionname").orEmpty()
         val versionCode = detail?.string("apkversioncode").orEmpty()
+        resolving = true
         scope.launch {
-            val url = downloadUrl ?: app.repository.appDownloadUrl(
-                packageName = packageName,
-                id = id.toIntOrNull() ?: 0,
-                versionCode = versionCode.toIntOrNull() ?: 0,
-            )
-            if (url.isNullOrEmpty()) {
-                context.toast("无法获取下载链接，请稍后重试")
-                return@launch
+            try {
+                val url = downloadUrl ?: app.repository.appDownloadUrl(
+                    packageName = packageName,
+                    id = id.toIntOrNull() ?: 0,
+                    versionCode = versionCode.toIntOrNull() ?: 0,
+                )
+                if (url.isNullOrEmpty()) {
+                    context.toast("无法获取下载链接，请稍后重试")
+                    return@launch
+                }
+                downloadUrl = url
+                download(url, "$appName-$versionName-$versionCode.apk")
+            } finally {
+                resolving = false
             }
-            downloadUrl = url
-            download(url, "$appName-$versionName-$versionCode.apk")
         }
     }
 
@@ -360,6 +369,7 @@ fun ApkScreen(packageName: String) {
                         item(contentType = "header") {
                             ApkHeader(
                                 app = current,
+                                downloading = resolving,
                                 onOpenIcon = rememberHapticClick {
                                     navigator.push(Route.ImageView(listOf(current.logo)))
                                 },
@@ -540,7 +550,7 @@ private fun LocalApkFallback(
 }
 
 @Composable
-private fun ApkHeader(app: Entity, onOpenIcon: () -> Unit, onDownload: () -> Unit) {
+private fun ApkHeader(app: Entity, downloading: Boolean, onOpenIcon: () -> Unit, onDownload: () -> Unit) {
     Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
@@ -583,7 +593,11 @@ private fun ApkHeader(app: Entity, onOpenIcon: () -> Unit, onDownload: () -> Uni
                         )
                     }
                     if (app.entityType == "apk") {
-                        TextButton(text = "下载", onClick = onDownload)
+                        TextButton(
+                            text = if (downloading) "获取中…" else "下载",
+                            enabled = !downloading,
+                            onClick = onDownload,
+                        )
                     }
                 }
             }
