@@ -441,7 +441,7 @@ fun ReplyComposerSheet(
             )
         }
         Spacer(Modifier.height(ComposerPanel.StatusGap))
-        StatusLine(text = "${input.text.length}/500")
+        StatusLine(text = "${input.text.length}/${ComposerPanel.MaxMessage}")
         Spacer(Modifier.height(ComposerPanel.StatusToBodyGap))
         // The sheet hands the content whatever is left once its toolbar is in, so the field is
         // capped by that leftover instead of by a guess about the window: with the keyboard up the
@@ -469,7 +469,7 @@ fun ReplyComposerSheet(
                     state = input,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     hint = "说点什么…",
-                    maxCount = 500,
+                    maxCount = ComposerPanel.MaxMessage,
                     minLines = 4,
                     maxLines = 6,
                     textStyle = COUITheme.textStyles.body1,
@@ -682,6 +682,13 @@ private suspend fun loadCaptchaImage(
  * action, closing on a 40dp bottom inset.
  */
 private object ComposerPanel {
+    /**
+     * The field's ceiling. The old form stopped at 500, but the server takes much longer bodies —
+     * an 1832-character feed posts fine — so the sheet allows a long post and the template importer
+     * writes into it.
+     */
+    const val MaxMessage = 2000
+
     val SideInset = 16.dp
 
     /** Inset between the capsule action and the window bottom: 155px. */

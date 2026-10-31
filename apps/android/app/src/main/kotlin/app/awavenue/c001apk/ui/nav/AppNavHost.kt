@@ -76,6 +76,7 @@ import app.awavenue.c001apk.ui.feed.detail.Reply2ReplyScreen
 import app.awavenue.c001apk.ui.feed.detail.WebScreen
 import app.awavenue.c001apk.ui.ffflist.FFFListScreen
 import app.awavenue.c001apk.ui.drafts.DraftsScreen
+import app.awavenue.c001apk.ui.drafts.TemplateImportScreen
 import app.awavenue.c001apk.ui.follow.LocalFollowListScreen
 import app.awavenue.c001apk.ui.history.HistoryScreen
 import app.awavenue.c001apk.ui.image.ImageOrigins
@@ -780,6 +781,7 @@ private fun RouteHost(route: Route) {
         Route.Accounts -> AccountsScreen()
         Route.LocalFollowList -> LocalFollowListScreen()
         Route.Drafts -> DraftsScreen()
+        Route.TemplateImport -> TemplateImportScreen()
         is Route.Feed -> FeedDetailScreen(id = route.id, preview = route.preview, replyId = route.replyId)
         is Route.Reply2Reply -> Reply2ReplyScreen(
             id = route.id,

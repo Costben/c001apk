@@ -60,6 +60,7 @@ import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.Delete
+import io.github.suqi8.coui.kmp.icon.extended.Download
 import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -104,6 +105,9 @@ fun DraftsScreen() {
                         }
                     },
                     actions = {
+                        TopBarIconButton(onClick = { navigator.push(Route.TemplateImport) }) {
+                            Icon(COUIIcons.Download, contentDescription = "导入模板")
+                        }
                         if (drafts.isNotEmpty()) {
                             TopBarIconButton(onClick = { confirmClear = true }) {
                                 Icon(COUIIcons.Delete, contentDescription = "清除全部")
