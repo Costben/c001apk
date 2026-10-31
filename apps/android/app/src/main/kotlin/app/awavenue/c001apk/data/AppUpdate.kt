@@ -109,28 +109,33 @@ class AppRelease private constructor(
      *
      * Two names are ours: the CI builds `c001apk-coui-<version>.apk`, but the release is published
      * under `c001apk-<version>.apk`. Only the first used to be accepted, so every published release
-     * looked like it had no APK at all and in-app update silently fell back to the browser. Both are
-     * matched now, the CI's name first. An APK that turns out to belong to another app is caught
-     * when it is opened, not here.
+     * looked like it had no APK at all and in-app update silently fell back to the browser.
+     *
+     * The published name is trusted for the universal file only. `c001apk-<version>-android-<abi>.apk`
+     * is what the legacy Flutter build shipped, and that is a different app; a file that turns out to
+     * belong to another app is caught again when it is opened.
      */
     fun apkDownloadUrl(abis: List<String>): String? {
         val version = Regex.escape(version.toString())
+        // CI's own name, the device's ABI ahead of the universal file.
         val suffixes = abis.filter { it in SUPPORTED_ABIS }.map { "-android-${Regex.escape(it)}" } + ""
-        for (prefix in APK_PREFIXES) {
-            for (suffix in suffixes) {
-                val pattern = Regex("^$prefix-$version(?:\\+\\d+)?$suffix\\.apk$")
-                assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
-            }
+        for (suffix in suffixes) {
+            val pattern = Regex("^$CI_PREFIX-$version(?:\\+\\d+)?$suffix\\.apk$")
+            assets.entries.firstOrNull { pattern.matches(it.key) }?.let { return it.value }
         }
-        return null
+        val published = Regex("^$RELEASE_PREFIX-$version(?:\\+\\d+)?\\.apk$")
+        return assets.entries.firstOrNull { published.matches(it.key) }?.value
     }
 
     companion object {
         private const val REPOSITORY = "/${Protocol.REPOSITORY}/releases/"
         private val SUPPORTED_ABIS = setOf("arm64-v8a", "armeabi-v7a", "x86_64")
 
-        /** Asset name prefixes this app publishes under, most specific first. */
-        private val APK_PREFIXES = listOf("c001apk-coui", "c001apk")
+        /** The name CI builds the APK under, ABI splits included. */
+        private const val CI_PREFIX = "c001apk-coui"
+
+        /** The name the same file is published under; universal only, see [apkDownloadUrl]. */
+        private const val RELEASE_PREFIX = "c001apk"
         private val json = Json { ignoreUnknownKeys = true }
 
         private fun trusted(url: HttpUrl, prefix: String): Boolean =

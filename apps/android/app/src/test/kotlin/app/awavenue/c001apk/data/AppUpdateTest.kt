@@ -130,7 +130,8 @@ class AppUpdateTest {
         val parsed = AppRelease.fromJson(
             release(
                 listOf(
-                    // The Flutter client's APK is a different app.
+                    // The Flutter client's APK is a different app: it is the only build that ships
+                    // ABI-split `c001apk-*` files, so those stay unrecognised.
                     asset("c001apk-2.0.0-android-arm64-v8a.apk"),
                     asset("c001apk-coui-2.0.0.apk", size = 0),
                     asset("c001apk-coui-2.0.0-android-arm64-v8a.apk", state = "new"),
@@ -140,6 +141,34 @@ class AppUpdateTest {
             ),
         )
         assertEquals("$base/tag/$tag", parsed.downloadFor(listOf("arm64-v8a", "x86_64", "armeabi-v7a")))
+    }
+
+    @Test
+    fun picksThePublishedUniversalApk() {
+        // What the release actually ships: the CI's universal file, renamed to `c001apk-<version>`.
+        val parsed = AppRelease.fromJson(
+            release(
+                listOf(asset("c001apk-2.0.0.apk", url = "$base/download/$tag/c001apk-2.0.0.apk")),
+            ),
+        )
+        assertEquals("$base/download/$tag/c001apk-2.0.0.apk", parsed.downloadFor(listOf("arm64-v8a")))
+        assertEquals("$base/download/$tag/c001apk-2.0.0.apk", parsed.downloadFor(emptyList()))
+    }
+
+    @Test
+    fun ciNameWinsOverThePublishedName() {
+        val parsed = AppRelease.fromJson(
+            release(
+                listOf(
+                    asset("c001apk-2.0.0.apk"),
+                    asset("c001apk-coui-2.0.0-android-arm64-v8a.apk"),
+                ),
+            ),
+        )
+        assertEquals(
+            "$base/download/$tag/c001apk-coui-2.0.0-android-arm64-v8a.apk",
+            parsed.downloadFor(listOf("arm64-v8a")),
+        )
     }
 
     @Test
