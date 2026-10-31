@@ -81,6 +81,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
+import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.OssUploadModel
@@ -117,6 +118,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 /**
@@ -192,6 +194,9 @@ fun ReplyComposerSheet(
     var publishing by remember { mutableStateOf(false) }
     var captchaImage by remember { mutableStateOf<ByteArray?>(null) }
     var captchaCode by remember { mutableStateOf("") }
+    // 导入草稿箱内容: the list, then — only when there is something to lose — the overwrite question.
+    var pickingDraft by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<Draft?>(null) }
 
     val hint = when {
         activeTarget.id.isNotEmpty() -> "回复: ${activeTarget.title}"
@@ -210,8 +215,8 @@ fun ReplyComposerSheet(
     val pickImages = rememberImagePicker(
         onLoading = { progress = it },
         onPicked = { picked ->
-            val room = 9 - images.size
-            if (picked.size > room) context.toast("最多选择9张图片")
+            val room = ComposerBudget.Images - images.size
+            if (picked.size > room) context.toast("最多选择${ComposerBudget.Images}张图片")
             images = images + picked.take(room)
         },
     )
@@ -340,6 +345,33 @@ fun ReplyComposerSheet(
         }
     }
 
+    /**
+     * 导入草稿箱内容: the draft's words and pictures replace what is in the field, and the target is
+     * left alone — the point of the entry is to carry a composition written somewhere else (a reply
+     * to someone, a topic post) onto the page the sheet is open on now. Whatever the budget has to
+     * cut is said out loud instead of dropped quietly.
+     */
+    fun importDraft(draft: Draft) {
+        if (draft.text.isBlank() && draft.images.isEmpty()) {
+            context.toast("这条草稿是空的")
+            return
+        }
+        val text = draft.text.take(ComposerBudget.Message)
+        val pictures = draft.images.take(ComposerBudget.Images)
+        input.replace(text)
+        images = pictures.map { SelectedImage(it.path, OssUploadModel(it.name, it.resolution, it.md5)) }
+        val cut = buildList {
+            if (draft.text.length > text.length) {
+                add("正文超过 ${ComposerBudget.Message} 字，已截到 ${text.length} 字")
+            }
+            if (draft.images.size > pictures.size) {
+                add("图片超过 ${ComposerBudget.Images} 张，只带前 ${pictures.size} 张")
+            }
+        }
+        context.toast(if (cut.isEmpty()) "已导入草稿" else "已导入草稿：${cut.joinToString("；")}")
+        input.focus()
+    }
+
     fun saveToDrafts() {
         if (savingDraft) return
         savingDraft = true
@@ -403,6 +435,18 @@ fun ReplyComposerSheet(
                     show = menuOpen,
                     onDismissRequest = { menuOpen = false },
                     entries = listOf(
+                        // 导入草稿箱内容: any page can pull a composition written elsewhere onto
+                        // itself. Only the words and the pictures travel — the target stays this
+                        // sheet's, which is the whole reason the entry exists.
+                        "导入草稿箱内容" to {
+                            if (app.drafts.drafts.isEmpty()) {
+                                context.toast("草稿箱是空的")
+                            } else {
+                                input.clearFocus()
+                                focusManager.clearFocus()
+                                pickingDraft = true
+                            }
+                        },
                         // An untouched sheet has nothing worth filing; the box would just collect
                         // blanks, so the entry says so instead.
                         "保存到草稿箱" to {
@@ -633,6 +677,44 @@ fun ReplyComposerSheet(
         )
     }
 
+    // 导入草稿箱内容: the list, then the overwrite question only when the field already holds work.
+    if (pickingDraft) {
+        DraftPickerDialog(
+            drafts = app.drafts.drafts,
+            onPick = { picked ->
+                pickingDraft = false
+                if (input.text.isNotBlank() || images.isNotEmpty()) {
+                    pendingImport = picked
+                } else {
+                    importDraft(picked)
+                }
+            },
+            onDismiss = {
+                pickingDraft = false
+                input.focus()
+            },
+        )
+    }
+
+    pendingImport?.let { picked ->
+        OverlayAlertDialog(
+            buttonColors = appDialogButtonColors(),
+            show = true,
+            title = "覆盖当前内容？",
+            summary = "发布框里的文字和图片会被这条草稿替换。",
+            cancelText = "取消",
+            confirmText = "覆盖",
+            onCancel = {
+                pendingImport = null
+                input.focus()
+            },
+            onConfirm = {
+                pendingImport = null
+                importDraft(picked)
+            },
+        )
+    }
+
     OverlayLoadingDialog(show = progress != null, text = progress)
 
 
@@ -687,6 +769,21 @@ private suspend fun loadCaptchaImage(
  * overflow circle, a 28sp title, a 12sp status line, the body, one tool row and a 44dp capsule
  * action, closing on a 40dp bottom inset.
  */
+/**
+ * How much of a draft the sheet will take.
+ *
+ * This client has one composer for everything: a feed and a reply both send `message` and `pic` to
+ * the same form, the field filters at [ComposerPanel.MaxMessage] characters, and the picture row
+ * stops at nine — the same nine the upload endpoint takes. The website's publish form used to stop
+ * at 500 characters, but that was the feed form and the API accepts longer bodies (an 1832-character
+ * feed posts fine), so a draft is trimmed to the composer's own ceiling rather than to a guess about
+ * a stricter reply limit. If the server does refuse a reply for length, its own message is shown.
+ */
+private object ComposerBudget {
+    const val Message = ComposerPanel.MaxMessage
+    const val Images = 9
+}
+
 private object ComposerPanel {
     /**
      * The field's ceiling. The old form stopped at 500, but the server takes much longer bodies —
@@ -1143,6 +1240,76 @@ private fun VisibilityOption(
                 contentDescription = "已选择",
                 modifier = Modifier.size(20.dp),
                 tint = COUITheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+/**
+ * 导入草稿箱内容: the draft box as a list to pick from.
+ *
+ * Each row says where the draft was written, because importing is deliberately about leaving that
+ * place: the words and pictures come over, the target does not. The newest draft is at the top, so
+ * the one just put aside is the one under the finger.
+ */
+@OptIn(ExperimentalCOUIApi::class)
+@Composable
+private fun DraftPickerDialog(
+    drafts: List<Draft>,
+    onPick: (Draft) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    OverlayDialog(show = true, title = "导入草稿箱内容", onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            drafts.forEach { draft ->
+                DraftPickerRow(draft = draft, onClick = { onPick(draft) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DraftPickerRow(draft: Draft, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (draft.images.isNotEmpty()) {
+            AsyncImage(
+                model = File(draft.images.first().path),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                draft.preview,
+                style = COUITheme.textStyles.body2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                buildString {
+                    append(draft.label)
+                    if (draft.images.isNotEmpty()) append(" · ${draft.images.size} 张图")
+                    append(" · ${fromToday(draft.updatedAt / 1000)}")
+                },
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

@@ -60,6 +60,18 @@ class EmojiInputState internal constructor(initialText: String) {
         edit.setSelection((start + code.length).coerceAtMost(editable.length))
     }
 
+    /**
+     * Replaces the whole buffer, caret at the end. The draft import writes into a field that is
+     * already open and already holding someone else's text, so this goes through the view rather
+     * than only the state: the `[emoji]` codes in the incoming text have to be re-spanned.
+     */
+    fun replace(replacement: String) {
+        text = replacement
+        val edit = editText ?: return
+        edit.setText(replacement)
+        edit.setSelection(edit.text.length)
+    }
+
     fun focus() {
         val edit = editText ?: return
         edit.requestFocus()
