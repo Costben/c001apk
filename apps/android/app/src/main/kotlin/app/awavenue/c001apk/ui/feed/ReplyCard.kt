@@ -43,9 +43,11 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.CounterButton
+import app.awavenue.c001apk.ui.common.DeleteConfirmationDialog
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
+import app.awavenue.c001apk.ui.common.rememberDeleteConfirmation
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
@@ -111,6 +113,8 @@ fun ReplyCard(
     val isFeedReply = reply.string("fetchType") == "feed_reply"
     val isContainer = !isFeedReply || (isReply2Reply && !isTopReply)
     var panelOpen by remember { mutableStateOf(false) }
+    // The menu sits under a reply that may be long; deleting it by accident is not recoverable.
+    val deleteConfirm = rememberDeleteConfirmation()
 
     Box(
         modifier
@@ -211,7 +215,11 @@ fun ReplyCard(
                     isOwn = reply.uid.isNotEmpty() && reply.uid == app.session.uid,
                     onCopy = { navigator.push(Route.Copy(reply.message)) },
                     onBlock = { onBlock?.invoke(reply.uid, null) },
-                    onDelete = { onDelete?.invoke(reply.id, null) },
+                    onDelete = {
+                        deleteConfirm.ask(if (isReply2Reply) "回复" else "评论") {
+                            onDelete?.invoke(reply.id, null)
+                        }
+                    },
                     onReport = { navigator.push(Route.Web(Protocol.reportLink(reply.id, isReply = true))) },
                     onShowReplies = { onShowReplies?.invoke(reply) },
                     isPinned = isTopReply,
@@ -220,6 +228,8 @@ fun ReplyCard(
             )
         }
     }
+
+    DeleteConfirmationDialog(deleteConfirm)
 }
 
 private fun replyMenuEntries(
@@ -254,6 +264,8 @@ private fun NestedReplies(
     val session = LocalApp.current.session
     // By id: the nested rows are read afresh on every pass, so the same reply is a new object each time.
     var panelFor by remember { mutableStateOf<String?>(null) }
+    // One prompt for the whole strip: only one nested row's menu is open at a time anyway.
+    val deleteConfirm = rememberDeleteConfirmation()
     Column(
         Modifier
             .fillMaxWidth()
@@ -284,7 +296,9 @@ private fun NestedReplies(
                         isOwn = nested.uid.isNotEmpty() && nested.uid == session.uid,
                         onCopy = { navigator.push(Route.Copy(nested.message)) },
                         onBlock = { onBlock?.invoke(nested.uid, reply.id) },
-                        onDelete = { onDelete?.invoke(nested.id, reply.id) },
+                        onDelete = {
+                            deleteConfirm.ask("回复") { onDelete?.invoke(nested.id, reply.id) }
+                        },
                         onReport = { navigator.push(Route.Web(Protocol.reportLink(nested.id, isReply = true))) },
                         onShowReplies = { onShowReplies?.invoke(nested) },
                     ),
@@ -306,6 +320,8 @@ private fun NestedReplies(
             }
         }
     }
+
+    DeleteConfirmationDialog(deleteConfirm)
 }
 
 /**

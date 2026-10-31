@@ -45,12 +45,14 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.CounterButton
+import app.awavenue.c001apk.ui.common.DeleteConfirmationDialog
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.openCoolapkLink
 import app.awavenue.c001apk.ui.common.openBrowser
+import app.awavenue.c001apk.ui.common.rememberDeleteConfirmation
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -180,6 +182,8 @@ fun FeedCard(
     }
     val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
+    // Deleting is the one entry of the more-menu that cannot be undone, so it asks first.
+    val deleteConfirm = rememberDeleteConfirmation()
 
     val like = FeedActions.like(feed)
     val liked = like?.liked ?: feed.isLiked
@@ -224,22 +228,24 @@ fun FeedCard(
                     },
                     onReport = { navigator.push(Route.Web(Protocol.reportLink(feed.id))) },
                     onDelete = {
-                        if (onDelete != null) {
-                            onDelete()
-                        } else {
-                            scope.launch {
-                                try {
-                                    val result = app.repository.deleteFeed(feed.id)
-                                    if (result.message.isNotEmpty()) {
-                                        context.toast(result.message)
-                                    } else {
-                                        FeedActions.removeFeed(feed.id)
-                                        if (result.count.isNotEmpty()) context.toast(result.count)
+                        deleteConfirm.ask("动态") {
+                            if (onDelete != null) {
+                                onDelete()
+                            } else {
+                                scope.launch {
+                                    try {
+                                        val result = app.repository.deleteFeed(feed.id)
+                                        if (result.message.isNotEmpty()) {
+                                            context.toast(result.message)
+                                        } else {
+                                            FeedActions.removeFeed(feed.id)
+                                            if (result.count.isNotEmpty()) context.toast(result.count)
+                                        }
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        context.toast(ApiFailure.from(e).message)
                                     }
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    context.toast(ApiFailure.from(e).message)
                                 }
                             }
                         }
@@ -335,6 +341,7 @@ fun FeedCard(
         }
     }
 
+    DeleteConfirmationDialog(deleteConfirm)
 }
 
 private fun feedMenuEntries(
