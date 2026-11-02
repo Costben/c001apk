@@ -1,7 +1,10 @@
 package app.awavenue.c001apk.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.graphics.ImageBitmap
@@ -98,10 +101,19 @@ class Navigator {
     val hasOverlay: Boolean get() = stack.size > 1
 
     /**
-     * What back does on the main screen. Returns false when the app should go to the background
-     * instead — the Flutter client sends the app home rather than exiting.
+     * What back does on the main screen. Returns false when there is nothing left for the main
+     * screen to go back to.
      */
     var onMainBack: (() -> Boolean)? = null
+
+    /**
+     * Whether back on the main screen still has something to do there — returning to the 主页 tab.
+     *
+     * When it is false the host stops consuming back at the root, so the system runs its own
+     * predictive "return to home": the window animates out to the launcher. Intercepting that
+     * gesture was what made back look like the app vanishing with no motion at all.
+     */
+    var mainBackAvailable: Boolean by mutableStateOf(false)
 
     /** [origin] is the element the page grows out of, and shrinks back into on pop. */
     fun push(route: Route, origin: ExpandOrigin? = null) {

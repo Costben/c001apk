@@ -177,7 +177,12 @@ fun AppNavHost(
         // list beside it is already in place.
         BackHandler(enabled = paneEntry != null) { navigator.pop() }
 
-        PredictiveBackHandler(enabled = paneEntry == null) { progress ->
+        // At the root with nothing left to do there, stay out of back's way: the system then runs
+        // its own predictive "return to home", and the window shrinks out to the launcher. Taking
+        // the gesture here and backgrounding the task is what made back look like the app simply
+        // vanishing — no preview under the finger, no motion after it.
+        val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
+        PredictiveBackHandler(enabled = paneEntry == null && rootHasWork) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
 
@@ -203,8 +208,9 @@ fun AppNavHost(
             if (navigator.stack.size <= 1) {
                 gestureEntry = null
                 gestureProgress = 1f
-                // Nothing to preview: back either returns the main screen to its first tab or
-                // backgrounds the app, and neither happens until the gesture is released.
+                // Nothing to preview: back returns the main screen to its first tab, and that does
+                // not happen until the gesture is released. The 主页 tab is not this branch — the
+                // handler is off there, so the system owns the gesture.
                 try {
                     progress.collect { }
                 } catch (_: CancellationException) {
@@ -212,6 +218,8 @@ fun AppNavHost(
                 }
                 val justPopped = System.currentTimeMillis() - navigator.lastPopTime < 350L
                 if (!justPopped) {
+                    // The tab switch is the expected path. moveTaskToBack only covers a stale
+                    // registration — the tab changed under a gesture that was already running.
                     if (navigator.onMainBack?.invoke() != true) (context as? Activity)?.moveTaskToBack(true)
                 }
                 return@PredictiveBackHandler

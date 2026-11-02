@@ -648,6 +648,22 @@ val pageFade: () -> Float = remember(fade, entryGesture) {
 
 这段逻辑在 `AppNavHost.kt:149-203`。
 
+## 1.9 根页面：返回交给系统
+
+返回栈只有一页、当前又在「主页」标签时，宿主**不注册**任何返回回调：
+
+```kotlin
+// AppNavHost.kt
+val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
+PredictiveBackHandler(enabled = paneEntry == null && rootHasWork) { progress -> ... }
+```
+
+- `mainBackAvailable` 由 `MainScreen` 每次组合后同步（`SideEffect`）：不在「主页」标签时为 true，返回切回主页；在主页时为 false，宿主把返回让给系统
+- 这条路径原来也被宿主吃掉，手势结束时调 `moveTaskToBack(true)`：手势期间没有预览（回调被应用接管，系统就不画回桌面的动画），松手后任务直接沉到后台。观感是「按一下返回，应用没了」，中间什么都没有
+- 现在回调不注册，系统按默认方式处理：窗口缩成圆角卡片、露出桌面、左缘出现返回箭头，松手后收进图标位。实测（132，Android 16 / ColorOS）：手势停在半途截图能看到缩小的卡片与箭头，松手后 `topResumedActivity` 变成 launcher
+- 代价：这条路径是 `finish()`（系统默认）而不是 `moveTaskToBack`，下次打开是冷启动，标签页靠 `settings.homeTab` 恢复。回桌面动画和进程保活只能二选一，这里选动画
+- `moveTaskToBack` 只留在宿主里的兜底分支：注册时 `mainBackAvailable` 为 true、手势进行中标签被换掉，`onMainBack()` 返回 false 的那种竞态
+
 ---
 
 # 二、设置页：整页从右滑入

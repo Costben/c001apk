@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -210,7 +211,9 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
         }
     }
 
-    // Back returns to the first tab; on it the host backgrounds the app, as upstream does.
+    // Back returns to the first tab. On it there is nothing left for the main screen to do, so the
+    // host lets the system take the gesture and the window animates out to the launcher.
+    SideEffect { navigator.mainBackAvailable = !onHome }
     DisposableEffect(navigator, onHome, pagerState) {
         navigator.onMainBack = {
             if (onHome) {
@@ -220,7 +223,10 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                 true
             }
         }
-        onDispose { navigator.onMainBack = null }
+        onDispose {
+            navigator.onMainBack = null
+            navigator.mainBackAvailable = false
+        }
     }
 
     Scaffold(
