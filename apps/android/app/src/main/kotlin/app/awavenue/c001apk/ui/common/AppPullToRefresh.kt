@@ -23,6 +23,15 @@ private val AppRefreshTexts = FullPagePullToRefreshTexts(
 )
 
 /**
+ * How long 「刷新成功」 stays before the page returns, 260ms against COUI's 800ms.
+ *
+ * The hint is a confirmation, not a state to sit in: by the time it is on screen the content is
+ * already there, so a long hold just makes the last step of every refresh feel like waiting. The
+ * hint crossfades in over half the hold, so it still gets a readable moment at 260ms.
+ */
+private const val COMPLETE_HOLD_MILLIS = 260L
+
+/**
  * The app's pull-to-refresh container: COUI's full-page variant, where the page itself follows the
  * finger and uncovers a full-screen refresh layer instead of growing a ball above the list.
  *
@@ -49,6 +58,7 @@ fun AppPullToRefresh(
         state = rememberFullPagePullToRefreshState(),
         contentPadding = contentPadding,
         topAppBarScrollBehavior = topAppBarScrollBehavior,
+        completeHoldDurationMillis = COMPLETE_HOLD_MILLIS,
         refreshTexts = AppRefreshTexts,
         content = content,
     )
