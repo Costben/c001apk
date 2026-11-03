@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -24,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -40,6 +43,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.chat.MessageRow
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
+import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -64,6 +68,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
@@ -77,10 +82,20 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
+
+private val NotificationCategories = listOf(
+    NotificationType.System to "全部",
+    NotificationType.Comment to "评论",
+    NotificationType.Like to "点赞",
+    NotificationType.At to "@我",
+    NotificationType.Follow to "关注",
+    NotificationType.Message to "私信",
+)
 
 @Composable
 fun NotificationScreen(
-    type: NotificationType,
+    type: NotificationType = NotificationType.System,
     title: String? = null,
     showShortcuts: Boolean = false,
 ) {
@@ -88,19 +103,87 @@ fun NotificationScreen(
     val navigator = LocalNavigator.current
     val scrollBehavior = rememberPageScrollBehavior("notification")
     val backdrop = rememberGlassBackdrop()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         app.unread.refresh()
-        // Opening one list reads only its own counters. The centre keeps its tile badges while it
-        // is open so the user can see what is new, and clears them when it is left.
-        if (!showShortcuts) app.unread.markRead(*type.unreadFields)
     }
-    if (showShortcuts) {
-        DisposableEffect(Unit) {
-            onDispose { app.unread.markAllRead() }
-        }
+    DisposableEffect(Unit) {
+        onDispose { app.unread.markAllRead() }
     }
 
+    val initialIndex = remember(type) {
+        val found = NotificationCategories.indexOfFirst { it.first == type }
+        if (found >= 0) found else 0
+    }
+    val pagerState = rememberPagerState(initialPage = initialIndex) { NotificationCategories.size }
+
+    LaunchedEffect(pagerState.currentPage) {
+        val currentCategory = NotificationCategories[pagerState.currentPage].first
+        app.unread.markRead(*currentCategory.unreadFields)
+    }
+
+    Scaffold(
+        edgeToEdge = true,
+        topBar = {
+            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                SmallTopAppBar(
+                    title = title ?: "消息通知",
+                    gradientGlass = true,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                        }
+                    },
+                    bottomContent = {
+                        TabRowWithContour(
+                            tabs = NotificationCategories.map { (cat, label) ->
+                                val count = app.unread.unread(*cat.unreadFields)
+                                if (count > 0) "$label $count" else label
+                            },
+                            selectedTabIndex = pagerState.currentPage,
+                            onTabSelected = { index ->
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            colors = appTabRowColors(),
+                        )
+                    },
+                )
+            }
+        },
+    ) { innerPadding ->
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().glassSource(backdrop),
+            ) { page ->
+                val categoryType = NotificationCategories[page].first
+                NotificationPage(
+                    type = categoryType,
+                    scrollBehavior = scrollBehavior,
+                    backdrop = backdrop,
+                    contentPadding = PaddingValues(
+                        start = 10.dp,
+                        end = 10.dp,
+                        top = innerPadding.calculateTopPadding() + 10.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 10.dp,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationPage(
+    type: NotificationType,
+    scrollBehavior: ScrollBehavior,
+    backdrop: LayerBackdrop?,
+    contentPadding: PaddingValues,
+) {
+    val app = LocalApp.current
     val viewModel = viewModel(key = "notification-${type.name}") {
         FeedListViewModel(
             PageLoader { page, first, last ->
@@ -109,53 +192,18 @@ fun NotificationScreen(
             app::contentGate,
         )
     }
-
-    Scaffold(
-        edgeToEdge = true,
-        topBar = {
-            CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                SmallTopAppBar(
-                    title = title ?: type.label,
-                    gradientGlass = true,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
-                        TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
-                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                        }
-                    },
-                )
-            }
-        },
-    ) { innerPadding ->
-        CompositionLocalProvider(LocalBackdrop provides backdrop) {
-            NotificationList(
-                viewModel = viewModel,
-                scrollBehavior = scrollBehavior,
-                backdrop = backdrop,
-                leading = if (showShortcuts) {
-                    {
-                        NotificationShortcuts(
-                            unread = { kind -> app.unread.unread(*kind.unreadFields) },
-                        ) { target ->
-                            navigator.push(Route.Notification(target))
-                        }
-                    }
-                } else {
-                    null
-                },
-                contentPadding = PaddingValues(
-                    start = 10.dp,
-                    end = 10.dp,
-                    top = innerPadding.calculateTopPadding() + 10.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 10.dp,
-                ),
-            )
-        }
-    }
+    NotificationList(
+        type = type,
+        viewModel = viewModel,
+        scrollBehavior = scrollBehavior,
+        backdrop = backdrop,
+        contentPadding = contentPadding,
+    )
 }
 
 @Composable
 private fun NotificationList(
+    type: NotificationType,
     viewModel: FeedListViewModel,
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
@@ -164,7 +212,7 @@ private fun NotificationList(
 ) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
-    val listState = rememberPageListState("notification")
+    val listState = rememberPageListState("notification-${type.name}")
     // Reading a conversation drops its unread badge, the way the Flutter list clears it on tap.
     var clearedMessages by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(viewModel.refreshError) {
