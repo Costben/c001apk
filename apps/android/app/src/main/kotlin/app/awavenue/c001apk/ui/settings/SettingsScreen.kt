@@ -70,6 +70,7 @@ import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Back
 import io.github.suqi8.coui.kmp.icon.extended.Background
 import io.github.suqi8.coui.kmp.icon.extended.Blocklist
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -350,6 +351,13 @@ fun SettingsScreen() {
                 item {
                     SmallTitle("交互")
                     Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                        SwitchPreference(
+                            title = "预测性返回手势",
+                            summary = "返回时页面跟随手指并露出下一层；关闭后直接返回",
+                            checked = settings.predictiveBack,
+                            onCheckedChange = settings::updatePredictiveBack,
+                            startAction = { PreferenceStartIcon(COUIIcons.Back) },
+                        )
                         SwitchPreference(
                             title = "点击触感",
                             summary = "点击卡片、按钮时轻微振动",

@@ -70,6 +70,10 @@ class AppSettings(context: Context) {
     var openInBrowser by mutableStateOf(prefs.getBoolean(KEY_OPEN_IN_BROWSER, false))
         private set
 
+    /** Whether back follows the finger and reveals the page underneath. Off keeps a plain pop. */
+    var predictiveBack by mutableStateOf(prefs.getBoolean(KEY_PREDICTIVE_BACK, true))
+        private set
+
     var recordHistory by mutableStateOf(prefs.getBoolean(KEY_RECORD_HISTORY, true))
         private set
 
@@ -165,6 +169,9 @@ class AppSettings(context: Context) {
     fun updateFollowSelection(value: Int) = put { putInt(KEY_FOLLOW_SELECTION, value) }.also { followSelection = value }
 
     fun updateOpenInBrowser(value: Boolean) = put { putBoolean(KEY_OPEN_IN_BROWSER, value) }.also { openInBrowser = value }
+
+    fun updatePredictiveBack(value: Boolean) =
+        put { putBoolean(KEY_PREDICTIVE_BACK, value) }.also { predictiveBack = value }
 
     fun updateRecordHistory(value: Boolean) = put { putBoolean(KEY_RECORD_HISTORY, value) }.also { recordHistory = value }
 
@@ -286,6 +293,7 @@ class AppSettings(context: Context) {
         const val KEY_FOLLOW_TYPE = "followType"
         const val KEY_FOLLOW_SELECTION = "followFeedSelectionV1"
         const val KEY_OPEN_IN_BROWSER = "openInBrowser"
+        const val KEY_PREDICTIVE_BACK = "predictiveBack"
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_HISTORY_CARD_MODE = "historyCardMode"
         const val KEY_SHOW_EMOJI = "showEmoji"

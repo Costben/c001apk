@@ -123,6 +123,7 @@ fun AppNavHost(
 ) {
     val context = LocalContext.current
     val openInBrowser = LocalApp.current.settings.openInBrowser
+    val predictiveBack = LocalApp.current.settings.predictiveBack
     val scope = rememberCoroutineScope()
     val imageOrigins = remember { ImageOrigins() }
     // The current tab's bar line; a card returning into a main-tab list is scrolled clear of it.
@@ -173,16 +174,24 @@ fun AppNavHost(
             deepLinks.collect { url -> openCoolapkLink(context, navigator, url, "", openInBrowser) }
         }
 
+        val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
+
         // A pane is closed by back directly: there is no page to pull across the window, and the
-        // list beside it is already in place.
-        BackHandler(enabled = paneEntry != null) { navigator.pop() }
+        // list beside it is already in place. With the predictive gesture switched off, back is the
+        // plain pop it was before the gesture existed — no preview, no travel, just the page gone.
+        BackHandler(enabled = paneEntry != null || (!predictiveBack && rootHasWork)) {
+            if (paneEntry != null || navigator.stack.size > 1) {
+                navigator.pop()
+            } else if (navigator.onMainBack?.invoke() != true) {
+                (context as? Activity)?.moveTaskToBack(true)
+            }
+        }
 
         // At the root with nothing left to do there, stay out of back's way: the system then runs
         // its own predictive "return to home", and the window shrinks out to the launcher. Taking
         // the gesture here and backgrounding the task is what made back look like the app simply
         // vanishing — no preview under the finger, no motion after it.
-        val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
-        PredictiveBackHandler(enabled = paneEntry == null && rootHasWork) { progress ->
+        PredictiveBackHandler(enabled = predictiveBack && paneEntry == null && rootHasWork) { progress ->
             // A gesture that starts while the last one is still settling takes it over.
             settleJob?.cancel()
 
