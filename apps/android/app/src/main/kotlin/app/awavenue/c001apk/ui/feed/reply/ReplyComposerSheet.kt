@@ -472,26 +472,23 @@ fun ReplyComposerSheet(
         }
 
         Spacer(Modifier.height(ComposerPanel.ToolbarGap))
-        // The trimmed line box is taller than the measured ink box, so the title is centred inside
-        // a pinned-height box and measured unbounded, which keeps ascenders and descenders whole.
-        Box(
-            Modifier.fillMaxWidth().height(ComposerPanel.TitleHeight),
-            contentAlignment = Alignment.CenterStart,
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = hint,
-                modifier = Modifier.wrapContentHeight(unbounded = true),
-                style = trimmedLineHeight,
-                fontSize = 28.sp,
-                lineHeight = 28.sp,
+                style = COUITheme.textStyles.body1,
                 fontWeight = FontWeight.Bold,
                 color = COUITheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            Spacer(Modifier.width(8.dp))
+            StatusLine(text = "${input.text.length}/${ComposerPanel.MaxMessage}")
         }
-        Spacer(Modifier.height(ComposerPanel.StatusGap))
-        StatusLine(text = "${input.text.length}/${ComposerPanel.MaxMessage}")
         Spacer(Modifier.height(ComposerPanel.StatusToBodyGap))
         // The sheet hands the content whatever is left once its toolbar is in, so the field is
         // capped by that leftover instead of by a guess about the window: with the keyboard up the
@@ -520,8 +517,8 @@ fun ReplyComposerSheet(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     hint = "说点什么…",
                     maxCount = ComposerPanel.MaxMessage,
-                    minLines = 4,
-                    maxLines = 6,
+                    minLines = 2,
+                    maxLines = 5,
                     textStyle = COUITheme.textStyles.body1,
                     onFocused = { emojiPanel = false },
                 )
@@ -794,11 +791,11 @@ private object ComposerPanel {
 
     val SideInset = 16.dp
 
-    /** Inset between the capsule action and the window bottom: 155px. */
-    val BottomInset = 40.dp
+    /** Inset between the capsule action and the window bottom when keyboard is hidden. */
+    val BottomInset = 20.dp
 
-    /** The same gap while the sheet sits on the keyboard, where 40dp would read as dead space. */
-    val KeyboardBottomInset = 12.dp
+    /** The same gap while the sheet sits on the keyboard, tightly hugging the IME top edge. */
+    val KeyboardBottomInset = 4.dp
 
     /**
      * How much of the keyboard's travel the foot gap spends easing from [BottomInset] to
@@ -810,25 +807,16 @@ private object ComposerPanel {
     /** Height of the close capsule and the overflow circle: 155px. */
     val ToolbarButtonHeight = 40.dp
 
-    /** Distance from the toolbar's foot to the title ink: 80px. */
-    val ToolbarGap = 3.dp
+    /** Distance from the toolbar's foot to the title ink. */
+    val ToolbarGap = 4.dp
 
-    /** Ink height of the 28sp title: 105px. */
-    val TitleHeight = 27.dp
-
-    /** Gap between the title and the status line: 29px. */
-    val StatusGap = 12.dp
-
-    /** Ink height of the 12sp status line: 44px. */
-    val StatusHeight = 12.dp
-
-    val StatusToBodyGap = 16.dp
+    val StatusToBodyGap = 8.dp
 
     /** The list-row radius the template uses for its squircle cards. */
-    val EditorRadius = 23.dp
+    val EditorRadius = 20.dp
 
-    /** The field keeps at least three lines plus its own padding before it starts scrolling. */
-    val MinEditorHeight = 88.dp
+    /** The field keeps at least two lines plus its own padding before it starts scrolling. */
+    val MinEditorHeight = 56.dp
 
     /** A 64dp thumbnail row plus its 10dp gap. */
     val ImagesHeight = 74.dp
@@ -836,9 +824,9 @@ private object ComposerPanel {
     /** The emoji grid's 212dp plus its 8dp gap. */
     val EmojiHeight = 220.dp
 
-    val ToolsHeight = 40.dp
-    val ToolsGap = 16.dp
-    val ActionGap = 20.dp
+    val ToolsHeight = 36.dp
+    val ToolsGap = 8.dp
+    val ActionGap = 8.dp
 
     /** Height of the capsule action: 171px. */
     val ActionHeight = 44.dp
@@ -984,7 +972,6 @@ private fun OverflowDots(ink: Color) {
 private fun StatusLine(text: String) {
     val dotColor = COUITheme.colorScheme.onSurfaceVariantActions
     Row(
-        modifier = Modifier.height(ComposerPanel.StatusHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Canvas(modifier = Modifier.size(6.dp)) {
@@ -996,7 +983,7 @@ private fun StatusLine(text: String) {
             style = trimmedLineHeight,
             fontSize = 12.sp,
             lineHeight = 12.sp,
-            color = COUITheme.colorScheme.onBackground,
+            color = COUITheme.colorScheme.onSurfaceVariantSummary,
         )
     }
 }

@@ -119,7 +119,7 @@ fun EmojiEditText(
         modifier = modifier,
         factory = { context ->
             EmojiSpanEditText(context).apply {
-                val verticalPadding = (15 * resources.displayMetrics.density).toInt()
+                val verticalPadding = (10 * resources.displayMetrics.density).toInt()
                 setBackgroundColor(AndroidColor.TRANSPARENT)
                 gravity = Gravity.TOP or Gravity.START
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or
