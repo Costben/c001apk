@@ -9,14 +9,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.data.DigitalUnion
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
@@ -35,6 +42,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Refresh
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.EditTextPreference
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.launch
 
 @Composable
 fun ParamsScreen() {
@@ -44,6 +52,8 @@ fun ParamsScreen() {
     val scrollBehavior = rememberPageScrollBehavior("params")
     val backdrop = rememberGlassBackdrop()
     val params = settings.deviceParams
+    val scope = rememberCoroutineScope()
+    var fetchingId by remember { mutableStateOf(false) }
 
     Scaffold(
         edgeToEdge = true,
@@ -110,6 +120,28 @@ fun ParamsScreen() {
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                         summary = "留空时随机生成",
+                        bottomAction = {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(
+                                    text = if (fetchingId) "正在获取…" else "自动获取",
+                                    enabled = !fetchingId,
+                                    onClick = {
+                                        if (fetchingId) return@TextButton
+                                        fetchingId = true
+                                        scope.launch {
+                                            val id = DigitalUnion.fetch(context, settings.szlmId)
+                                            fetchingId = false
+                                            if (id == null) {
+                                                context.toast("暂时无法获取数盟 ID，请检查网络后重试")
+                                            } else {
+                                                settings.updateSzlmId(id)
+                                                context.toast("已获取并应用数盟 ID")
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        },
                     )
                     EditTextPreference(
                         title = "制造商",

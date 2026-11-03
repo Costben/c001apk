@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.data.DigitalUnion
 import app.awavenue.c001apk.data.OfficialDeviceIdentity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.toast
@@ -43,6 +45,7 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TextField
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.launch
 
 /** The package and page the official client exposes its device identifiers on. */
 private const val OFFICIAL_COOLAPK = "com.coolapk.market"
@@ -58,11 +61,14 @@ private const val OFFICIAL_DEVICE_ID_PAGE = "coolmarket://www.coolapk.com/native
 fun OnboardingScreen(onClose: () -> Unit) {
     val settings = LocalApp.current.settings
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var draft by rememberSaveable { mutableStateOf("") }
     var recognized by rememberSaveable { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var fetching by remember { mutableStateOf(false) }
+    var autoError by remember { mutableStateOf<String?>(null) }
 
     fun recognize(text: String) {
         runCatching { OfficialDeviceIdentity.parse(text) }
@@ -134,14 +140,63 @@ fun OnboardingScreen(onClose: () -> Unit) {
             ) {
                 Text("欢迎使用 c001apk", style = COUITheme.textStyles.title1)
                 Text(
-                    "花一分钟导入官方酷安的设备标识，能减少浏览动态和评论时反复出现的人机验证。" +
-                        "不导入也能正常浏览，只是验证会更频繁。",
+                    "花一分钟获取设备标识，能减少浏览动态和评论时反复出现的人机验证。" +
+                        "不获取也能正常浏览，只是验证会更频繁。",
                     style = COUITheme.textStyles.body2,
                     color = COUITheme.colorScheme.onSurfaceVariantSummary,
                 )
 
                 StepCard(
                     number = 1,
+                    title = "自动获取（推荐）",
+                    body = "点一下让本机注册一个数盟 ID，成功后会直接填入协议参数。" +
+                        "这一步不上传账号，也不读取官方酷安的数据。",
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            text = if (fetching) "正在获取…" else "自动获取数盟 ID",
+                            enabled = !fetching,
+                            onClick = {
+                                if (fetching) return@TextButton
+                                fetching = true
+                                autoError = null
+                                scope.launch {
+                                    val id = DigitalUnion.fetch(context, settings.szlmId)
+                                    fetching = false
+                                    if (id == null) {
+                                        autoError = "暂时无法获取，请检查网络后重试，或使用下面的手动导入"
+                                    } else {
+                                        settings.updateSzlmId(id)
+                                        recognized = id
+                                        saved = true
+                                        context.toast("已获取并应用数盟 ID")
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    autoError?.let {
+                        Text(
+                            it,
+                            style = COUITheme.textStyles.body2,
+                            color = COUITheme.colorScheme.error,
+                        )
+                    }
+                    if (saved && recognized != null) {
+                        Text(
+                            "已保存，本机请求会使用这份设备标识。返回内容页刷新即可。",
+                            style = COUITheme.textStyles.body2,
+                            color = COUITheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                StepCard(
+                    number = 2,
                     title = "打开官方酷安",
                     body = "在官方酷安中进入「我 → 设置 → 检测日志与测试」。下面的按钮会直接打开这一页，" +
                         "不会读取酷安账号或密码。",
@@ -161,7 +216,7 @@ fun OnboardingScreen(onClose: () -> Unit) {
                 }
 
                 StepCard(
-                    number = 2,
+                    number = 3,
                     title = "复制完整内容",
                     body = "向下滚动，找到「复制 OAID」。在同一个页面里慢慢点 5 次：前几次只有 OAID 或提示" +
                         "没有 OAID，第 5 次才会复制包含 ShuzlmID 的完整文本。\n\n" +
@@ -169,7 +224,7 @@ fun OnboardingScreen(onClose: () -> Unit) {
                 )
 
                 StepCard(
-                    number = 3,
+                    number = 4,
                     title = "粘贴并识别",
                     body = "回到这里，粘贴刚复制的整段文本。只会保存其中的 ShuzlmID，" +
                         "其他字段和本机机型参数都不会改动。",
