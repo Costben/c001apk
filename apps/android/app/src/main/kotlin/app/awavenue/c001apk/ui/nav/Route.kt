@@ -29,8 +29,11 @@ enum class NotificationType(val label: String, val endpoint: String) {
     /** Mentions inside comments. Kept apart from [Comment]: the server files these separately. */
     AtComment("@我的评论", "/v6/notification/atCommentMeList"),
 
-    /** Comments on your feeds and replies to your comments — everything that answers you. */
-    Comment("评论", "/v6/notification/commentMeList"),
+    /**
+     * Comments on your feeds and replies to your comments. Coolapk has no list of its own for
+     * these, so it reads the same stream as [System] and keeps only the comment rows.
+     */
+    Comment("评论", "/v6/notification/list"),
 
     Like("我收到的赞", "/v6/notification/feedLikeList"),
     Follow("好友关注", "/v6/notification/contactsFollowList"),

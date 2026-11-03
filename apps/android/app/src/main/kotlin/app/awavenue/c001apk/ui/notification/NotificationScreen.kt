@@ -204,17 +204,60 @@ private fun NotificationPage(
  * list.
  */
 private fun notificationLoader(app: C001apkApp, type: NotificationType): PageLoader =
-    if (type == NotificationType.At) {
-        MergedNotificationLoader(
+    when (type) {
+        NotificationType.At -> MergedNotificationLoader(
             listOf(NotificationType.At, NotificationType.AtComment),
         ) { source, page, first, last ->
             app.repository.notificationList(source.endpoint, page, first, last)
         }
-    } else {
-        PageLoader { page, first, last ->
+
+        NotificationType.Comment -> CommentNotificationLoader { page, first, last ->
+            app.repository.notificationList(type.endpoint, page, first, last)
+        }
+
+        else -> PageLoader { page, first, last ->
             app.repository.notificationList(type.endpoint, page, first, last)
         }
     }
+
+/** The notification `type` of a comment on your feed or a reply to your comment. */
+private const val REPLY_NOTIFICATION_TYPE = "feed_reply"
+
+/** How many raw pages one batch may scan for comment rows before it gives up. */
+private const val COMMENT_SCAN_PAGES = 5
+
+/**
+ * The 评论 category is the general notification stream with everything but replies dropped: likes,
+ * follows and mentions share the same endpoint. A page therefore arrives half empty, so the loader
+ * keeps its own cursor and keeps asking for further pages until it has rows to show. The cursor is
+ * internal because the list above counts the rows it was handed, which skips the pages this filter
+ * consumed.
+ */
+private class CommentNotificationLoader(
+    private val fetch: suspend (Int, String?, String?) -> List<Entity>,
+) : PageLoader {
+    private var nextPage = 0
+    private var first: String? = null
+    private var last: String? = null
+
+    override suspend fun load(page: Int, firstItem: String?, lastItem: String?): List<Entity> {
+        if (page <= 1) {
+            nextPage = 0
+            first = null
+            last = null
+        }
+        repeat(COMMENT_SCAN_PAGES) {
+            nextPage++
+            val rows = fetch(nextPage, if (nextPage == 1) null else first, last)
+            if (rows.isEmpty()) return emptyList()
+            if (first == null) first = rows.first().id
+            last = rows.last().id
+            val comments = rows.filter { it.string("type") == REPLY_NOTIFICATION_TYPE }
+            if (comments.isNotEmpty()) return comments
+        }
+        return emptyList()
+    }
+}
 
 /**
  * Joins several notification streams into one list. Each stream keeps its own cursor: Coolapk's
