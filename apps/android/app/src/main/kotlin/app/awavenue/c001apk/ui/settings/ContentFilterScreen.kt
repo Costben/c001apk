@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -31,6 +32,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
 import io.github.suqi8.coui.kmp.basic.Card
@@ -52,6 +54,7 @@ import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.launch
 
 /**
  * The content rules: a master switch, the scopes they may act in, and the rules themselves.
@@ -74,6 +77,8 @@ fun ContentFilterScreen() {
     // null closes the editor; the second flag tells a new rule from an edited one.
     var editing by remember { mutableStateOf<ContentRule?>(null) }
     var creating by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var importingRules by remember { mutableStateOf(false) }
 
     fun save(next: ContentRule) {
         val exists = prefs.rules.any { it.id == next.id }
@@ -156,6 +161,48 @@ fun ContentFilterScreen() {
                                 )
                             }
                         },
+                    )
+                }
+            }
+
+            SmallTitle("秋风规则")
+            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                ArrowPreference(
+                    title = if (importingRules) "正在更新远程规则…" else "更新远程规则",
+                    summary = prefs.twilight?.let {
+                        "版本 ${it.revision} · ${it.rules.size} 条 · 发布于 ${it.publishedAt}"
+                    } ?: "从 TG-Twilight 导入公开规则快照，个人规则与已有关闭项不受影响",
+                    enabled = !importingRules,
+                    onClick = {
+                        importingRules = true
+                        scope.launch {
+                            val problem = runCatching { app.twilightRules.fetch() }
+                                .fold(
+                                    onSuccess = { candidate -> store.importTwilight(candidate) },
+                                    onFailure = { it.message ?: "规则下载失败，请稍后重试" },
+                                )
+                            importingRules = false
+                            if (problem == null) {
+                                val imported = store.preferences.twilight
+                                context.toast("已更新到版本 ${imported?.revision}（${imported?.rules?.size} 条）")
+                            } else {
+                                context.toast(problem)
+                            }
+                        }
+                    },
+                )
+                prefs.twilight?.let { snapshot ->
+                    SwitchPreference(
+                        title = "严格模式",
+                        summary = "同时启用标记为「严格」的规则",
+                        checked = prefs.twilightStrict,
+                        enabled = prefs.enabled,
+                        onCheckedChange = store::setTwilightStrict,
+                    )
+                    ArrowPreference(
+                        title = "规则明细",
+                        summary = "逐条查看并单独开关（${snapshot.rules.size} 条）",
+                        onClick = { navigator.push(Route.TwilightRules) },
                     )
                 }
             }

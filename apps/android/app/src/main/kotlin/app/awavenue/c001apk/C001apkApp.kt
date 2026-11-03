@@ -17,6 +17,7 @@ import app.awavenue.c001apk.data.SessionStore
 import app.awavenue.c001apk.data.UnreadStore
 import app.awavenue.c001apk.data.UpdateService
 import app.awavenue.c001apk.network.ApiClient
+import app.awavenue.c001apk.network.TwilightRulesClient
 import app.awavenue.c001apk.platform.MessageCheckWorker
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -53,6 +54,9 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var apiClient: ApiClient
         private set
+    /** The public 秋风 rules, on a transport that never carries the Coolapk session. */
+    lateinit var twilightRules: TwilightRulesClient
+        private set
     lateinit var repository: CoolapkRepository
         private set
     lateinit var unread: UnreadStore
@@ -74,6 +78,7 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
         productComparison = ProductComparisonStore()
         apiClient = ApiClient(settings, session::snapshot, baseClient = httpClient)
         repository = CoolapkRepository(apiClient, settings, session, accounts)
+        twilightRules = TwilightRulesClient()
         unread = UnreadStore(this, repository, session)
         updates = UpdateService(settings, BuildConfig.VERSION_NAME, httpClient)
         MessageCheckWorker.schedule(this)

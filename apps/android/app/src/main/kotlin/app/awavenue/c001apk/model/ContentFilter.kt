@@ -4,6 +4,7 @@ import java.text.Normalizer
 import java.util.Locale
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -48,11 +49,17 @@ data class ContentRule(
     }
 }
 
-/** Everything the filter remembers: the master switch, the scopes it may act in, and the rules. */
+/**
+ * Everything the filter remembers: the master switch, the scopes it may act in, the rules, and
+ * the last imported 秋风 snapshot with the choices made about it.
+ */
 data class ContentFilterPreferences(
     val enabled: Boolean = false,
     val scopes: Set<FilterScope> = FilterScope.entries.toSet(),
     val rules: List<ContentRule> = emptyList(),
+    val twilight: TwilightRuleSet? = null,
+    val twilightStrict: Boolean = false,
+    val disabledTwilightRules: Set<String> = emptySet(),
 ) {
     companion object {
         const val MaxRules = 200
@@ -62,16 +69,19 @@ data class ContentFilterPreferences(
 /** One candidate for the engine: the visible text plus what the rule kinds compare against. */
 data class FilterInput(
     val scope: FilterScope,
+    val key: String? = null,
     val author: String,
     val text: String,
     val topics: List<String> = emptyList(),
+    val topicIds: List<String> = emptyList(),
 )
 
 data class ContentFilterMatch(val ruleId: String, val reason: String)
 
 /**
- * The user's rules, compiled once per list load. Matching runs on the text the reader actually
- * sees: markup, image urls and article metadata never trigger a keyword.
+ * The user's rules and the imported remote rules, compiled once per list load. Matching runs on
+ * the text the reader actually sees: markup, image urls and article metadata never trigger a
+ * keyword. Local rules answer first; the remote set is only consulted when they do not match.
  */
 class ContentFilterEngine(val preferences: ContentFilterPreferences) {
     private class CompiledRule(
@@ -80,8 +90,13 @@ class ContentFilterEngine(val preferences: ContentFilterPreferences) {
         val exceptions: List<String>,
     )
 
+    private val twilight by lazy { TwilightFilterEngine(preferences) }
+
     val isEnabled = preferences.enabled && preferences.scopes.isNotEmpty() &&
-        preferences.rules.any { it.enabled && it.scopes.any(preferences.scopes::contains) }
+        (
+            preferences.rules.any { it.enabled && it.scopes.any(preferences.scopes::contains) } ||
+                twilight.isEnabled
+            )
 
     private val rules: List<CompiledRule> = if (!isEnabled) {
         emptyList()
@@ -94,7 +109,7 @@ class ContentFilterEngine(val preferences: ContentFilterPreferences) {
     }
 
     fun match(input: FilterInput): ContentFilterMatch? {
-        if (rules.isEmpty() || input.scope !in preferences.scopes) return null
+        if (!isEnabled || input.scope !in preferences.scopes) return null
         val sentences by lazy { visibleFilterText(input.text).split(SentenceSplit) }
         for (compiled in rules) {
             if (input.scope !in compiled.rule.scopes) continue
@@ -107,11 +122,11 @@ class ContentFilterEngine(val preferences: ContentFilterPreferences) {
             }
             if (matched) return ContentFilterMatch(compiled.rule.id, compiled.rule.title)
         }
-        return null
+        return twilight.match(input)
     }
 
     fun match(item: Entity, scope: FilterScope? = null): ContentFilterMatch? =
-        if (rules.isEmpty()) null else item.filterInput(scope)?.let(::match)
+        if (!isEnabled) null else item.filterInput(scope)?.let(::match)
 }
 
 /** The rule candidate one list row offers, or null for cards that are never content. */
@@ -130,11 +145,15 @@ fun Entity.filterInput(scope: FilterScope? = null): FilterInput? {
     }.joinToString("\n")
     return FilterInput(
         scope = resolved,
+        key = id.takeIf(String::isNotBlank)?.let { "${resolved.name}:$it" },
         author = uid.ifEmpty { if (resolved == FilterScope.User) id else "" },
         text = body,
         topics = tags.split(',', '#').map(String::trim).filter(String::isNotBlank) +
             listOfNotNull(ttitle) +
             relationRows.mapNotNull { it.title.takeIf(String::isNotBlank) },
+        topicIds = relationRows
+            .filter { it.entityType == "topic" }
+            .mapNotNull { it.id.takeIf(String::isNotBlank) },
     )
 }
 
@@ -224,6 +243,12 @@ fun ContentFilterPreferences.toJson(): JsonObject = buildJsonObject {
             }
         },
     )
+    put("twilightStrict", JsonPrimitive(twilightStrict))
+    put(
+        "disabledTwilightRules",
+        buildJsonArray { disabledTwilightRules.sorted().forEach { add(JsonPrimitive(it)) } },
+    )
+    put("twilight", twilight?.toJson() ?: JsonNull)
 }
 
 /** Reads a saved rule set; anything unreadable falls back to the default (off, no rules). */
@@ -249,10 +274,19 @@ fun decodeContentFilter(raw: String): ContentFilterPreferences {
                 enabled = rule.bool("enabled"),
             )
         }
+        val twilight = (root["twilight"] as? JsonObject)?.let { element ->
+            runCatching { TwilightRuleSet.fromJson(element).also { it.validate() } }.getOrNull()
+        }
         ContentFilterPreferences(
             enabled = root.bool("enabled"),
             scopes = scopes.toSet().ifEmpty { FilterScope.entries.toSet() },
             rules = rules.take(ContentFilterPreferences.MaxRules),
+            twilight = twilight,
+            twilightStrict = root.bool("twilightStrict"),
+            disabledTwilightRules = root.strings("disabledTwilightRules")
+                .filter { it.startsWith("twilight:") }
+                .take(10_000)
+                .toSet(),
         )
     }.getOrDefault(ContentFilterPreferences())
 }

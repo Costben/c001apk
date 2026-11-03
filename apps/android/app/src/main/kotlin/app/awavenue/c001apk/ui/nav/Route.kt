@@ -89,6 +89,8 @@ sealed interface Route {
     data class Blacklist(val type: BlacklistType) : Route
     /** 内容过滤: the keyword, user and topic rules applied to every list. */
     data object ContentFilter : Route
+    /** 秋风规则明细: the imported remote snapshot, one switch per rule. */
+    data object TwilightRules : Route
     data class Chat(val ukey: String, val uid: String, val username: String) : Route
     data class Copy(val text: String) : Route
 }

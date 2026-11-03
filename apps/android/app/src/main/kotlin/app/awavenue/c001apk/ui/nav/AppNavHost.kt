@@ -91,6 +91,7 @@ import app.awavenue.c001apk.ui.settings.AboutScreen
 import app.awavenue.c001apk.ui.settings.ContentFilterScreen
 import app.awavenue.c001apk.ui.settings.ParamsScreen
 import app.awavenue.c001apk.ui.settings.SettingsScreen
+import app.awavenue.c001apk.ui.settings.TwilightRulesScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
 import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
@@ -834,6 +835,7 @@ private fun RouteHost(route: Route) {
         is Route.History -> HistoryScreen(type = route.type)
         is Route.Blacklist -> BlacklistScreen(type = route.type)
         is Route.ContentFilter -> ContentFilterScreen()
+        Route.TwilightRules -> TwilightRulesScreen()
         is Route.Chat -> ChatScreen(ukey = route.ukey, uid = route.uid, username = route.username)
         is Route.Copy -> CopyScreen(text = route.text)
     }

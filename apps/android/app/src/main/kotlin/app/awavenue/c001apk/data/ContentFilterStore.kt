@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.awavenue.c001apk.model.ContentFilterPreferences
+import app.awavenue.c001apk.model.TwilightRuleSet
 import app.awavenue.c001apk.model.decodeContentFilter
 import app.awavenue.c001apk.model.toJson
 
@@ -26,6 +27,35 @@ class ContentFilterStore(context: Context) {
     }
 
     fun update(block: (ContentFilterPreferences) -> ContentFilterPreferences) = save(block(preferences))
+
+    /**
+     * Replaces the remote snapshot, keeping personal rules, scope choices and the per-rule picks.
+     * Returns the reason it was rejected, or null once imported.
+     */
+    fun importTwilight(candidate: TwilightRuleSet): String? {
+        val previous = preferences.twilight
+        val problem = runCatching {
+            candidate.validate()
+            require(previous == null || candidate.revision > previous.revision || candidate == previous) {
+                "远程版本过旧或同版本内容改变，保留已有规则"
+            }
+        }.exceptionOrNull()
+        if (problem != null) return problem.message ?: "远程规则校验失败"
+        update { it.copy(twilight = candidate) }
+        return null
+    }
+
+    fun setTwilightStrict(value: Boolean) = update { it.copy(twilightStrict = value) }
+
+    fun setTwilightRuleEnabled(key: String, enabled: Boolean) = update { current ->
+        current.copy(
+            disabledTwilightRules = if (enabled) {
+                current.disabledTwilightRules - key
+            } else {
+                current.disabledTwilightRules + key
+            },
+        )
+    }
 
     private fun read(): ContentFilterPreferences =
         prefs.getString(KEY, null)?.let(::decodeContentFilter) ?: ContentFilterPreferences()
