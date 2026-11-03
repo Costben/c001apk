@@ -37,6 +37,7 @@ object Api {
     const val USER_APK_FOLLOW_LIST = "$API/v6/user/apkFollowList"
     const val USER_FANS_LIST = "$API/v6/user/fansList"
     const val USER_RECENT_HISTORY_LIST = "$API/v6/user/recentHistoryList"
+    const val HIT_HISTORY_LIST = "$API/v6/user/hitHistoryList"
     const val USER_LIKE_LIST = "$API/v6/user/likeList"
     const val USER_REPLY_LIST = "$API/v6/user/replyList"
     const val USER_REPLY_TO_ME_LIST = "$API/v6/user/replyToMeList"

@@ -270,6 +270,17 @@ class CoolapkRepository(
         listFromUrl("/v6/collection/itemList", pageParams(page, firstItem, lastItem) + ("id" to id))
 
     /**
+     * The account's cloud browse history. Read-only: the client never uploads the local list, so
+     * this answers what the signed-in account browsed on any device.
+     */
+    suspend fun cloudHistory(page: Int, firstItem: String?, lastItem: String?): List<CloudHistoryEntry> {
+        if (!session.isLogin) throw ApiFailure(ApiFailureKind.Authentication, "登录后可查看云端浏览历史")
+        val root = api.getJson(Api.HIT_HISTORY_LIST, pageParams(page, firstItem, lastItem))
+        if (!session.isLogin) throw ApiFailure(ApiFailureKind.Authentication, "登录状态已失效，请重新登录")
+        return CloudHistoryEntry.parse(root)
+    }
+
+    /**
      * The collections a feed may be saved to, each row flagged with this account's membership.
      * `uid` stays empty on purpose: the server then answers for the signed-in account.
      */
