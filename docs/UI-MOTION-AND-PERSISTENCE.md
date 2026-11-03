@@ -1517,43 +1517,34 @@ private var page = 1
 # 五、发布面板：跟着键盘走的面板高度
 
 `ReplyComposerSheet` 是唯一一个“高度由键盘决定”的界面。它的问题不是动画没做，而是
-**有一段几何量在收尾那一帧才变**，于是看起来像“先回落、再闪现长高”。
+**有几何量在收尾那一帧才变**，于是看起来像“先回落、再闪现长高”。
 
 ## 5.1 面板怎么跟键盘
 
-- 面板是 `OverlayBottomSheet`，贴窗口底边；`insideMargin = DpSize(16.dp, bottomGap)` 里的
+- 面板是 `OverlayBottomSheet`，贴窗口底边；`insideMargin = DpSize(10.dp, bottomGap)` 里的
   `bottomGap` 就是内容（发布胶囊）与面板底边之间的留白。
 - 库在 sheet 的 `Column` 上加了 `imePadding()`，所以键盘起来时整块面板骑在键盘上方，
   面板底边 = 窗口底边 − IME 高度。
 - 编辑区高度不写死：`BoxWithConstraints` 拿到 sheet 剩下的高度，减掉图片行、表情面板、
   工具行和发布胶囊，得到 `editorMax`，卡片再 `heightIn(max = editorMax)`。键盘越高卡片越矮，
-  最低 `MinEditorHeight = 88dp`（再低就没法打字了）。
+  最低 `MinEditorHeight = 56dp`（再低就没法打字了）。
 
-## 5.2 收尾跳变：12dp / 40dp 不能瞬间切
+## 5.2 收尾跳变：两处几何量都不能在最后一帧才变
 
-原实现是：
+有两处会在键盘收完的那一帧翻转：
 
-```kotlin
-val bottomGap = if (keyboard > 0.dp) KeyboardBottomInset else BottomInset  // 12dp / 40dp
-```
+1. `bottomGap` 的 4dp / 30dp 切换。
+2. 库在面板内容下面补的 `PanelPaddingBottom = 60dp`，它原本写死成“IME 归零时加回来”。
 
-`keyboard` 是 `WindowInsets.ime` 的当前值，键盘收起时它会逐帧掉到 0，所以这个 `if` 会在
-**最后一帧**翻转：面板的回落已经结束、`imePadding` 已经是 0，才把留白从 12dp 换成 40dp，
-整块面板连同编辑卡片、发布胶囊在同一帧里向上跳 28dp。
+两者都会让面板在回落结束后突然变高、整体上跳。实测（1272×2772，620dpi，即 3.875px/dp）
+只修第一处时，第二处仍会让发布胶囊在落定后向上跳约 232px（60dp）。
 
-实测（1240×2772，620dpi，即 3.875px/dp；微信输入法，键盘高 322dp）：
+修法：
 
-| 帧 | 面板顶边 y | 编辑卡片高 | 发布胶囊顶 y |
-| --- | --- | --- | --- |
-| 键盘在（静止） | 140 | 96.0dp | 1318 |
-| 回落中 | 307 → 442 → 489 | 87 → 113dp | 2372 → 2508 → 2554 |
-| 落定后约 100ms | **381（−108px = −28dp）** | 114.3dp | **2446（−108px）** |
-
-回落本身是逐帧连续的（4 帧走完 349px），只有最后那一跳是离散的。观感就是“先回落到底、
-过一会儿闪现展开”。
-
-修法：让 `bottomGap` 变成 IME inset 的**连续函数**，在键盘行程的最后 80dp 里从 40dp 插值到
-12dp。这样面板的脚在整个回落过程里一直在动，没有“落定后补一帧”的机会。
+- `bottomGap` 变成 IME inset 的**连续函数**，在键盘行程的最后 80dp 里从 30dp 插值到 4dp。
+- `OverlayBottomSheet` 新增 `panelPaddingBottom` 参数，发布面板传 `0.dp`，底部间距完全由
+  `insideMargin.height` 决定，面板高度不再随键盘归零而突变。默认值仍是平台的 60dp，
+  其他面板行为不变。
 
 ```kotlin
 val keyboardGapProgress = (keyboard / ComposerPanel.KeyboardGapRange).coerceIn(0f, 1f)
@@ -1561,27 +1552,38 @@ val bottomGap = ComposerPanel.BottomInset +
     (ComposerPanel.KeyboardBottomInset - ComposerPanel.BottomInset) * keyboardGapProgress
 ```
 
-键盘完全收起时 `keyboard = 0`，留白正好是 40dp；键盘完全起来时大于 80dp，留白正好是 12dp。
+键盘完全收起时 `keyboard = 0`，留白正好是 30dp；键盘完全起来时大于 80dp，留白正好是 4dp。
 中间那 80dp 是过渡区，和键盘自己的动画同帧推进。
+
+实测逐帧（1272×2772，screenrecord 拆帧，`panelTop` 为面板顶边）：
+
+| 方向 | 面板顶边 y | 单帧最大位移 | 反向跳变 |
+| --- | --- | --- | --- |
+| 键盘收起 | 570 → 1700，单调向下 | 145px | 无 |
+| 键盘弹起 | 1700 → 570，单调向上 | 229px（键盘自身行程） | 无 |
+
+落定后发布胶囊底边距屏幕底 117px = 30.2dp。
 
 ## 5.3 为什么不用 animateDpAsState
 
-试过用 `animateDpAsState` 把 12/40 的切换补成动画，但它是在键盘**已经收完**之后才开始跑，
+试过用 `animateDpAsState` 把 4/30 的切换补成动画，但它是在键盘**已经收完**之后才开始跑，
 问题从“跳变”变成“落定之后再长高”，还是两段；而且曲线和 IME 的动画对不齐，中途会看到
 面板和键盘脱节。绑到 inset 上，时序天然一致。
 
 同理，编辑卡片的高度不需要额外补动画：它由约束驱动，约束由 IME inset 逐帧驱动，本来就是
-连续的（上表里 87 → 113 → 114.3dp 就是逐帧长出来的）。
+连续的。
 
 ## 5.4 怎么量
 
 1. `adb shell screenrecord --time-limit 5 /sdcard/rec.mp4`，操作触发过渡，然后 `adb pull`。
 2. `ffmpeg -i rec.mp4 -vsync 0 f/%03d.png` 拆帧。
-3. 用 PIL 按行扫描：面板表面（x 1050 附近）亮度 239/240，编辑卡片是纯白 253，发布胶囊是
-   蓝色（R<130、B>170）。打印每帧的 `panelTop / cardTop / cardHeight / capTop` 和逐帧 Δ。
-4. 判据：所有 Δ 应该分散在多帧上，任何一帧都不该出现 ≈28dp（108px）的单帧位移。
+3. 用 PIL 按行扫描：面板表面（x=636 附近）亮度 239/240，编辑卡片是纯白 253，发布胶囊是
+   蓝色（B>190、B−R>50、G 在 140–230）。打印每帧的 `panelTop / capTop / capBot` 和逐帧 Δ。
+4. 判据：`panelTop` 在两个方向上都必须单调，任何一帧都不该出现反向位移（哪怕只有 20px 的
+   回弹）。采样步长会让个别帧出现 ±3px 的噪声，那不是跳变。
 
-坑：卡片和面板表面都是“白”，阈值不分开会量到面板背景，卡片高度会算成整个面板。
+坑：卡片和面板表面都是“白”，阈值不分开会量到面板背景；背景里的蓝色元素也会混进胶囊
+检测，蓝色扫描要限制在 `panelTop` 以下，并按行统计像素数。
 
 ---
 
@@ -1727,10 +1729,12 @@ private const val SnapshotSettleMillis = 220L
 val cardCornerRadius = 17.dp
 
 // 发布面板
-val composerBottomInset = 40.dp          // 面板内容离窗口底边
-val composerKeyboardBottomInset = 12.dp  // 骑在键盘上时
+val composerSideInset = 10.dp            // 面板左右内边距，输入框宽度由它决定
+val composerBottomInset = 30.dp          // 面板内容离窗口底边
+val composerKeyboardBottomInset = 4.dp   // 骑在键盘上时
 val composerKeyboardGapRange = 80.dp     // 上面两个值在这段键盘行程里插值
-val composerMinEditorHeight = 88.dp
+val composerMinEditorHeight = 56.dp
+val composerPanelPaddingBottom = 0.dp    // 不再叠加库默认的 60dp
 
 // 底栏
 val barHeight = 56.dp
@@ -1771,8 +1775,8 @@ val labelLineHeight = 13.6.dp
 | 设置入口 | `ui/message/MessageScreen.kt` | 235 |
 | 设置宿主 | `ui/nav/AppNavHost.kt` | 580 |
 | 设置页 | `ui/settings/SettingsScreen.kt` | 113 |
-| 发布面板：留白插值 | `ui/feed/reply/ReplyComposerSheet.kt` | 378-390 |
-| 发布面板：几何常量 | `ui/feed/reply/ReplyComposerSheet.kt` | 684-790 |
+| 发布面板：留白插值 | `ui/feed/reply/ReplyComposerSheet.kt` | 410-426 |
+| 发布面板：几何常量 | `ui/feed/reply/ReplyComposerSheet.kt` | 786-870 |
 | 底栏调用 | `ui/main/MainScreen.kt` | 210-288 |
 | Tab 切换 | `ui/main/MainScreen.kt` | 73-75, 136-145 |
 | 首页 padding | `ui/home/HomeScreen.kt` | 461 |

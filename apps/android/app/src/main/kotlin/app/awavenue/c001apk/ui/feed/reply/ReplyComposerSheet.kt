@@ -413,8 +413,9 @@ fun ReplyComposerSheet(
     // IME, the same gap would read as dead space, so it shrinks to the native keyboard spacing.
     // The two gaps are blended over the last stretch of the keyboard's travel instead of switched
     // the moment the IME reaches zero. A switch lands on a frame of its own — the keyboard's inset
-    // has already finished animating by then, so the panel used to fall to the bottom and only
-    // then jump 28dp taller, reading as a flash instead of a grow.
+    // has already finished animating by then, so the panel would fall to the bottom and only then
+    // jump taller, reading as a flash instead of a grow. The library's own 60dp foot padding is
+    // switched off for the same reason: it used to snap in on that frame and lift the whole panel.
     val keyboardGapProgress = (keyboard / ComposerPanel.KeyboardGapRange).coerceIn(0f, 1f)
     val bottomGap = ComposerPanel.BottomInset +
         (ComposerPanel.KeyboardBottomInset - ComposerPanel.BottomInset) * keyboardGapProgress
@@ -423,6 +424,7 @@ fun ReplyComposerSheet(
         show = shown,
         showDragHandle = false,
         insideMargin = DpSize(ComposerPanel.SideInset, bottomGap),
+        panelPaddingBottom = 0.dp,
         onDismissRequest = { requestClose() },
         onDismissFinished = { afterExit?.invoke() },
         startAction = {
@@ -789,10 +791,11 @@ private object ComposerPanel {
      */
     const val MaxMessage = 2000
 
-    val SideInset = 16.dp
+    /** The panel's side inset; the field keeps the same margin, so a wider panel widens it too. */
+    val SideInset = 10.dp
 
     /** Inset between the capsule action and the window bottom when keyboard is hidden. */
-    val BottomInset = 20.dp
+    val BottomInset = 30.dp
 
     /** The same gap while the sheet sits on the keyboard, tightly hugging the IME top edge. */
     val KeyboardBottomInset = 4.dp
