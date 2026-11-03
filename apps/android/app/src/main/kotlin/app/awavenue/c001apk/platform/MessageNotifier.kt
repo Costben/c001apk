@@ -42,7 +42,7 @@ object MessageNotifier {
 
     private val kinds = listOf(
         Kind("atme", NotificationType.At, "@我的动态") { "$it 条动态提到了你" },
-        Kind("atcommentme", NotificationType.Comment, "@我的评论") { "$it 条评论提到了你" },
+        Kind("atcommentme", NotificationType.AtComment, "@我的评论") { "$it 条评论提到了你" },
         Kind("feedlike", NotificationType.Like, "我收到的赞") { "收到 $it 个新的赞" },
         Kind("contacts_follow", NotificationType.Follow, "好友关注") { "$it 位新的关注者" },
         Kind("message", NotificationType.Message, "私信") { "$it 条未读私信" },

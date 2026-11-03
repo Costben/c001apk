@@ -23,8 +23,15 @@ enum class FFFListType(val label: String) {
 
 /** The notification lists behind `/notification`. 通知 is the combined comment stream. */
 enum class NotificationType(val label: String, val endpoint: String) {
-    At("@我的动态", "/v6/notification/atMeList"),
-    Comment("@我的评论", "/v6/notification/atCommentMeList"),
+    /** Mentions in feeds; the list page merges [AtComment] into it so one tab answers “@我”. */
+    At("@我", "/v6/notification/atMeList"),
+
+    /** Mentions inside comments. Kept apart from [Comment]: the server files these separately. */
+    AtComment("@我的评论", "/v6/notification/atCommentMeList"),
+
+    /** Comments on your feeds and replies to your comments — everything that answers you. */
+    Comment("评论", "/v6/notification/commentMeList"),
+
     Like("我收到的赞", "/v6/notification/feedLikeList"),
     Follow("好友关注", "/v6/notification/contactsFollowList"),
     Message("私信与信息", "/v6/message/list"),

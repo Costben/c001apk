@@ -38,7 +38,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.data.UnreadStore
+import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.chat.MessageRow
 import app.awavenue.c001apk.ui.common.AppIcons
@@ -185,12 +187,7 @@ private fun NotificationPage(
 ) {
     val app = LocalApp.current
     val viewModel = viewModel(key = "notification-${type.name}") {
-        FeedListViewModel(
-            PageLoader { page, first, last ->
-                app.repository.notificationList(type.endpoint, page, first, last)
-            },
-            app::contentGate,
-        )
+        FeedListViewModel(notificationLoader(app, type), app::contentGate)
     }
     NotificationList(
         type = type,
@@ -199,6 +196,60 @@ private fun NotificationPage(
         backdrop = backdrop,
         contentPadding = contentPadding,
     )
+}
+
+/**
+ * The paging source behind one category. `@我` reads both mention streams — a mention in a feed
+ * and a mention in a comment — because the server files them apart while users read them as one
+ * list.
+ */
+private fun notificationLoader(app: C001apkApp, type: NotificationType): PageLoader =
+    if (type == NotificationType.At) {
+        MergedNotificationLoader(
+            listOf(NotificationType.At, NotificationType.AtComment),
+        ) { source, page, first, last ->
+            app.repository.notificationList(source.endpoint, page, first, last)
+        }
+    } else {
+        PageLoader { page, first, last ->
+            app.repository.notificationList(type.endpoint, page, first, last)
+        }
+    }
+
+/**
+ * Joins several notification streams into one list. Each stream keeps its own cursor: Coolapk's
+ * `firstItem` / `lastItem` are ids inside that stream, so handing one stream's ids to another
+ * would skip or repeat rows. Pages are returned newest first.
+ */
+private class MergedNotificationLoader(
+    private val sources: List<NotificationType>,
+    private val fetch: suspend (NotificationType, Int, String?, String?) -> List<Entity>,
+) : PageLoader {
+    private val firsts = arrayOfNulls<String>(sources.size)
+    private val lasts = arrayOfNulls<String>(sources.size)
+
+    override suspend fun load(page: Int, firstItem: String?, lastItem: String?): List<Entity> {
+        // A refresh starts every stream over; later pages continue each one from where it stopped.
+        if (page <= 1) {
+            firsts.fill(null)
+            lasts.fill(null)
+        }
+        val merged = ArrayList<Entity>()
+        sources.forEachIndexed { index, source ->
+            val rows = fetch(
+                source,
+                page,
+                if (page <= 1) null else firsts[index],
+                if (page <= 1) null else lasts[index],
+            )
+            if (rows.isNotEmpty()) {
+                if (firsts[index] == null) firsts[index] = rows.first().id
+                lasts[index] = rows.last().id
+                merged += rows
+            }
+        }
+        return merged.sortedByDescending { it.dateline }
+    }
 }
 
 @Composable
@@ -363,8 +414,11 @@ private fun NotificationShortcuts(
 /** The counters a list owns; opening it marks exactly these read. */
 private val NotificationType.unreadFields: Array<String>
     get() = when (this) {
-        NotificationType.At -> arrayOf("atme")
-        NotificationType.Comment -> arrayOf("commentme", "atcommentme")
+        // The tab merges both mention streams, so both counters belong to it.
+        NotificationType.At -> arrayOf("atme", "atcommentme")
+        NotificationType.AtComment -> arrayOf("atcommentme")
+        // Only the replies themselves: `atcommentme` belongs to `@我`.
+        NotificationType.Comment -> arrayOf("commentme")
         NotificationType.Like -> arrayOf("feedlike")
         NotificationType.Follow -> arrayOf("contacts_follow")
         NotificationType.Message -> arrayOf("message")
