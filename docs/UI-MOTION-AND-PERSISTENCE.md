@@ -458,7 +458,7 @@ fun ExpandFrame(
 | Hero tag | 不需要字符串 tag；`ExpandOrigin` 对象随 `Route.Feed` 一起入栈，按对象身份关联 |
 | flightShuttleBuilder | `ExpandFrame` 的 `graphicsLayer` + `drawWithContent` |
 | 起始元素快照 | `ExpandOrigin.layer`，由 `Modifier.expandOrigin` 持续录制 |
-| 上一页快照 | `LeavingPage` 的 `picture.record {}`；预测返回用 `BackStackEntry.snapshot` |
+| 上一页快照 | `LeavingPage` 的 `picture.record {}`；预测返回重新组合下面那一页，不画快照 |
 
 ### 起始卡片
 
@@ -532,28 +532,33 @@ Modifier.graphicsLayer {
 
 ### 预测返回时的上一页
 
-预测返回不重新组合下面的页面，而是直接画 `BackStackEntry.snapshot`：
+预测返回把下面的页面**重新组合**，而不是画一张静止画面：画面是死的，连着压几层之后可能比
+页面恢复到的状态慢一帧，看起来像同一页被预览了两次。重新组合恢复的是 entry 自己的状态，
+所以预览永远就是 pop 真正会落到的那个页面。
 
 ```kotlin
-// AppNavHost.kt:462-478
+// AppNavHost.kt:683-686
 @Composable
 private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
-    val snapshot = entry.snapshot
-    if (snapshot != null) {
-        Box(
-            Modifier.fillMaxSize().drawBehind {
-                if (snapshot.width == 0 || snapshot.height == 0) return@drawBehind
-                drawImage(
-                    snapshot,
-                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                )
-            },
-        )
-    } else {
-        ComposedRevealedRoute(entry)
-    }
+    ComposedRevealedRoute(entry)
 }
 ```
+
+这一层在别的组合位置，而 `rememberSaveable` 按位置存取，所以它取不到页面原来的 saved
+state：`entry.savedState` 只作为恢复来源传进去（显式 `key` 的值仍能命中），**不写回**。
+写回会把页面离开组合时存下的那份整个替换掉，手势中途松手取消后，那一页回来时状态就没了。
+真正决定「看到什么」的状态（列表位置、当前分类、顶栏折叠）都存在 `BackStackEntry.memory`
+上，见 4.5。
+
+```kotlin
+// AppNavHost.kt:689-712
+val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
+...
+LocalPageMemory provides entry.memory,
+```
+
+预览层还带 `RouteTransition(preview = true)`，页面据此跳过用户没要求的动作：抢焦点弹键盘、
+发网络请求、清未读角标。
 
 ### 图片查看器是另一套
 
@@ -811,7 +816,7 @@ val slideShape = remember(screenCornerRadius) { RoundedCornerShape(screenCornerR
 - 松手未过阈值：200ms 回位。
 - 松手过阈值：150ms 完成退出，然后 `pop()`。
 - 两个 `tween` 使用默认 `FastOutSlowInEasing`。
-- 下面的页面用 `BackStackEntry.snapshot` 直接绘制，不会重新组合导致列表跳回顶部。
+- 下面的页面重新组合，靠 `BackStackEntry.memory` 回到用户离开时的位置，不会跳回顶部。
 
 Manifest 需要开启预测返回：
 

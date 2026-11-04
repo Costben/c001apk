@@ -687,6 +687,11 @@ private fun RevealedRoute(entry: BackStackEntry) = key(entry) {
 
 @Composable
 private fun ComposedRevealedRoute(entry: BackStackEntry) {
+    // The page's own state is the restore source, so anything it filed under an explicit key still
+    // comes back here. What this composition files is never written back to the entry: its values
+    // sit under this composition's own slots, which the real page can never read, so saving them
+    // would only replace the state the real page left behind — and a gesture released early would
+    // come back to a page that had lost it.
     val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
     val settled = remember { RouteTransition(progress = SettledGesture, exiting = { false }, preview = true) }
     CompositionLocalProvider(
@@ -703,9 +708,6 @@ private fun ComposedRevealedRoute(entry: BackStackEntry) {
         ) {
             Box(Modifier.fillMaxSize()) { RouteHost(entry.route) }
         }
-    }
-    DisposableEffect(saveableState) {
-        onDispose { entry.savedState = saveableState.performSave() }
     }
 }
 
