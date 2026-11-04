@@ -59,9 +59,12 @@ import app.awavenue.c001apk.ui.feed.LikeCard
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.NotificationType
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Badge
 import io.github.suqi8.coui.kmp.basic.EmptyState
@@ -107,20 +110,32 @@ fun NotificationScreen(
     val backdrop = rememberGlassBackdrop()
     val scope = rememberCoroutineScope()
 
+    // True when this page was composed only to be revealed under a back gesture. It is a preview of
+    // the page the pop will land on, not the page the user is on, so it must not fetch counters or
+    // clear badges the user would still be looking at if the gesture is let go.
+    val preview = LocalRouteTransition.current?.preview == true
+
     LaunchedEffect(Unit) {
-        app.unread.refresh()
+        if (!preview) app.unread.refresh()
     }
     DisposableEffect(Unit) {
-        onDispose { app.unread.markAllRead() }
+        onDispose { if (!preview) app.unread.markAllRead() }
     }
 
     val initialIndex = remember(type) {
         val found = NotificationCategories.indexOfFirst { it.first == type }
         if (found >= 0) found else 0
     }
-    val pagerState = rememberPagerState(initialPage = initialIndex) { NotificationCategories.size }
+    // The tab lives on the entry, not in the saved state: the page under a back gesture is composed
+    // outside the slot its state was saved from, where `rememberPagerState` finds nothing and opens
+    // on 全部, then jumps to the tab the user left once the pop lands.
+    val pagerState = rememberPagerState(
+        initialPage = pageMemoryPage("notification", initialIndex),
+    ) { NotificationCategories.size }
+    rememberPageMemoryRecorder("notification", pagerState.currentPage)
 
     LaunchedEffect(pagerState.currentPage) {
+        if (preview) return@LaunchedEffect
         val currentCategory = NotificationCategories[pagerState.currentPage].first
         app.unread.markRead(*currentCategory.unreadFields)
     }
