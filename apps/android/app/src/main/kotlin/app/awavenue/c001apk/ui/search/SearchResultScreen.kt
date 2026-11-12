@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -58,12 +59,23 @@ import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import io.github.suqi8.coui.kmp.icon.extended.GridView
+import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
+import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
+import io.github.suqi8.coui.kmp.basic.ChipTabGroup
+import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
@@ -77,7 +89,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-private enum class SearchContentType(val label: String, val type: String) {
+internal enum class SearchContentType(val label: String, val type: String) {
     Feed("动态", "feed"),
     App("应用", "apk"),
     Game("游戏", "game"),
@@ -86,7 +98,7 @@ private enum class SearchContentType(val label: String, val type: String) {
     User("用户", "user"),
 }
 
-private enum class SearchType(val label: String, val feedType: String) {
+internal enum class SearchType(val label: String, val feedType: String) {
     All("全部", "all"),
     Feed("动态", "feed"),
     Article("文章", "feedArticle"),
@@ -98,7 +110,7 @@ private enum class SearchType(val label: String, val feedType: String) {
     Vote("投票", "vote"),
 }
 
-private enum class SearchSortType(val label: String, val sort: String, val isStrict: Int) {
+internal enum class SearchSortType(val label: String, val sort: String, val isStrict: Int) {
     Dateline("最新发布", "dateline", 0),
     Default("默认", "none", 0),
     Hot("热门", "hot", 0),
@@ -169,38 +181,6 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
         pageMemory?.selections?.put(SEARCH_CONTENT_TYPE_KEY, searchType)
         pageMemory?.selections?.put(SEARCH_SORT_KEY, sortType)
     }
-    var menuOpen by remember { mutableStateOf(false) }
-    // Each overflow row owns its options as `children`, so the library shrinks the primary panel
-    // and morphs a second panel out of the row, matching the native ColorOS cascade.
-    val menuEntries = remember(searchType, sortType) {
-        listOf(
-            DropdownEntry(
-                items = listOf(
-                    DropdownItem(
-                        text = "内容类型",
-                        children = SearchType.entries.map { type ->
-                            DropdownItem(
-                                text = type.label,
-                                selected = searchType == type,
-                                onClick = { searchType = type },
-                            )
-                        },
-                    ),
-                    DropdownItem(
-                        text = "排序方式",
-                        children = SearchSortType.entries.map { sort ->
-                            DropdownItem(
-                                text = sort.label,
-                                selected = sortType == sort,
-                                onClick = { sortType = sort },
-                            )
-                        },
-                    ),
-                ),
-            ),
-        )
-    }
-
     // The bar never collapses; pinning the range keeps the nested-scroll connection from eating
     // the list's drags for a height change this page does not draw.
     SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
@@ -273,17 +253,12 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                                 }
                             }
                             if (pagerState.currentPage == 0) {
-                                Box {
-                                    TopBarIconButton(onClick = { menuOpen = true }) {
-                                        Icon(COUIIcons.More, contentDescription = "菜单")
-                                    }
-                                    OverlayCascadingListPopup(
-                                        show = menuOpen,
-                                        entries = menuEntries,
-                                        alignment = PopupPositionProvider.Align.BottomEnd,
-                                        onDismissRequest = { menuOpen = false },
-                                    )
-                                }
+                                SearchFilterButton(
+                                    searchType = searchType,
+                                    onSearchType = { searchType = it },
+                                    sortType = sortType,
+                                    onSortType = { sortType = it },
+                                )
                             }
                         }
                         if (title.isEmpty()) {
@@ -316,47 +291,21 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
         },
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
-            HorizontalPager(
-                state = pagerState,
+            SearchResultPager(
+                query = query,
+                tabs = tabs,
+                pagerState = pagerState,
+                searchType = searchType,
+                sortType = sortType,
+                pageType = pageType,
+                pageParam = pageParam,
+                scrollBehavior = scrollBehavior,
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 12.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                ),
                 modifier = Modifier.fillMaxSize().glassSource(backdrop),
-                beyondViewportPageCount = 1,
-            ) { page ->
-                val contentType = tabs[page]
-                val feedType = searchType.feedType
-                val sort = sortType.sort
-                val isStrict = sortType.isStrict
-                val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
-                    FeedListViewModel(
-                        PageLoader { p, first, last ->
-                            app.repository.search(
-                                type = contentType.type,
-                                feedType = feedType,
-                                sort = sort,
-                                searchValue = query,
-                                isStrict = isStrict,
-                                pageType = pageType,
-                                pageParam = pageParam,
-                                page = p,
-                                firstItem = first,
-                                lastItem = last,
-                            )
-                        },
-                        app::contentGate,
-                    )
-                }
-                // A new view model means a new search: start the list from the top instead of
-                // keeping the previous filter's scroll position.
-                key(viewModel) {
-                    FeedList(
-                        viewModel = viewModel,
-                        scrollBehavior = scrollBehavior,
-                        contentPadding = PaddingValues(
-                            top = innerPadding.calculateTopPadding() + 12.dp,
-                            bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                        ),
-                    )
-                }
-            }
+            )
         }
     }
 }
@@ -367,4 +316,246 @@ private fun scopeLabel(pageType: String?): String = when (pageType) {
     "tag" -> "话题"
     "product_phone" -> "数码"
     else -> "范围"
+}
+
+/**
+ * The overflow key of a search: content type and order, as one cascading menu. Each row owns its
+ * options as `children`, so the library shrinks the primary panel and morphs a second panel out of
+ * the row, matching the native ColorOS cascade. Both only apply to the 动态 results.
+ */
+@Composable
+internal fun SearchFilterButton(
+    searchType: SearchType,
+    onSearchType: (SearchType) -> Unit,
+    sortType: SearchSortType,
+    onSortType: (SearchSortType) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(modifier) {
+        TopBarIconButton(onClick = { menuOpen = true }) {
+            Icon(COUIIcons.More, contentDescription = "筛选")
+        }
+        SearchFilterMenu(
+            show = menuOpen,
+            onDismissRequest = { menuOpen = false },
+            searchType = searchType,
+            onSearchType = onSearchType,
+            sortType = sortType,
+            onSortType = onSortType,
+            alignment = PopupPositionProvider.Align.BottomEnd,
+        )
+    }
+}
+
+/** The cascading 内容类型 / 排序方式 menu behind the result page's filter button. */
+@Composable
+private fun SearchFilterMenu(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    searchType: SearchType,
+    onSearchType: (SearchType) -> Unit,
+    sortType: SearchSortType,
+    onSortType: (SearchSortType) -> Unit,
+    alignment: PopupPositionProvider.Align,
+) {
+    val entries = remember(searchType, sortType, onSearchType, onSortType) {
+        listOf(
+            DropdownEntry(
+                items = listOf(
+                    DropdownItem(
+                        text = "内容类型",
+                        children = SearchType.entries.map { type ->
+                            DropdownItem(
+                                text = type.label,
+                                selected = searchType == type,
+                                onClick = { onSearchType(type) },
+                            )
+                        },
+                    ),
+                    DropdownItem(
+                        text = "排序方式",
+                        children = SearchSortType.entries.map { sort ->
+                            DropdownItem(
+                                text = sort.label,
+                                selected = sortType == sort,
+                                onClick = { onSortType(sort) },
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+    }
+    OverlayCascadingListPopup(
+        show = show,
+        entries = entries,
+        alignment = alignment,
+        onDismissRequest = onDismissRequest,
+    )
+}
+
+/**
+ * The result pages of one search, one per content type. Shared by the search result page and the
+ * home bar's in-place search, so both load and list results the same way.
+ */
+@Composable
+internal fun SearchResultPager(
+    query: String,
+    tabs: List<SearchContentType>,
+    pagerState: PagerState,
+    searchType: SearchType,
+    sortType: SearchSortType,
+    pageType: String?,
+    pageParam: String?,
+    scrollBehavior: ScrollBehavior,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
+) {
+    val app = LocalApp.current
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier,
+        beyondViewportPageCount = 1,
+    ) { page ->
+        val contentType = tabs[page]
+        val feedType = searchType.feedType
+        val sort = sortType.sort
+        val isStrict = sortType.isStrict
+        val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
+            FeedListViewModel(
+                PageLoader { p, first, last ->
+                    app.repository.search(
+                        type = contentType.type,
+                        feedType = feedType,
+                        sort = sort,
+                        searchValue = query,
+                        isStrict = isStrict,
+                        pageType = pageType,
+                        pageParam = pageParam,
+                        page = p,
+                        firstItem = first,
+                        lastItem = last,
+                    )
+                },
+                app::contentGate,
+            )
+        }
+        // A new view model means a new search: start the list from the top instead of keeping the
+        // previous filter's scroll position.
+        key(viewModel) {
+            FeedList(
+                viewModel = viewModel,
+                scrollBehavior = scrollBehavior,
+                contentPadding = contentPadding,
+            )
+        }
+    }
+}
+
+/**
+ * The content types of a search as COUI chip tabs, led by the round grid chip whose menu lists the
+ * same types (the current one checked) and, below a divider, 内容类型 and 排序方式 as submenus. Those
+ * two only narrow 动态, so they are disabled on the other types. The home bar's in-place search uses
+ * it; the layout follows the search header of Cobo.
+ */
+@Composable
+internal fun SearchResultTabs(
+    tabs: List<SearchContentType>,
+    selectedIndex: Int,
+    onSelectedChange: (Int) -> Unit,
+    searchType: SearchType,
+    onSearchType: (SearchType) -> Unit,
+    sortType: SearchSortType,
+    onSortType: (SearchSortType) -> Unit,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 16.dp,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val hapticFeedback = LocalHapticFeedback.current
+    val currentOnSelectedChange by rememberUpdatedState(onSelectedChange)
+    val currentOnSearchType by rememberUpdatedState(onSearchType)
+    val currentOnSortType by rememberUpdatedState(onSortType)
+    val chipTabs = remember(tabs) { tabs.map { ChipTabData(label = it.label) } }
+    val positionProvider = remember(horizontalPadding) {
+        ListPopupDefaults.dropdownPositionProvider(horizontalMargin = horizontalPadding)
+    }
+    val filterEnabled = tabs.getOrNull(selectedIndex) == SearchContentType.Feed
+    val entries = remember(tabs, selectedIndex, searchType, sortType, filterEnabled, hapticFeedback) {
+        val confirm = { hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm) }
+        listOf(
+            DropdownEntry(
+                items = tabs.mapIndexed { index, tab ->
+                    DropdownItem(
+                        text = tab.label,
+                        selected = index == selectedIndex,
+                        onClick = {
+                            confirm()
+                            currentOnSelectedChange(index)
+                        },
+                    )
+                },
+            ),
+            DropdownEntry(
+                items = listOf(
+                    DropdownItem(
+                        text = "内容类型",
+                        enabled = filterEnabled,
+                        children = SearchType.entries.map { type ->
+                            DropdownItem(
+                                text = type.label,
+                                selected = searchType == type,
+                                onClick = {
+                                    confirm()
+                                    currentOnSearchType(type)
+                                },
+                            )
+                        },
+                    ),
+                    DropdownItem(
+                        text = "排序方式",
+                        enabled = filterEnabled,
+                        children = SearchSortType.entries.map { sort ->
+                            DropdownItem(
+                                text = sort.label,
+                                selected = sortType == sort,
+                                onClick = {
+                                    confirm()
+                                    currentOnSortType(sort)
+                                },
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+    }
+    Box(modifier.fillMaxWidth()) {
+        ChipTabGroup(
+            tabs = chipTabs,
+            selectedIndex = selectedIndex,
+            onSelectedChange = onSelectedChange,
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = COUIIcons.GridView,
+            onLeadingIconClick = { menuOpen = true },
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+        )
+        // Anchored to the 32dp grid chip itself, so the menu drops from it instead of centring on
+        // the full-width row.
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = horizontalPadding)
+                .size(ChipTabDefaults.Height),
+        ) {
+            OverlayCascadingListPopup(
+                show = menuOpen,
+                entries = entries,
+                onDismissRequest = { menuOpen = false },
+                popupPositionProvider = positionProvider,
+                alignment = PopupPositionProvider.Align.Start,
+                collapseOnSelection = true,
+            )
+        }
+    }
 }

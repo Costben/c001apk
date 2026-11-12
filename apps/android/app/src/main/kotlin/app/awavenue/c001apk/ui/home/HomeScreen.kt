@@ -1,5 +1,25 @@
 package app.awavenue.c001apk.ui.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
+import app.awavenue.c001apk.ui.common.longPressAnywhere
+import app.awavenue.c001apk.ui.search.SearchContentType
+import app.awavenue.c001apk.ui.search.SearchResultTabs
+import app.awavenue.c001apk.ui.search.SearchHistorySection
+import app.awavenue.c001apk.ui.search.SearchResultPager
+import app.awavenue.c001apk.ui.search.SearchSortType
+import app.awavenue.c001apk.ui.search.SearchType
+import androidx.compose.foundation.pager.rememberPagerState
+import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.TopAppBarSearchBar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -20,12 +40,16 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,13 +61,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,8 +79,6 @@ import app.awavenue.c001apk.ui.app.AppListPage
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
-import app.awavenue.c001apk.ui.common.TopBarIconButton
-import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -69,18 +92,13 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
-import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
-import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -114,6 +132,8 @@ enum class HomeTab(val label: String) {
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
 private val TOP_BAR_ROW_HEIGHT = 52.dp
+/** How far a top-row key's halo reaches past the row; the row's clip leaves this much room. */
+private val TOP_ROW_HALO = 16.dp
 
 /**
  * The header cards the 首页内容 switches own: the banner, the channel shortcuts, and the rows of
@@ -132,41 +152,6 @@ private fun homeHeaderVisible(item: Entity, carousel: Boolean, channels: Boolean
  * bar reads as a translucent surface rather than as icons sitting directly on the list.
  */
 private const val MATERIAL_MIN_ALPHA = 0.55f
-
-/**
- * Long-press anywhere on the bar, including over the tabs. The tab items consume their own down,
- * so a parent combinedClickable never sees those touches; the Initial pass does. Nothing is
- * consumed until the press actually turns into a long press, which keeps taps and drags intact.
- */
-private fun Modifier.longPressAnywhere(onLongPress: () -> Unit): Modifier = pointerInput(onLongPress) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val touchSlop = viewConfiguration.touchSlop
-        var canceled = false
-        val releasedEarly = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                val change = event.changes.firstOrNull { it.id == down.id } ?: continue
-                if (!change.pressed || change.isConsumed ||
-                    (change.position - down.position).getDistance() > touchSlop
-                ) {
-                    canceled = true
-                    return@withTimeoutOrNull
-                }
-            }
-        }
-        if (releasedEarly == null && !canceled) {
-            onLongPress()
-            // Swallow the rest of the gesture so the tab does not also click on release.
-            var pressed = true
-            while (pressed) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                event.changes.forEach { it.consume() }
-                pressed = event.changes.any { it.pressed }
-            }
-        }
-    }
-}
 
 /**
  * Reports a mostly-vertical drag before the page's list sees it, so the pager can stand down for
@@ -230,9 +215,48 @@ fun HomeScreen(
             navigator.push(Route.Login)
         }
     }
-    val openSearch = rememberHapticClick {
-        navigator.push(Route.Search(title = ""))
+    // Search runs in place: the bar's round search key stretches into the field, the history fades
+    // in under it, and a submitted keyword lists its results right there instead of pushing a page.
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    // The keyword the results are showing; null while the history is.
+    var searchSubmitted by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchType by rememberSaveable { mutableStateOf(SearchType.All) }
+    var searchSort by rememberSaveable { mutableStateOf(SearchSortType.Dateline) }
+    val resultTabs = SearchContentType.entries
+    val resultPagerState = rememberPagerState { resultTabs.size }
+    // The results never collapse the bar; the state only tracks how far the list has scrolled, which
+    // drives the bar material the way the home stream's scroll does.
+    val resultScrollState = rememberTopAppBarState(initialHeightOffsetLimit = 0f)
+    val resultScrollBehavior = COUIScrollBehavior(state = resultScrollState)
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val closeSearch = {
+        searchQuery = ""
+        searchSubmitted = null
+        searchExpanded = false
     }
+    val submitSearch: (String) -> Unit = { raw ->
+        val text = raw.trim()
+        if (text.isNotEmpty()) {
+            // The results are what the user is reading now: a field that kept the focus would
+            // leave the caret blinking over them.
+            focusManager.clearFocus()
+            keyboard?.hide()
+            app.searchHistory.add(text)
+            searchQuery = text
+            if (text != searchSubmitted) resultScrollState.contentOffset = 0f
+            searchSubmitted = text
+        }
+    }
+    // True while the search is open and no pushed page covers it. The bar itself stays expanded
+    // under a page, so that only decides which back steps may run.
+    val searchActive = searchExpanded && !navigator.hasOverlay
+    // Back from the history closes the search. Back from the results is handled after the bar.
+    BackHandler(enabled = searchActive) { closeSearch() }
+    // Switching to 关注 / 我的 leaves the search behind instead of reopening it on the way back.
+    val onOtherMainTab = navigator.mainBackAvailable
+    LaunchedEffect(onOtherMainTab) { if (onOtherMainTab) closeSearch() }
     val scope = rememberCoroutineScope()
     // Only the top row collapses. The limit is exactly its height, so the tab row stays pinned
     // under the status bar once the header has scrolled away.
@@ -281,6 +305,8 @@ fun HomeScreen(
 
     val backdrop = rememberGlassBackdrop()
     val density = LocalDensity.current
+    // The opaque face the bar turns into while the results scroll under it.
+    val barFace = COUITheme.colorScheme.surface
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // Same profile as the Settings homepage's scroll-driven overlay: the blur is at full strength
     // at the bar's top edge and fades to clear over the bar plus the native extra band below it.
@@ -294,10 +320,26 @@ fun HomeScreen(
     // follows the distance the list has scrolled, not the row's collapse: pulling the row back down
     // changes no content position, and tying the material to it would visibly thin the blur exactly
     // when the row reappears. The draw-phase read keeps the shader composed across the gesture.
-    val materialScrollFraction = remember(scrolledPx, density) {
+    // 0 → 1 as the search opens; read only in draw lambdas, so the fade never recomposes the bar.
+    val searchFade = remember { Animatable(if (searchExpanded) 1f else 0f) }
+    LaunchedEffect(searchExpanded) { searchFade.animateTo(if (searchExpanded) 1f else 0f, tween(220)) }
+    val segmentsGone by remember(searchFade) { derivedStateOf { searchFade.value >= 1f } }
+    // 0 → 1 as results replace the history.
+    val resultsFade = remember { Animatable(if (searchSubmitted != null) 1f else 0f) }
+    LaunchedEffect(searchSubmitted != null) {
+        resultsFade.animateTo(if (searchSubmitted != null) 1f else 0f, tween(220))
+    }
+    val resultsShown by remember(resultsFade) { derivedStateOf { resultsFade.value > 0f } }
+    val historyGone by remember(resultsFade) { derivedStateOf { resultsFade.value >= 1f } }
+    val materialScrollFraction = remember(scrolledPx, density, searchFade, resultsFade, resultScrollState) {
         {
             val ramp = AppBarBlurOverlayDefaults.scrollAlpha(scrolledPx.floatValue, density)
-            MATERIAL_MIN_ALPHA + (1f - MATERIAL_MIN_ALPHA) * ramp
+            val resultRamp = AppBarBlurOverlayDefaults.scrollAlpha(abs(resultScrollState.contentOffset), density)
+            // The history panel shares the bar's surface colour, so the material clears while it
+            // is open: no bar edge is left drawn across the panel. The results scroll under the
+            // bar like the stream does, so the material returns with them.
+            (MATERIAL_MIN_ALPHA + (1f - MATERIAL_MIN_ALPHA) * ramp) * (1f - searchFade.value) +
+                (MATERIAL_MIN_ALPHA + (1f - MATERIAL_MIN_ALPHA) * resultRamp) * resultsFade.value
         }
     }
 
@@ -323,15 +365,29 @@ fun HomeScreen(
                 // extra band below it.
                 extraHeight = materialExtra,
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            // BiliCO's detail bar: once the results scroll under the bar, its whole
+                            // face becomes the page's own surface, so no screenshot bleeds through
+                            // the chips. Below the threshold the bar stays the glass it always is.
+                            val covered = resultsFade.value * AppBarBlurOverlayDefaults.scrollAlpha(
+                                abs(resultScrollState.contentOffset),
+                                this,
+                            )
+                            if (covered > 0f) drawRect(barFace.copy(alpha = covered))
+                        },
+                ) {
                     Spacer(modifier = Modifier.height(statusBar))
                     // The row keeps its full height and slides out of a box that shrinks with the
                     // scroll, so the tab row rises into its place instead of leaving a gap behind.
                     // The height is resolved in the measure phase and the clip in the draw phase,
                     // both from [collapseFraction], so scrolling never recomposes the bar.
                     // A circular button's halo reaches 15.5dp past its 40dp circle, while the row only
-                    // leaves 6dp above and below, so clipping at rest would slice the halo off; the
-                    // clip only engages while the row is sliding out.
+                    // leaves 6dp above and below. The clip therefore keeps a halo-wide margin on every
+                    // side: at rest it cuts nothing, and while the row slides out the glow under the
+                    // buttons stays drawn instead of switching off at the first pixel of collapse.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -344,7 +400,12 @@ fun HomeScreen(
                                     .coerceIn(0, full)
                                 layout(placeable.width, visible) { placeable.placeRelative(0, 0) }
                             }
-                            .graphicsLayer { clip = collapseFraction() > 0f },
+                            .drawWithContent {
+                                val halo = TOP_ROW_HALO.toPx()
+                                clipRect(-halo, -halo, size.width + halo, size.height + halo) {
+                                    this@drawWithContent.drawContent()
+                                }
+                            },
                     ) {
                         Row(
                             modifier = Modifier
@@ -357,29 +418,72 @@ fun HomeScreen(
                                     // to each draw instead of an offscreen copy of the whole row.
                                     compositingStrategy = CompositingStrategy.ModulateAlpha
                                 }
-                                .padding(start = 16.dp, end = 16.dp),
+                            ,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            // COUI's toolbar search: the round key stretches left into the field
+                            // and splits off the 取消 capsule, all inside this row. Transparent
+                            // gradient = embedded, so it rides on the material drawn above.
                             ChromeDensity {
-                                NetworkImage(
-                                    app.session.userAvatar,
-                                    Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .clickable(onClick = openProfile),
-                                    contentDescription = "我的",
+                                TopAppBarSearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = {
+                                        searchQuery = it
+                                        // Clearing the field goes back to the history.
+                                        if (it.isEmpty()) searchSubmitted = null
+                                    },
+                                    // The field stays open while a page is pushed over it: coming back
+                                    // from a feed must land on the results exactly as they were, not
+                                    // on a bar that collapsed and reopened underneath.
+                                    expanded = searchExpanded,
+                                    onExpandedChange = { searchExpanded = it },
+                                    placeholder = "搜索",
+                                    cancelText = "取消",
+                                    onSearch = submitSearch,
+                                    onCancel = closeSearch,
+                                    searchButtonContentDescription = "搜索",
+                                    backdrop = backdrop,
+                                    gradientColor = Color.Transparent,
+                                    extraActions = { NotificationBell() },
+                                    titleContent = {
+                                        NetworkImage(
+                                            app.session.userAvatar,
+                                            Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .clickable(onClick = openProfile),
+                                            contentDescription = "我的",
+                                        )
+                                    },
                                 )
+                                // Back from the results returns to the history first. The bar's own
+                                // back handler closes the whole search, and the newest registered
+                                // handler wins, so this one has to come after the bar.
+                                BackHandler(enabled = searchActive && searchSubmitted != null) {
+                                    searchSubmitted = null
+                                }
+                                // The field stays open while a page is pushed over it, so the bar's
+                                // own back handler would close the search instead of leaving that
+                                // page. Being registered after the bar, this one runs first and pops.
+                                BackHandler(enabled = searchExpanded && navigator.hasOverlay) {
+                                    navigator.pop()
+                                }
                             }
-                            Spacer(Modifier.weight(1f))
-                            TopBarIconButton(onClick = openSearch) {
-                                Icon(COUIIcons.Search, contentDescription = "搜索")
-                            }
-                            NotificationBell(Modifier.padding(start = 10.dp))
                         }
                     }
+                    // The segments only fade while the search is open; their slot keeps its height,
+                    // so the bar and the pages under it stay exactly where they were. Once faded
+                    // they leave composition, and taps in the slot reach the history underneath.
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2),
+                    ) {
+                    if (!segmentsGone) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .graphicsLayer { alpha = 1f - searchFade.value }
                             // The capsule shares the top row's 16dp margins, so its edges line up
                             // with the avatar's left edge and the bell's right edge.
                             .padding(horizontal = 16.dp)
@@ -405,17 +509,38 @@ fun HomeScreen(
                                     scope.launch { pagerState.animateScrollToPage(it) }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = appTabRowColors(),
+                                // COUI's transparent blur highlight: the capsule blurs the page
+                                // under it, with the library's own colours and indicator material.
                                 // Six labels have to share the narrower capsule: COUI's 52dp floor and
                                 // 12dp segment padding overflow it, so the segments give up some of
                                 // both instead of the capsule growing.
                                 minWidth = 44.dp,
                                 segmentPadding = 8.dp,
-                                indicatorMaterial = MaterialStrokeParams.frameworkCapsule13(
-                                    COUITheme.colorScheme.background.luminance() < 0.5f,
-                                ),
+                                backdrop = backdrop,
                             )
                         }
+                    }
+                    }
+                    // While results show, the slot carries their content types instead: COUI's
+                    // chip tabs, led by the round grid chip that opens the type / filter menu.
+                    if (resultsShown) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = resultsFade.value },
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            SearchResultTabs(
+                                tabs = resultTabs,
+                                selectedIndex = resultPagerState.currentPage,
+                                onSelectedChange = { scope.launch { resultPagerState.animateScrollToPage(it) } },
+                                searchType = searchType,
+                                onSearchType = { searchType = it },
+                                sortType = searchSort,
+                                onSortType = { searchSort = it },
+                            )
+                        }
+                    }
                     }
                 }
             }
@@ -434,11 +559,13 @@ fun HomeScreen(
             }
         }
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            // The search panel sits in the same glass layer as the pages, so the bar blurs whichever
+            // of them is showing.
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .glassSource(backdrop)
                     .verticalDragWins { vertical -> pagerScrollEnabled = !vertical },
                 userScrollEnabled = pagerScrollEnabled,
                 beyondViewportPageCount = 1,
@@ -469,6 +596,61 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
+            // The history drops in under the expanded field and covers the stream, the way the
+            // search page used to; picking a keyword opens its results on top.
+            AnimatedVisibility(
+                visible = searchExpanded,
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(160)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(COUITheme.colorScheme.surface)
+                        // Swallow taps and drags so nothing reaches the stream underneath.
+                        .clickable(interactionSource = null, indication = null) {},
+                ) {
+                    if (!historyGone) {
+                        SearchHistorySection(
+                            onPick = submitSearch,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = 1f - resultsFade.value }
+                                // Straight under the search field: the segment slot above is empty
+                                // while searching, and the bar's material is cleared.
+                                .padding(top = statusBar + TOP_BAR_ROW_HEIGHT)
+                                .verticalScroll(rememberScrollState()),
+                            bottomPadding = outerPadding.calculateBottomPadding(),
+                        )
+                    }
+                    val submitted = searchSubmitted
+                    if (submitted != null) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = resultsFade.value }
+                                .background(COUITheme.colorScheme.surface),
+                        ) {
+                            SearchResultPager(
+                                query = submitted,
+                                tabs = resultTabs,
+                                pagerState = resultPagerState,
+                                searchType = searchType,
+                                sortType = searchSort,
+                                pageType = null,
+                                pageParam = null,
+                                scrollBehavior = resultScrollBehavior,
+                                contentPadding = PaddingValues(
+                                    top = innerPadding.calculateTopPadding() + 12.dp,
+                                    bottom = outerPadding.calculateBottomPadding() + 12.dp,
+                                ),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
+            }
             }
         }
     }

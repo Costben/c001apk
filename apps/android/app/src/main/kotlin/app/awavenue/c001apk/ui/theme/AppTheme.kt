@@ -128,7 +128,9 @@ fun rememberChromeDensity(): Density {
         if (!overridden) {
             system
         } else {
-            val widthPx = configuration.screenWidthDp * system.density
+            // The window width comes from the configuration's own density, not the incoming
+            // one, so a nested ChromeDensity resolves to the same value instead of shrinking again.
+            val widthPx = configuration.screenWidthDp * configuration.densityDpi / 160f
             Density(
                 density = minOf(system.density, widthPx / DefaultLogicalWidthDp),
                 fontScale = system.fontScale,

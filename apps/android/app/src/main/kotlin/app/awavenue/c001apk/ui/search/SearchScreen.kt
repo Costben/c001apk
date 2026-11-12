@@ -1,9 +1,10 @@
 package app.awavenue.c001apk.ui.search
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.key
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,8 +30,9 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
-import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.FlowLayout
+import io.github.suqi8.coui.kmp.basic.SearchHistoryChip
+import io.github.suqi8.coui.kmp.basic.SearchHistoryViewDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.InputField
@@ -41,7 +43,6 @@ import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Clear
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
-import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /**
  * The search page in COUISearchBar's edit state: one field capsule across the header.
@@ -65,8 +66,6 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
     // something that changes while the page lives.
     val preview = LocalRouteTransition.current?.preview == true
     var keyword by remember { mutableStateOf("") }
-    var showClearDialog by remember { mutableStateOf(false) }
-    val history = app.searchHistory.keywords
 
     // The device only lights the bar while it is being edited, so the caustic light ramps in with
     // the page instead of snapping on.
@@ -111,13 +110,41 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
             }
         },
     ) { innerPadding ->
-        if (history.isEmpty()) return@Scaffold
-        Column(
-            Modifier
+        SearchHistorySection(
+            onPick = { text ->
+                keyword = text
+                submit(text)
+            },
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
                 .verticalScroll(rememberPageScrollState("search")),
-        ) {
+            bottomPadding = innerPadding.calculateBottomPadding(),
+        )
+    }
+}
+
+/**
+ * The 搜索历史 chips with their 清除全部 key, shared by the search page and the home bar's in-place
+ * search. Nothing is drawn while the history is empty.
+ *
+ * Long-pressing a chip springs a ✕ out of its right side; tapping the ✕ deletes that keyword, and
+ * tapping the chip again (or long-pressing another one) puts the ✕ away.
+ */
+@Composable
+fun SearchHistorySection(
+    onPick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    bottomPadding: Dp = 0.dp,
+) {
+    val app = LocalApp.current
+    val history = app.searchHistory.keywords
+    var showClearDialog by remember { mutableStateOf(false) }
+    // The chip whose ✕ is out. Only one at a time, so a long press elsewhere moves it.
+    var deleting by remember { mutableStateOf<String?>(null) }
+
+    if (history.isNotEmpty()) {
+        Column(modifier) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -136,22 +163,26 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
                 modifier = Modifier.fillMaxWidth().padding(
                     start = 10.dp,
                     end = 10.dp,
-                    bottom = 10.dp + innerPadding.calculateBottomPadding(),
+                    bottom = 10.dp + bottomPadding,
                 ),
-                itemSpacing = 8.dp,
-                lineSpacing = 8.dp,
+                itemSpacing = SearchHistoryViewDefaults.FlowItemSpacing,
+                lineSpacing = SearchHistoryViewDefaults.FlowLineSpacing,
             ) {
                 history.forEach { text ->
-                    Card(
-                        cornerRadius = 20.dp,
-                        insideMargin = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        onClick = {
-                            keyword = text
-                            submit(text)
-                        },
-                        onLongPress = { app.searchHistory.remove(text) },
-                    ) {
-                        Text(text, maxLines = 1, style = COUITheme.textStyles.footnote1)
+                    key(text) {
+                        // COUI's search-history chip: a long press springs its ✕ out while the
+                        // chip widens; only one is out at a time.
+                        SearchHistoryChip(
+                            text = text,
+                            onClick = { onPick(text) },
+                            onDelete = {
+                                deleting = null
+                                app.searchHistory.remove(text)
+                            },
+                            deleteMode = deleting == text,
+                            onDeleteModeChange = { on -> deleting = if (on) text else null },
+                            deleteContentDescription = "删除 $text",
+                        )
                     }
                 }
             }
@@ -167,6 +198,7 @@ fun SearchScreen(title: String, pageType: String?, pageParam: String?) {
         onCancel = { showClearDialog = false },
         onConfirm = {
             showClearDialog = false
+            deleting = null
             app.searchHistory.clear()
         },
     )
