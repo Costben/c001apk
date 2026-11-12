@@ -46,7 +46,10 @@ import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TopAppBarSearchBar
 import io.github.suqi8.coui.kmp.basic.TopAppBarState
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /**
@@ -215,7 +218,9 @@ internal fun InPlaceSearchBar(
  *
  * [topChrome] is the page's own row of content types for a bar that has no second row to put them
  * in: it floats over the results with no band of its own, so a scrolled row passes behind the chips
- * the way it does under a title instead of stopping at a painted edge.
+ * the way it does under a title instead of stopping at a painted edge. It is handed the backdrop the
+ * results are recorded into, so a chip can frost what scrolls behind it: the row sits above that
+ * layer, and a chip sampling a layer it is drawn into would read it while it is being recorded.
  */
 @Composable
 internal fun InPlaceSearchPanel(
@@ -225,9 +230,10 @@ internal fun InPlaceSearchPanel(
     bottomPadding: Dp,
     modifier: Modifier = Modifier,
     topChromeHeight: Dp = 0.dp,
-    topChrome: (@Composable () -> Unit)? = null,
+    topChrome: (@Composable (Backdrop?) -> Unit)? = null,
 ) {
     val surface = COUITheme.colorScheme.surface
+    val resultsBackdrop = rememberLayerBackdrop()
     AnimatedVisibility(
         visible = state.expanded,
         modifier = modifier,
@@ -258,21 +264,30 @@ internal fun InPlaceSearchPanel(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = state.resultsFade.value }
-                        .background(surface),
+                        .graphicsLayer { alpha = state.resultsFade.value },
                 ) {
-                    SearchResultPager(
-                        query = submitted,
-                        tabs = state.tabs,
-                        pagerState = state.pagerState,
-                        searchType = state.searchType,
-                        sortType = state.sortType,
-                        pageType = null,
-                        pageParam = null,
-                        scrollBehavior = state.scrollBehavior,
-                        contentPadding = resultContentPadding,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    // The results are recorded as a layer of their own, with the page's colour under
+                    // them: a chip samples it to frost whatever scrolls behind its row. The row itself
+                    // is drawn above this box, never inside it.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(surface)
+                            .layerBackdrop(resultsBackdrop),
+                    ) {
+                        SearchResultPager(
+                            query = submitted,
+                            tabs = state.tabs,
+                            pagerState = state.pagerState,
+                            searchType = state.searchType,
+                            sortType = state.sortType,
+                            pageType = null,
+                            pageParam = null,
+                            scrollBehavior = state.scrollBehavior,
+                            contentPadding = resultContentPadding,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     if (topChrome != null) {
                         // The bar keeps the page's colour and the chips float under it: the band wears
                         // off across the chips' own row, so a scrolled row slides in under them instead
@@ -295,7 +310,7 @@ internal fun InPlaceSearchPanel(
                                 ),
                             contentAlignment = Alignment.BottomCenter,
                         ) {
-                            topChrome()
+                            topChrome(resultsBackdrop)
                         }
                     }
                 }

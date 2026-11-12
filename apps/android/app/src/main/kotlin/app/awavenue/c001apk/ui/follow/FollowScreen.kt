@@ -303,7 +303,7 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                     topChromeHeight = CHIP_ROW_GAP + CHIP_ROW_HEIGHT,
                     // The chips have no band of their own: they sit just under the bar and the
                     // results scroll up behind them.
-                    topChrome = {
+                    topChrome = { rowBackdrop ->
                         SearchResultTabs(
                             modifier = Modifier.padding(top = CHIP_ROW_GAP),
                             tabs = search.tabs,
@@ -315,6 +315,9 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                             onSearchType = { search.searchType = it },
                             sortType = search.sortType,
                             onSortType = { search.sortType = it },
+                            // The panel records the results into a layer of their own: the row is
+                            // drawn above it, so a chip frosts what scrolls behind its row.
+                            backdrop = rowBackdrop,
                         )
                     },
                 )

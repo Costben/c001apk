@@ -87,6 +87,7 @@ import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
+import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -469,6 +470,9 @@ internal fun SearchResultPager(
  * same types (the current one checked) and, below a divider, 内容类型 and 排序方式 as submenus. Those
  * two only narrow 动态, so they are disabled on the other types. The home bar's in-place search uses
  * it; the layout follows the search header of Cobo.
+ *
+ * [backdrop] is the layer behind the row: with it the pills frost what scrolls under them instead of
+ * painting an opaque fill. Pass the page's own layer only where the row is drawn outside it.
  */
 @Composable
 internal fun SearchResultTabs(
@@ -479,6 +483,7 @@ internal fun SearchResultTabs(
     onSearchType: (SearchType) -> Unit,
     sortType: SearchSortType,
     onSortType: (SearchSortType) -> Unit,
+    backdrop: Backdrop? = null,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 16.dp,
 ) {
@@ -550,6 +555,7 @@ internal fun SearchResultTabs(
             leadingIcon = COUIIcons.GridView,
             onLeadingIconClick = { menuOpen = true },
             contentPadding = PaddingValues(horizontal = horizontalPadding),
+            backdrop = backdrop,
         )
         // Anchored to the 32dp grid chip itself, so the menu drops from it instead of centring on
         // the full-width row.

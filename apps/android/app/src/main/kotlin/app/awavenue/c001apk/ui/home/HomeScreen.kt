@@ -476,6 +476,9 @@ fun HomeScreen(
                                 onSearchType = { search.searchType = it },
                                 sortType = search.sortType,
                                 onSortType = { search.sortType = it },
+                                // The bar is a sibling of the layer the pages record into, so the
+                                // chips can frost the results scrolling under them.
+                                backdrop = backdrop,
                             )
                         }
                     }
