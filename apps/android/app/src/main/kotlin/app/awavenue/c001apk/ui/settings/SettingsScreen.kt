@@ -3,13 +3,9 @@ package app.awavenue.c001apk.ui.settings
 import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,7 +28,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.BuildConfig
 import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
@@ -63,9 +58,8 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.ListPopupColumn
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.SliderDefaults
 import io.github.suqi8.coui.kmp.basic.SmallTitle
-import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
@@ -93,7 +87,6 @@ import io.github.suqi8.coui.kmp.icon.extended.Theme
 import io.github.suqi8.coui.kmp.icon.extended.Tune
 import io.github.suqi8.coui.kmp.icon.extended.Update
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
-import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.OverlayDropdownPreference
@@ -105,8 +98,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.roundToInt
 
-/** The scale steps the Flutter slider dialog snaps to. */
+/** The discrete scale steps 字体大小 snaps to. */
 private val fontScaleSteps = listOf(0.8f, 0.85f, 0.9f, 0.95f, 1f, 1.05f, 1.1f, 1.15f, 1.2f, 1.25f, 1.3f)
 
 /** The 深色模式 options in the order the Flutter dropdown lists them. */
@@ -126,12 +120,17 @@ fun SettingsScreen() {
 
     val backdrop = rememberGlassBackdrop()
 
-    var showFontScale by remember { mutableStateOf(false) }
     var cacheSize by remember { mutableStateOf<Long?>(null) }
     var askClearCache by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateResult.Available?>(null) }
     var menu by remember { mutableStateOf(false) }
+
+    // 字体大小 drags against a local draft and only commits on release: the scale is applied by
+    // swapping LocalDensity, so committing mid-drag re-measures the whole page on every step and
+    // the drag stalls.
+    var fontScaleDraft by remember { mutableFloatStateOf(settings.fontScale) }
+    LaunchedEffect(settings.fontScale) { fontScaleDraft = settings.fontScale }
 
     // Each 主题颜色 option carries a dot in the seed it applies, so the list reads as swatches.
     val seedColorEntry = remember(settings.seedColor) {
@@ -279,11 +278,24 @@ fun SettingsScreen() {
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
                             onClick = rememberHapticClick { navigator.push(Route.ContentFilter) },
                         )
-                        ArrowPreference(
+                        SliderPreference(
                             title = "字体大小",
-                            summary = "${scaleText(settings.fontScale)}x",
+                            value = fontScaleDraft,
+                            onValueChange = { fontScaleDraft = it },
+                            onValueChangeFinished = {
+                                val snapped = (fontScaleDraft * 20f).roundToInt() / 20f
+                                if (snapped != settings.fontScale) settings.updateFontScale(snapped)
+                            },
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
-                            onClick = rememberHapticClick { showFontScale = true },
+                            valueText = "${scaleText(fontScaleDraft)}x",
+                            valueRange = fontScaleSteps.first()..fontScaleSteps.last(),
+                            steps = fontScaleSteps.size - 2,
+                            hapticEffect = if (settings.hapticFeedback) {
+                                SliderDefaults.SliderHapticEffect.Step
+                            } else {
+                                SliderDefaults.SliderHapticEffect.None
+                            },
+                            showKeyPoints = true,
                         )
                         SwitchPreference(
                             title = "在浏览器中打开",
@@ -518,14 +530,6 @@ fun SettingsScreen() {
         }
     }
 
-    if (showFontScale) {
-        FontScaleDialog(
-            current = settings.fontScale,
-            onChange = settings::updateFontScale,
-            onClose = { showFontScale = false },
-        )
-    }
-
     update?.let { AppUpdateDialog(it, onDismiss = { update = null }) }
 
     if (askClearCache) {
@@ -580,49 +584,6 @@ private fun ClearCacheDialog(cacheSize: Long, onConfirm: () -> Unit, onCancel: (
         onConfirm = onConfirm,
         onCancel = onCancel,
     )
-}
-
-@Composable
-private fun FontScaleDialog(current: Float, onChange: (Float) -> Unit, onClose: () -> Unit) {
-    var draft by remember { mutableFloatStateOf(current) }
-
-    OverlayDialog(show = true, title = "字体大小", onDismissRequest = onClose) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            SliderPreference(
-                value = draft,
-                onValueChange = { draft = it },
-                valueRange = fontScaleSteps.first()..fontScaleSteps.last(),
-                keyPoints = fontScaleSteps,
-                showKeyPoints = true,
-                valueText = scaleText(draft),
-            )
-            Text(
-                "字体大小：${scaleText(draft)}",
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-                fontSize = (15 * draft).sp,
-            )
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    text = "重置",
-                    onClick = {
-                        onChange(1f)
-                        onClose()
-                    },
-                )
-                TextButton(
-                    text = "确定",
-                    onClick = {
-                        onChange(draft)
-                        onClose()
-                    },
-                )
-            }
-        }
-    }
 }
 
 private suspend fun cacheBytes(context: Context): Long = withContext(Dispatchers.IO) {
