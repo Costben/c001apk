@@ -162,6 +162,10 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
                     },
                 containerColor = COUITheme.colorScheme.surface,
                 backdrop = backdrop,
+                // The ColorOS gradient shape fades to nothing across the whole bar, which leaves the row
+                // below the search field sharp and untinted. COUI's own material keeps the bar's body
+                // blurred and tints the band under it instead.
+                platformRenderer = false,
                 scrollFraction = materialScrollFraction,
             ) {
                 Column(Modifier.fillMaxWidth()) {
