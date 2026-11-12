@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -64,7 +65,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import io.github.suqi8.coui.kmp.icon.extended.Community
+import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
 import io.github.suqi8.coui.kmp.icon.extended.GridView
+import io.github.suqi8.coui.kmp.icon.extended.Notes
+import io.github.suqi8.coui.kmp.icon.extended.Phone
+import io.github.suqi8.coui.kmp.icon.extended.Play
+import io.github.suqi8.coui.kmp.icon.extended.Store
 import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
 import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.ChipTabGroup
@@ -89,13 +96,17 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-internal enum class SearchContentType(val label: String, val type: String) {
-    Feed("动态", "feed"),
-    App("应用", "apk"),
-    Game("游戏", "game"),
-    Topic("话题", "feedTopic"),
-    Product("数码", "product"),
-    User("用户", "user"),
+internal enum class SearchContentType(
+    val label: String,
+    val type: String,
+    val icon: ImageVector,
+) {
+    Feed("动态", "feed", COUIIcons.Notes),
+    App("应用", "apk", COUIIcons.Store),
+    Game("游戏", "game", COUIIcons.Play),
+    Topic("话题", "feedTopic", COUIIcons.Community),
+    Product("数码", "product", COUIIcons.Phone),
+    User("用户", "user", COUIIcons.ContactsCircle),
 }
 
 internal enum class SearchType(val label: String, val feedType: String) {
@@ -476,7 +487,7 @@ internal fun SearchResultTabs(
     val currentOnSelectedChange by rememberUpdatedState(onSelectedChange)
     val currentOnSearchType by rememberUpdatedState(onSearchType)
     val currentOnSortType by rememberUpdatedState(onSortType)
-    val chipTabs = remember(tabs) { tabs.map { ChipTabData(label = it.label) } }
+    val chipTabs = remember(tabs) { tabs.map { ChipTabData(label = it.label, icon = it.icon) } }
     val positionProvider = remember(horizontalPadding) {
         ListPopupDefaults.dropdownPositionProvider(horizontalMargin = horizontalPadding)
     }
