@@ -2,25 +2,14 @@ package app.awavenue.c001apk.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.graphics.Color
 import app.awavenue.c001apk.ui.common.longPressAnywhere
-import app.awavenue.c001apk.ui.search.SearchContentType
+import app.awavenue.c001apk.ui.search.InPlaceSearchBar
+import app.awavenue.c001apk.ui.search.InPlaceSearchPanel
 import app.awavenue.c001apk.ui.search.SearchResultTabs
-import app.awavenue.c001apk.ui.search.SearchHistorySection
-import app.awavenue.c001apk.ui.search.SearchResultPager
-import app.awavenue.c001apk.ui.search.SearchSortType
-import app.awavenue.c001apk.ui.search.SearchType
-import androidx.compose.foundation.pager.rememberPagerState
-import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
-import io.github.suqi8.coui.kmp.basic.TopAppBarSearchBar
-import androidx.compose.foundation.background
+import app.awavenue.c001apk.ui.search.rememberInPlaceSearchState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -67,8 +56,6 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -217,46 +204,19 @@ fun HomeScreen(
     }
     // Search runs in place: the bar's round search key stretches into the field, the history fades
     // in under it, and a submitted keyword lists its results right there instead of pushing a page.
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    // The keyword the results are showing; null while the history is.
-    var searchSubmitted by rememberSaveable { mutableStateOf<String?>(null) }
-    var searchType by rememberSaveable { mutableStateOf(SearchType.All) }
-    var searchSort by rememberSaveable { mutableStateOf(SearchSortType.Dateline) }
-    val resultTabs = SearchContentType.entries
-    val resultPagerState = rememberPagerState { resultTabs.size }
-    // The results never collapse the bar; the state only tracks how far the list has scrolled, which
-    // drives the bar material the way the home stream's scroll does.
-    val resultScrollState = rememberTopAppBarState(initialHeightOffsetLimit = 0f)
-    val resultScrollBehavior = COUIScrollBehavior(state = resultScrollState)
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val closeSearch = {
-        searchQuery = ""
-        searchSubmitted = null
-        searchExpanded = false
-    }
-    val submitSearch: (String) -> Unit = { raw ->
-        val text = raw.trim()
-        if (text.isNotEmpty()) {
-            // The results are what the user is reading now: a field that kept the focus would
-            // leave the caret blinking over them.
-            focusManager.clearFocus()
-            keyboard?.hide()
-            app.searchHistory.add(text)
-            searchQuery = text
-            if (text != searchSubmitted) resultScrollState.contentOffset = 0f
-            searchSubmitted = text
-        }
-    }
+    val search = rememberInPlaceSearchState()
+    val searchExpanded = search.expanded
+    val searchFade = search.searchFade
+    val resultsFade = search.resultsFade
+    val resultScrollState = search.scrollState
     // True while the search is open and no pushed page covers it. The bar itself stays expanded
     // under a page, so that only decides which back steps may run.
     val searchActive = searchExpanded && !navigator.hasOverlay
     // Back from the history closes the search. Back from the results is handled after the bar.
-    BackHandler(enabled = searchActive) { closeSearch() }
+    BackHandler(enabled = searchActive) { search.close() }
     // Switching to 关注 / 我的 leaves the search behind instead of reopening it on the way back.
     val onOtherMainTab = navigator.mainBackAvailable
-    LaunchedEffect(onOtherMainTab) { if (onOtherMainTab) closeSearch() }
+    LaunchedEffect(onOtherMainTab) { if (onOtherMainTab) search.close() }
     val scope = rememberCoroutineScope()
     // Only the top row collapses. The limit is exactly its height, so the tab row stays pinned
     // under the status bar once the header has scrolled away.
@@ -320,17 +280,9 @@ fun HomeScreen(
     // follows the distance the list has scrolled, not the row's collapse: pulling the row back down
     // changes no content position, and tying the material to it would visibly thin the blur exactly
     // when the row reappears. The draw-phase read keeps the shader composed across the gesture.
-    // 0 → 1 as the search opens; read only in draw lambdas, so the fade never recomposes the bar.
-    val searchFade = remember { Animatable(if (searchExpanded) 1f else 0f) }
-    LaunchedEffect(searchExpanded) { searchFade.animateTo(if (searchExpanded) 1f else 0f, tween(220)) }
+    // The segments only fade once the field has fully taken over.
     val segmentsGone by remember(searchFade) { derivedStateOf { searchFade.value >= 1f } }
-    // 0 → 1 as results replace the history.
-    val resultsFade = remember { Animatable(if (searchSubmitted != null) 1f else 0f) }
-    LaunchedEffect(searchSubmitted != null) {
-        resultsFade.animateTo(if (searchSubmitted != null) 1f else 0f, tween(220))
-    }
-    val resultsShown by remember(resultsFade) { derivedStateOf { resultsFade.value > 0f } }
-    val historyGone by remember(resultsFade) { derivedStateOf { resultsFade.value >= 1f } }
+    val resultsShown = search.resultsShown
     val materialScrollFraction = remember(scrolledPx, density, searchFade, resultsFade, resultScrollState) {
         {
             val ramp = AppBarBlurOverlayDefaults.scrollAlpha(scrolledPx.floatValue, density)
@@ -421,31 +373,27 @@ fun HomeScreen(
                             ,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // COUI's toolbar search: the round key stretches left into the field
-                            // and splits off the 取消 capsule, all inside this row. Transparent
-                            // gradient = embedded, so it rides on the material drawn above.
-                            ChromeDensity {
-                                TopAppBarSearchBar(
-                                    query = searchQuery,
-                                    onQueryChange = {
-                                        searchQuery = it
-                                        // Clearing the field goes back to the history.
-                                        if (it.isEmpty()) searchSubmitted = null
-                                    },
-                                    // The field stays open while a page is pushed over it: coming back
-                                    // from a feed must land on the results exactly as they were, not
-                                    // on a bar that collapsed and reopened underneath.
-                                    expanded = searchExpanded,
-                                    onExpandedChange = { searchExpanded = it },
-                                    placeholder = "搜索",
-                                    cancelText = "取消",
-                                    onSearch = submitSearch,
-                                    onCancel = closeSearch,
-                                    searchButtonContentDescription = "搜索",
+                            Box(Modifier.fillMaxWidth()) {
+                                // COUI's toolbar search: the round key stretches left into the field
+                                // and splits off the 取消 capsule, all inside this row. Transparent
+                                // gradient = embedded, so it rides on the material drawn above.
+                                InPlaceSearchBar(
+                                    state = search,
                                     backdrop = backdrop,
-                                    gradientColor = Color.Transparent,
                                     extraActions = { NotificationBell() },
-                                    titleContent = {
+                                )
+                                // The library's Android 14+ bar draws its title from a string and
+                                // drops titleContent, so the avatar is laid over the empty title slot
+                                // instead — and leaves with the field the way that title does.
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = !searchExpanded,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 16.dp),
+                                    enter = fadeIn(tween(120)),
+                                    exit = fadeOut(tween(120)),
+                                ) {
+                                    ChromeDensity {
                                         NetworkImage(
                                             app.session.userAvatar,
                                             Modifier
@@ -454,19 +402,7 @@ fun HomeScreen(
                                                 .clickable(onClick = openProfile),
                                             contentDescription = "我的",
                                         )
-                                    },
-                                )
-                                // Back from the results returns to the history first. The bar's own
-                                // back handler closes the whole search, and the newest registered
-                                // handler wins, so this one has to come after the bar.
-                                BackHandler(enabled = searchActive && searchSubmitted != null) {
-                                    searchSubmitted = null
-                                }
-                                // The field stays open while a page is pushed over it, so the bar's
-                                // own back handler would close the search instead of leaving that
-                                // page. Being registered after the bar, this one runs first and pops.
-                                BackHandler(enabled = searchExpanded && navigator.hasOverlay) {
-                                    navigator.pop()
+                                    }
                                 }
                             }
                         }
@@ -531,13 +467,15 @@ fun HomeScreen(
                             contentAlignment = Alignment.CenterStart,
                         ) {
                             SearchResultTabs(
-                                tabs = resultTabs,
-                                selectedIndex = resultPagerState.currentPage,
-                                onSelectedChange = { scope.launch { resultPagerState.animateScrollToPage(it) } },
-                                searchType = searchType,
-                                onSearchType = { searchType = it },
-                                sortType = searchSort,
-                                onSortType = { searchSort = it },
+                                tabs = search.tabs,
+                                selectedIndex = search.pagerState.currentPage,
+                                onSelectedChange = {
+                                    scope.launch { search.pagerState.animateScrollToPage(it) }
+                                },
+                                searchType = search.searchType,
+                                onSearchType = { search.searchType = it },
+                                sortType = search.sortType,
+                                onSortType = { search.sortType = it },
                             )
                         }
                     }
@@ -597,60 +535,19 @@ fun HomeScreen(
                     }
                 }
             }
-            // The history drops in under the expanded field and covers the stream, the way the
-            // search page used to; picking a keyword opens its results on top.
-            AnimatedVisibility(
-                visible = searchExpanded,
-                enter = fadeIn(tween(220)),
-                exit = fadeOut(tween(160)),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(COUITheme.colorScheme.surface)
-                        // Swallow taps and drags so nothing reaches the stream underneath.
-                        .clickable(interactionSource = null, indication = null) {},
-                ) {
-                    if (!historyGone) {
-                        SearchHistorySection(
-                            onPick = submitSearch,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = 1f - resultsFade.value }
-                                // Straight under the search field: the segment slot above is empty
-                                // while searching, and the bar's material is cleared.
-                                .padding(top = statusBar + TOP_BAR_ROW_HEIGHT)
-                                .verticalScroll(rememberScrollState()),
-                            bottomPadding = outerPadding.calculateBottomPadding(),
-                        )
-                    }
-                    val submitted = searchSubmitted
-                    if (submitted != null) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = resultsFade.value }
-                                .background(COUITheme.colorScheme.surface),
-                        ) {
-                            SearchResultPager(
-                                query = submitted,
-                                tabs = resultTabs,
-                                pagerState = resultPagerState,
-                                searchType = searchType,
-                                sortType = searchSort,
-                                pageType = null,
-                                pageParam = null,
-                                scrollBehavior = resultScrollBehavior,
-                                contentPadding = PaddingValues(
-                                    top = innerPadding.calculateTopPadding() + 12.dp,
-                                    bottom = outerPadding.calculateBottomPadding() + 12.dp,
-                                ),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                }
-            }
+            // The history drops in under the expanded field and covers the stream, the way the search
+            // page used to; picking a keyword opens its results on top.
+            InPlaceSearchPanel(
+                state = search,
+                // Straight under the search field: the segment slot above is empty while searching,
+                // and the bar's material is cleared.
+                historyTop = statusBar + TOP_BAR_ROW_HEIGHT,
+                resultContentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 12.dp,
+                    bottom = outerPadding.calculateBottomPadding() + 12.dp,
+                ),
+                bottomPadding = outerPadding.calculateBottomPadding(),
+            )
             }
         }
     }

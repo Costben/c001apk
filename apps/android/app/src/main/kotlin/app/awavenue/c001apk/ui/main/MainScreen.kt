@@ -58,6 +58,7 @@ import app.awavenue.c001apk.ui.home.HomeTab
 import app.awavenue.c001apk.ui.follow.FollowScreen
 import app.awavenue.c001apk.ui.message.MessageScreen
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
+import app.awavenue.c001apk.ui.nav.LocalMainPager
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.settings.AutomaticUpdateCheck
@@ -327,7 +328,7 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             }
         },
     ) { padding ->
-        CompositionLocalProvider(LocalAppFilter provides appFilter) {
+        CompositionLocalProvider(LocalAppFilter provides appFilter, LocalMainPager provides pagerState) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier

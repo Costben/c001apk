@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -165,6 +166,13 @@ class Navigator {
 }
 
 val LocalNavigator = staticCompositionLocalOf<Navigator> { error("Navigator not provided") }
+
+/**
+ * The main tabs' pager. A tab reads it to tell whether it is the one on screen — 关注 keeps its
+ * in-place search only while it is, so a search left open behind a tab switch cannot take the back
+ * press meant for the tab the user actually went to.
+ */
+val LocalMainPager = staticCompositionLocalOf<PagerState?> { null }
 
 /** How many reading pages the back stack keeps; older ones drop off as new ones open. */
 private const val MaxReadingStack = 8
