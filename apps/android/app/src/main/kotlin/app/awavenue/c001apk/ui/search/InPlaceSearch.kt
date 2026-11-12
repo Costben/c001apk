@@ -31,7 +31,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
@@ -39,6 +38,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.glassHeader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
@@ -289,28 +289,30 @@ internal fun InPlaceSearchPanel(
                         )
                     }
                     if (topChrome != null) {
-                        // The bar keeps the page's colour and the chips float under it: the band wears
-                        // off across the chips' own row, so a scrolled row slides in under them instead
-                        // of being cut flat at the bar's edge.
-                        val band = historyTop + topChromeHeight
-                        val opaqueStop = historyTop.value / band.value
-                        val clearStop = ((historyTop + CHIP_ROW_FADE).value / band.value)
-                            .coerceIn(opaqueStop, 1f)
+                        // The chips float under the bar on a strip of the same glass, not on a painted
+                        // band: the results stay visible through the row, blurred, and wear off under
+                        // it instead of being cut flat at the bar's edge. The strip runs on past the
+                        // chips by [BAND_BLEED], which is where both the blur and the colour are
+                        // spent: ended on the chips' own edge, the material would meet the sharp
+                        // list on a one-pixel line.
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(band)
-                                .background(
-                                    Brush.verticalGradient(
-                                        0f to surface,
-                                        opaqueStop to surface,
-                                        clearStop to surface.copy(alpha = 0f),
-                                        1f to surface.copy(alpha = 0f),
-                                    ),
+                                .height(historyTop + topChromeHeight + BAND_BLEED)
+                                .glassHeader(
+                                    backdrop = resultsBackdrop,
+                                    containerColor = surface.copy(alpha = BAND_ALPHA),
+                                    fadeHeight = BAND_BLEED,
+                                    // The band holds its blur down to the bleed: list text is what
+                                    // scrolls behind the chips, and the default curve had already
+                                    // spent the radius by the row's lower edge.
+                                    blurCurve = 6f,
                                 ),
-                            contentAlignment = Alignment.BottomCenter,
+                            contentAlignment = Alignment.TopCenter,
                         ) {
-                            topChrome(resultsBackdrop)
+                            Box(Modifier.padding(top = historyTop)) {
+                                topChrome(resultsBackdrop)
+                            }
                         }
                     }
                 }
@@ -319,5 +321,8 @@ internal fun InPlaceSearchPanel(
     }
 }
 
-/** How far past the bar's own colour the chips' band wears off onto the results. */
-private val CHIP_ROW_FADE = 24.dp
+/** How far the chips' glass runs past the row, where its blur and colour are spent. */
+private val BAND_BLEED = 12.dp
+
+/** How much of the page's colour the chips' strip lays over the results it blurs. */
+private const val BAND_ALPHA = 0.55f

@@ -51,6 +51,10 @@ fun Modifier.glassSource(backdrop: LayerBackdrop?): Modifier =
  * then ramps to transparent. The result is the gradient COUI's [AppBarBlurOverlay] gives a scanning
  * app bar, without the extra 24dp band that only suits a short bar.
  *
+ * [blurCurve] reshapes how long the blur holds before it drops: a higher value keeps the full
+ * radius deeper into the bar and spends it over a shorter run at the bottom, which is what a
+ * surface has to do when the content under it is list text rather than a photo.
+ *
  * Without a backdrop, or below Android 13, the surface is drawn opaque.
  */
 @Composable
@@ -58,13 +62,14 @@ fun Modifier.glassHeader(
     backdrop: Backdrop?,
     containerColor: Color,
     fadeHeight: Dp = 28.dp,
+    blurCurve: Float = 3f,
 ): Modifier {
     if (backdrop == null || !isRuntimeShaderSupported()) return background(containerColor)
     return progressiveTextureBlur(
         backdrop = backdrop,
         shape = RectangleShape,
         blurRadius = GlassDefaults.BlurRadius,
-        gradient = ProgressiveBlur.Top.copy(curve = 3f),
+        gradient = ProgressiveBlur.Top.copy(curve = blurCurve),
         colors = BlurDefaults.blurColors(),
     ).drawBehind {
         if (size.height <= 0f) return@drawBehind

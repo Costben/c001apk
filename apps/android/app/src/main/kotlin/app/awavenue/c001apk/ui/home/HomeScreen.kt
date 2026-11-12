@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.foundation.pager.HorizontalPager
@@ -265,8 +264,6 @@ fun HomeScreen(
 
     val backdrop = rememberGlassBackdrop()
     val density = LocalDensity.current
-    // The opaque face the bar turns into while the results scroll under it.
-    val barFace = COUITheme.colorScheme.surface
     val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // Same profile as the Settings homepage's scroll-driven overlay: the blur is at full strength
     // at the bar's top edge and fades to clear over the bar plus the native extra band below it.
@@ -318,18 +315,7 @@ fun HomeScreen(
                 extraHeight = materialExtra,
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .drawBehind {
-                            // BiliCO's detail bar: once the results scroll under the bar, its whole
-                            // face becomes the page's own surface, so no screenshot bleeds through
-                            // the chips. Below the threshold the bar stays the glass it always is.
-                            val covered = resultsFade.value * AppBarBlurOverlayDefaults.scrollAlpha(
-                                abs(resultScrollState.contentOffset),
-                                this,
-                            )
-                            if (covered > 0f) drawRect(barFace.copy(alpha = covered))
-                        },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Spacer(modifier = Modifier.height(statusBar))
                     // The row keeps its full height and slides out of a box that shrinks with the
