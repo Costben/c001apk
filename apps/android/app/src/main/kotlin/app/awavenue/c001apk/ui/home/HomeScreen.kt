@@ -51,10 +51,12 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -78,11 +80,17 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
+import io.github.suqi8.coui.kmp.basic.LocalToolbarBackdropBlurFraction
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
+import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBar
+import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
+import io.github.suqi8.coui.kmp.blur.isBlurEnabled
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -295,184 +303,246 @@ fun HomeScreen(
     Scaffold(
         edgeToEdge = true,
         topBar = {
-            // COUI's own app bar material: progressive blur plus the gradient surface ramp. The
-            // overlay measures the bar and draws the material past it without adding that band to
-            // the Scaffold's content padding.
-            AppBarBlurOverlay(
+            val barContainerColor = COUITheme.colorScheme.surface
+            val barMaterialBackdrop = if (backdrop != null) {
+                rememberLayerBackdrop(upstream = backdrop) {
+                    if (materialScrollFraction() < 0.999f) {
+                        drawRect(barContainerColor)
+                    }
+                    drawContent()
+                }
+            } else {
+                null
+            }
+            val blurEnabled = isBlurEnabled()
+            val activeExtra = if (resultsShown) {
+                TwoRowTopAppBarDefaults.ExtraHeight
+            } else {
+                materialExtra
+            }
+            val activeExtraPx = if (blurEnabled) with(density) { activeExtra.roundToPx() } else 0
+            val activeFraction = remember(blurEnabled, materialScrollFraction) {
+                if (blurEnabled) materialScrollFraction else { { 0f } }
+            }
+            // The material is recorded into its own backdrop first while the rows draw above it,
+            // so search result chips sample the blurred and tinted sheet instead of raw dark cards.
+            Layout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned {
                         appBarBounds.report(barSlot, it.positionInRoot().y + it.size.height)
                     },
-                containerColor = COUITheme.colorScheme.surface,
-                backdrop = backdrop,
-                // The ColorOS gradient shape fades to nothing across the whole bar, which leaves the row
-                // below the search field sharp and untinted. COUI's own material keeps the bar's body
-                // blurred and tints the band under it instead.
-                platformRenderer = false,
-                scrollFraction = materialScrollFraction,
-                // The bar carries a second row (the segment row) below the top row. The native
-                // gradient is at full strength only at the top edge and fades to clear at the
-                // node's bottom, so once the bar grew the content under the segments was left
-                // sharp. The blur now stays full down to the bar's bottom edge and fades over the
-                // extra band below it.
-                extraHeight = materialExtra,
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Spacer(modifier = Modifier.height(statusBar))
-                    // The row keeps its full height and slides out of a box that shrinks with the
-                    // scroll, so the tab row rises into its place instead of leaving a gap behind.
-                    // The height is resolved in the measure phase and the clip in the draw phase,
-                    // both from [collapseFraction], so scrolling never recomposes the bar.
-                    // A circular button's halo reaches 15.5dp past its 40dp circle, while the row only
-                    // leaves 6dp above and below. The clip therefore keeps a halo-wide margin on every
-                    // side: at rest it cuts nothing, and while the row slides out the glow under the
-                    // buttons stays drawn instead of switching off at the first pixel of collapse.
+                content = {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .layout { measurable, constraints ->
-                                val full = TOP_BAR_ROW_HEIGHT.roundToPx()
-                                val placeable = measurable.measure(
-                                    constraints.copy(minHeight = full, maxHeight = full),
-                                )
-                                val visible = (full * (1f - collapseFraction())).roundToInt()
-                                    .coerceIn(0, full)
-                                layout(placeable.width, visible) { placeable.placeRelative(0, 0) }
-                            }
-                            .drawWithContent {
-                                val halo = TOP_ROW_HALO.toPx()
-                                clipRect(-halo, -halo, size.width + halo, size.height + halo) {
-                                    this@drawWithContent.drawContent()
-                                }
-                            },
+                            .then(
+                                if (barMaterialBackdrop != null) {
+                                    Modifier.layerBackdrop(barMaterialBackdrop)
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(TOP_BAR_ROW_HEIGHT)
-                                .graphicsLayer {
-                                    translationY = -topRowHeightPx * collapseFraction()
-                                    alpha = 1f - collapseFraction()
-                                    // The avatar and buttons barely overlap, so the fade is applied
-                                    // to each draw instead of an offscreen copy of the whole row.
-                                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                                }
-                            ,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(Modifier.fillMaxWidth()) {
-                                // COUI's toolbar search: the round key stretches left into the field
-                                // and splits off the 取消 capsule, all inside this row. Transparent
-                                // gradient = embedded, so it rides on the material drawn above.
-                                InPlaceSearchBar(
-                                    state = search,
+                        if (resultsShown) {
+                            TwoRowTopAppBar(
+                                modifier = Modifier.fillMaxWidth(),
+                                secondRow = { Spacer(Modifier.fillMaxWidth().height(35.dp)) },
+                                firstRowHeight = TOP_BAR_ROW_HEIGHT,
+                                secondRowHeight = 35.dp,
+                                containerColor = barContainerColor,
+                                backdrop = backdrop,
+                                scrollFraction = materialScrollFraction,
+                                platformRenderer = false,
+                            ) {
+                                Spacer(Modifier.fillMaxWidth().height(TOP_BAR_ROW_HEIGHT))
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(if (blurEnabled) Modifier.padding(bottom = materialExtra) else Modifier),
+                            ) {
+                                AppBarBlurOverlay(
+                                    modifier = Modifier.fillMaxSize(),
+                                    containerColor = barContainerColor,
                                     backdrop = backdrop,
-                                    extraActions = { NotificationBell() },
-                                )
-                                // The library's Android 14+ bar draws its title from a string and
-                                // drops titleContent, so the avatar is laid over the empty title slot
-                                // instead — and leaves with the field the way that title does.
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = !searchExpanded,
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .padding(start = 16.dp),
-                                    enter = fadeIn(tween(120)),
-                                    exit = fadeOut(tween(120)),
+                                    extraHeight = materialExtra,
+                                    platformRenderer = false,
+                                    scrollFraction = materialScrollFraction,
                                 ) {
-                                    ChromeDensity {
-                                        NetworkImage(
-                                            app.session.userAvatar,
-                                            Modifier
-                                                .size(34.dp)
-                                                .clip(CircleShape)
-                                                .clickable(onClick = openProfile),
-                                            contentDescription = "我的",
+                                    Spacer(Modifier.fillMaxSize())
+                                }
+                            }
+                        }
+                    }
+                    CompositionLocalProvider(LocalToolbarBackdropBlurFraction provides activeFraction) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Spacer(modifier = Modifier.height(statusBar))
+                            // The row keeps its full height and slides out of a box that shrinks with the
+                            // scroll, so the tab row rises into its place instead of leaving a gap behind.
+                            // The height is resolved in the measure phase and the clip in the draw phase,
+                            // both from [collapseFraction], so scrolling never recomposes the bar.
+                            // A circular button's halo reaches 15.5dp past its 40dp circle, while the row only
+                            // leaves 6dp above and below. The clip therefore keeps a halo-wide margin on every
+                            // side: at rest it cuts nothing, and while the row slides out the glow under the
+                            // buttons stays drawn instead of switching off at the first pixel of collapse.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .layout { measurable, constraints ->
+                                        val full = TOP_BAR_ROW_HEIGHT.roundToPx()
+                                        val placeable = measurable.measure(
+                                            constraints.copy(minHeight = full, maxHeight = full),
                                         )
+                                        val visible = (full * (1f - collapseFraction())).roundToInt()
+                                            .coerceIn(0, full)
+                                        layout(placeable.width, visible) { placeable.placeRelative(0, 0) }
+                                    }
+                                    .drawWithContent {
+                                        val halo = TOP_ROW_HALO.toPx()
+                                        clipRect(-halo, -halo, size.width + halo, size.height + halo) {
+                                            this@drawWithContent.drawContent()
+                                        }
+                                    },
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(TOP_BAR_ROW_HEIGHT)
+                                        .graphicsLayer {
+                                            translationY = -topRowHeightPx * collapseFraction()
+                                            alpha = 1f - collapseFraction()
+                                            // The avatar and buttons barely overlap, so the fade is applied
+                                            // to each draw instead of an offscreen copy of the whole row.
+                                            compositingStrategy = CompositingStrategy.ModulateAlpha
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(Modifier.fillMaxWidth()) {
+                                        // COUI's toolbar search: the round key stretches left into the field
+                                        // and splits off the 取消 capsule, all inside this row. Transparent
+                                        // gradient = embedded, so it rides on the material drawn above.
+                                        InPlaceSearchBar(
+                                            state = search,
+                                            backdrop = if (resultsShown) (barMaterialBackdrop ?: backdrop) else backdrop,
+                                            extraActions = { NotificationBell() },
+                                        )
+                                        // The library's Android 14+ bar draws its title from a string and
+                                        // drops titleContent, so the avatar is laid over the empty title slot
+                                        // instead — and leaves with the field the way that title does.
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !searchExpanded,
+                                            modifier = Modifier
+                                                .align(Alignment.CenterStart)
+                                                .padding(start = 16.dp),
+                                            enter = fadeIn(tween(120)),
+                                            exit = fadeOut(tween(120)),
+                                        ) {
+                                            ChromeDensity {
+                                                NetworkImage(
+                                                    app.session.userAvatar,
+                                                    Modifier
+                                                        .size(34.dp)
+                                                        .clip(CircleShape)
+                                                        .clickable(onClick = openProfile),
+                                                    contentDescription = "我的",
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            // The segments only fade while the search is open; their slot keeps its height,
+                            // so the bar and the pages under it stay exactly where they were. Once faded
+                            // they leave composition, and taps in the slot reach the history underneath.
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2),
+                            ) {
+                            if (!segmentsGone) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer { alpha = 1f - searchFade.value }
+                                    // The capsule shares the top row's 16dp margins, so its edges line up
+                                    // with the avatar's left edge and the bell's right edge.
+                                    .padding(horizontal = 16.dp)
+                                    // Long-press anywhere on the bar, including the tabs themselves,
+                                    // opens the editor; taps and drags still reach the tab row below.
+                                    .longPressAnywhere(openTabEditor),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // ColorOS 17's segment control (COUISegmentButtonLayout) paints an opaque
+                                // capsule: the container hides the cards behind it instead of letting the
+                                // app bar material show through, with no glass or rim on top.
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(vertical = TAB_ROW_VERTICAL_PADDING)
+                                        .height(TabRowDefaults.TabRowWithContourHeight),
+                                ) {
+                                    TabRowWithContour(
+                                        tabs = tabs.map { it.label },
+                                        selectedTabIndex = selectedTabIndex,
+                                        onTabSelected = {
+                                            if (it == selectedTabIndex) returnTop.requestReturn()
+                                            scope.launch { pagerState.animateScrollToPage(it) }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        // COUI's transparent blur highlight: the capsule blurs the page
+                                        // under it, with the library's own colours and indicator material.
+                                        // Six labels have to share the narrower capsule: COUI's 52dp floor and
+                                        // 12dp segment padding overflow it, so the segments give up some of
+                                        // both instead of the capsule growing.
+                                        minWidth = 44.dp,
+                                        segmentPadding = 8.dp,
+                                        backdrop = backdrop,
+                                    )
+                                }
+                            }
+                            }
+                            // While results show, the slot carries their content types instead: COUI's
+                            // chip tabs, led by the round grid chip that opens the type / filter menu.
+                            if (resultsShown) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer { alpha = resultsFade.value },
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    SearchResultTabs(
+                                        tabs = search.tabs,
+                                        selectedIndex = search.pagerState.currentPage,
+                                        onSelectedChange = {
+                                            scope.launch { search.pagerState.animateScrollToPage(it) }
+                                        },
+                                        searchType = search.searchType,
+                                        onSearchType = { search.searchType = it },
+                                        sortType = search.sortType,
+                                        onSortType = { search.sortType = it },
+                                        backdrop = barMaterialBackdrop ?: backdrop,
+                                    )
+                                }
+                            }
+                            }
                         }
                     }
-                    // The segments only fade while the search is open; their slot keeps its height,
-                    // so the bar and the pages under it stay exactly where they were. Once faded
-                    // they leave composition, and taps in the slot reach the history underneath.
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2),
-                    ) {
-                    if (!segmentsGone) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer { alpha = 1f - searchFade.value }
-                            // The capsule shares the top row's 16dp margins, so its edges line up
-                            // with the avatar's left edge and the bell's right edge.
-                            .padding(horizontal = 16.dp)
-                            // Long-press anywhere on the bar, including the tabs themselves,
-                            // opens the editor; taps and drags still reach the tab row below.
-                            .longPressAnywhere(openTabEditor),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // ColorOS 17's segment control (COUISegmentButtonLayout) paints an opaque
-                        // capsule: the container hides the cards behind it instead of letting the
-                        // app bar material show through, with no glass or rim on top.
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(vertical = TAB_ROW_VERTICAL_PADDING)
-                                .height(TabRowDefaults.TabRowWithContourHeight),
-                        ) {
-                            TabRowWithContour(
-                                tabs = tabs.map { it.label },
-                                selectedTabIndex = selectedTabIndex,
-                                onTabSelected = {
-                                    if (it == selectedTabIndex) returnTop.requestReturn()
-                                    scope.launch { pagerState.animateScrollToPage(it) }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                // COUI's transparent blur highlight: the capsule blurs the page
-                                // under it, with the library's own colours and indicator material.
-                                // Six labels have to share the narrower capsule: COUI's 52dp floor and
-                                // 12dp segment padding overflow it, so the segments give up some of
-                                // both instead of the capsule growing.
-                                minWidth = 44.dp,
-                                segmentPadding = 8.dp,
-                                backdrop = backdrop,
-                            )
-                        }
-                    }
-                    }
-                    // While results show, the slot carries their content types instead: COUI's
-                    // chip tabs, led by the round grid chip that opens the type / filter menu.
-                    if (resultsShown) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = resultsFade.value },
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            SearchResultTabs(
-                                tabs = search.tabs,
-                                selectedIndex = search.pagerState.currentPage,
-                                onSelectedChange = {
-                                    scope.launch { search.pagerState.animateScrollToPage(it) }
-                                },
-                                searchType = search.searchType,
-                                onSearchType = { search.searchType = it },
-                                sortType = search.sortType,
-                                onSortType = { search.sortType = it },
-                                // The bar is a sibling of the layer the pages record into, so the
-                                // chips can frost the results scrolling under them.
-                                backdrop = backdrop,
-                            )
-                        }
-                    }
-                    }
+                },
+            ) { measurables, constraints ->
+                val rows = measurables[1].measure(constraints.copy(minHeight = 0))
+                val material = measurables[0].measure(
+                    Constraints.fixed(
+                        width = rows.width,
+                        height = rows.height + activeExtraPx,
+                    ),
+                )
+                layout(rows.width, rows.height) {
+                    material.placeRelative(0, 0)
+                    rows.placeRelative(0, 0)
                 }
             }
         },

@@ -11,15 +11,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
@@ -38,13 +43,15 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.ui.LocalApp
-import app.awavenue.c001apk.ui.common.glassHeader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.LocalEdgeToEdge
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TopAppBarSearchBar
 import io.github.suqi8.coui.kmp.basic.TopAppBarState
+import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBar
+import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
 import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
@@ -289,29 +296,44 @@ internal fun InPlaceSearchPanel(
                         )
                     }
                     if (topChrome != null) {
-                        // The chips float under the bar on a strip of the same glass, not on a painted
-                        // band: the results stay visible through the row, blurred, and wear off under
-                        // it instead of being cut flat at the bar's edge. The strip runs on past the
-                        // chips by [BAND_BLEED], which is where both the blur and the colour are
-                        // spent: ended on the chips' own edge, the material would meet the sharp
-                        // list on a one-pixel line.
+                        val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                        val firstRowHeight = (historyTop - statusBar).coerceAtLeast(0.dp)
+                        val secondRowHeight = (
+                            topChromeHeight -
+                                TwoRowTopAppBarDefaults.SecondRowGap -
+                                TwoRowTopAppBarDefaults.SecondRowBottom
+                            ).coerceAtLeast(0.dp)
+                        val materialHeight = historyTop + topChromeHeight + TwoRowTopAppBarDefaults.ExtraHeight
+                        val chromeBackdrop = rememberLayerBackdrop(upstream = resultsBackdrop) {
+                            drawContent()
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(historyTop + topChromeHeight + BAND_BLEED)
-                                .glassHeader(
-                                    backdrop = resultsBackdrop,
-                                    containerColor = surface.copy(alpha = BAND_ALPHA),
-                                    fadeHeight = BAND_BLEED,
-                                    // The band holds its blur down to the bleed: list text is what
-                                    // scrolls behind the chips, and the default curve had already
-                                    // spent the radius by the row's lower edge.
-                                    blurCurve = 6f,
-                                ),
+                                .height(materialHeight),
                             contentAlignment = Alignment.TopCenter,
                         ) {
+                            CompositionLocalProvider(LocalEdgeToEdge provides true) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .layerBackdrop(chromeBackdrop),
+                                ) {
+                                    TwoRowTopAppBar(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        secondRow = { Spacer(Modifier.fillMaxWidth().height(secondRowHeight)) },
+                                        firstRowHeight = firstRowHeight,
+                                        secondRowHeight = secondRowHeight,
+                                        containerColor = surface,
+                                        backdrop = resultsBackdrop,
+                                        platformRenderer = false,
+                                    ) {
+                                        Spacer(Modifier.fillMaxWidth().height(firstRowHeight))
+                                    }
+                                }
+                            }
                             Box(Modifier.padding(top = historyTop)) {
-                                topChrome(resultsBackdrop)
+                                topChrome(chromeBackdrop)
                             }
                         }
                     }
@@ -320,9 +342,3 @@ internal fun InPlaceSearchPanel(
         }
     }
 }
-
-/** How far the chips' glass runs past the row, where its blur and colour are spent. */
-private val BAND_BLEED = 12.dp
-
-/** How much of the page's colour the chips' strip lays over the results it blurs. */
-private const val BAND_ALPHA = 0.55f

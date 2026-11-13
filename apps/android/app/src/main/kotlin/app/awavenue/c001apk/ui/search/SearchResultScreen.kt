@@ -4,15 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -27,14 +23,16 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,11 +40,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppBarTitleSize
-import app.awavenue.c001apk.ui.common.appTabRowColors
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.feed.FeedList
@@ -57,41 +56,32 @@ import app.awavenue.c001apk.ui.nav.LocalPageMemory
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
-import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
-import io.github.suqi8.coui.kmp.basic.DropdownEntry
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.Dp
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import io.github.suqi8.coui.kmp.icon.extended.Community
-import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
-import io.github.suqi8.coui.kmp.icon.extended.GridView
-import io.github.suqi8.coui.kmp.icon.extended.Notes
-import io.github.suqi8.coui.kmp.icon.extended.Phone
-import io.github.suqi8.coui.kmp.icon.extended.Play
-import io.github.suqi8.coui.kmp.icon.extended.Store
-import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
+import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.ChipTabGroup
-import io.github.suqi8.coui.kmp.basic.ChipTabData
+import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
-import app.awavenue.c001apk.ui.common.TopBarIconButton
-import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
+import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
-import io.github.suqi8.coui.kmp.basic.TabRowDefaults
-import io.github.suqi8.coui.kmp.basic.TabRowWithContour
+import io.github.suqi8.coui.kmp.basic.SearchFilterTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
+import io.github.suqi8.coui.kmp.icon.extended.Community
+import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
+import io.github.suqi8.coui.kmp.icon.extended.GridView
 import io.github.suqi8.coui.kmp.icon.extended.More
+import io.github.suqi8.coui.kmp.icon.extended.Notes
+import io.github.suqi8.coui.kmp.icon.extended.Phone
+import io.github.suqi8.coui.kmp.icon.extended.Play
+import io.github.suqi8.coui.kmp.icon.extended.Store
 import io.github.suqi8.coui.kmp.overlay.OverlayCascadingListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
@@ -200,107 +190,82 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     Scaffold(
         edgeToEdge = true,
         topBar = {
-            CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                val density = LocalDensity.current
-                val materialScrollFraction = remember(scrollBehavior, density) {
-                    {
-                        AppBarBlurOverlayDefaults.scrollAlpha(
-                            abs(scrollBehavior.state.contentOffset),
-                            density,
-                        )
-                    }
+            val density = LocalDensity.current
+            val materialScrollFraction = remember(scrollBehavior, density) {
+                {
+                    AppBarBlurOverlayDefaults.scrollAlpha(
+                        abs(scrollBehavior.state.contentOffset),
+                        density,
+                    )
                 }
-                AppBarBlurOverlay(
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = COUITheme.colorScheme.surface,
-                    backdrop = backdrop,
-                    // The ColorOS gradient shape fades to nothing across the whole bar, which leaves the row
-                    // below the search field sharp and untinted. COUI's own material keeps the bar's body
-                    // blurred and tints the band under it instead.
-                    platformRenderer = false,
-                    scrollFraction = materialScrollFraction,
-                    extraHeight = AppBarBlurOverlayDefaults.ExtraHeight,
+            }
+            val chipTabs = remember(tabs) {
+                tabs.map { ChipTabData(label = it.label, icon = it.icon) }
+            }
+            // 材质、两行布局与胶囊采样的顺序交给库：材质先录进栏自己的层，两行画在录制之外，
+            // 胶囊采的是「模糊提白之后」的画面，不会在深色封面经过时比旁边的栏还透。
+            SearchFilterTopAppBar(
+                filters = if (title.isEmpty()) chipTabs else null,
+                selectedFilter = pagerState.currentPage,
+                onFilterSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                modifier = Modifier.fillMaxWidth(),
+                firstRowHeight = TopAppBarDefaults.CollapsedHeight,
+                rowGap = 6.dp,
+                containerColor = COUITheme.colorScheme.surface,
+                backdrop = backdrop,
+                scrollFraction = materialScrollFraction,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(TopAppBarDefaults.CollapsedHeight)
+                        .padding(start = 16.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.height(statusBar))
-                        Row(
+                    TopBarIconButton(onClick = { navigator.pop() }) {
+                        Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = TopAppBarDefaults.NavigationIconGap, end = 4.dp),
+                    ) {
+                        // The title is the field itself, so tapping it puts the caret where
+                        // the eye already is instead of opening a second page.
+                        BasicTextField(
+                            value = draft,
+                            onValueChange = { draft = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = TopAppBarDefaults.CollapsedHeight)
-                                .padding(start = 16.dp, end = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TopBarIconButton(onClick = { navigator.pop() }) {
-                                Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = TopAppBarDefaults.NavigationIconGap, end = 4.dp),
-                            ) {
-                                // The title is the field itself, so tapping it puts the caret where
-                                // the eye already is instead of opening a second page.
-                                BasicTextField(
-                                    value = draft,
-                                    onValueChange = { draft = it },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .semantics { contentDescription = "搜索关键词，点击编辑" },
-                                    textStyle = TextStyle(
-                                        fontSize = with(density) { AppBarTitleSize.toSp() },
-                                        fontWeight = FontWeight.Medium,
-                                        color = COUITheme.colorScheme.onSurface,
-                                    ),
-                                    singleLine = true,
-                                    cursorBrush = SolidColor(COUITheme.colorScheme.primary),
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(onSearch = { submit(draft) }),
-                                )
-                                if (title.isNotEmpty()) {
-                                    Text(
-                                        text = "${scopeLabel(pageType)}：$title",
-                                        modifier = Modifier.padding(top = TopAppBarDefaults.SubtitleMarginTop),
-                                        style = COUITheme.textStyles.body2,
-                                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                            if (pagerState.currentPage == 0) {
-                                SearchFilterButton(
-                                    searchType = searchType,
-                                    onSearchType = { searchType = it },
-                                    sortType = sortType,
-                                    onSortType = { sortType = it },
-                                )
-                            }
+                                .semantics { contentDescription = "搜索关键词，点击编辑" },
+                            textStyle = TextStyle(
+                                fontSize = with(density) { AppBarTitleSize.toSp() },
+                                fontWeight = FontWeight.Medium,
+                                color = COUITheme.colorScheme.onSurface,
+                            ),
+                            singleLine = true,
+                            cursorBrush = SolidColor(COUITheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { submit(draft) }),
+                        )
+                        if (title.isNotEmpty()) {
+                            Text(
+                                text = "${scopeLabel(pageType)}：$title",
+                                modifier = Modifier.padding(top = TopAppBarDefaults.SubtitleMarginTop),
+                                style = COUITheme.textStyles.body2,
+                                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        if (title.isEmpty()) {
-                            // ColorOS 17's segment control paints an opaque capsule, so the tabs
-                            // sit on their own surface instead of the page showing through.
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                                    .height(TabRowDefaults.TabRowWithContourHeight),
-                            ) {
-                                TabRowWithContour(
-                                    tabs = tabs.map { it.label },
-                                    selectedTabIndex = pagerState.currentPage,
-                                    onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = appTabRowColors(),
-                                    // Six labels share the narrower capsule, as on the home bar.
-                                    minWidth = 44.dp,
-                                    segmentPadding = 8.dp,
-                                    indicatorMaterial = MaterialStrokeParams.frameworkCapsule13(
-                                        COUITheme.colorScheme.background.luminance() < 0.5f,
-                                    ),
-                                )
-                            }
-                        }
+                    }
+                    if (pagerState.currentPage == 0) {
+                        SearchFilterButton(
+                            searchType = searchType,
+                            onSearchType = { searchType = it },
+                            sortType = sortType,
+                            onSortType = { sortType = it },
+                        )
                     }
                 }
             }
