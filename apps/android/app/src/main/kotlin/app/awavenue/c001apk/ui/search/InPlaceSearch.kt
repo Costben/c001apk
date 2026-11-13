@@ -81,6 +81,12 @@ internal class InPlaceSearchState internal constructor(
     val pagerState: PagerState,
     val scrollState: TopAppBarState,
     val scrollBehavior: ScrollBehavior,
+    /** The page the search is scoped to, or null for a search of the whole site. */
+    val pageType: String? = null,
+    /** The id or title of that page. Ignored while [pageType] is null. */
+    val pageParam: String? = null,
+    /** The hint in the field. A scoped search names the page it searches. */
+    val placeholder: String = "搜索",
 ) {
     /** The field is stretched over the bar, or the search key is resting in it. */
     var expanded by expandedState
@@ -133,11 +139,18 @@ internal class InPlaceSearchState internal constructor(
 }
 
 /**
- * The state both pages share, kept across configuration changes: an account switch rebuilds the
+ * The state the pages share, kept across configuration changes: an account switch rebuilds the
  * main screen and with it this state, which is what an account-own search needs.
+ *
+ * [pageType] and [pageParam] scope the search to one page (a topic, a product) the way the old
+ * search page did. Left out, the search covers the whole site.
  */
 @Composable
-internal fun rememberInPlaceSearchState(): InPlaceSearchState {
+internal fun rememberInPlaceSearchState(
+    pageType: String? = null,
+    pageParam: String? = null,
+    placeholder: String = "搜索",
+): InPlaceSearchState {
     val app = LocalApp.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -147,13 +160,25 @@ internal fun rememberInPlaceSearchState(): InPlaceSearchState {
     val submitted = rememberSaveable { mutableStateOf<String?>(null) }
     val searchType = rememberSaveable { mutableStateOf(SearchType.All) }
     val sortType = rememberSaveable { mutableStateOf(SearchSortType.Dateline) }
-    val tabs = SearchContentType.entries
+    // A search scoped to one page only has 动态 to list; a site-wide search has every type.
+    val tabs = if (pageType == null) SearchContentType.entries else listOf(SearchContentType.Feed)
     val pagerState = rememberPagerState { tabs.size }
     // The results never collapse the bar; the state only tracks how far the list has scrolled,
     // which drives the bar's material the way a stream's scroll does.
     val scrollState = rememberTopAppBarState(initialHeightOffsetLimit = 0f)
     val scrollBehavior = COUIScrollBehavior(state = scrollState)
-    val state = remember(expanded, query, submitted, searchType, sortType, pagerState, scrollState) {
+    val state = remember(
+        expanded,
+        query,
+        submitted,
+        searchType,
+        sortType,
+        pagerState,
+        scrollState,
+        pageType,
+        pageParam,
+        placeholder,
+    ) {
         InPlaceSearchState(
             expandedState = expanded,
             queryState = query,
@@ -167,6 +192,9 @@ internal fun rememberInPlaceSearchState(): InPlaceSearchState {
             pagerState = pagerState,
             scrollState = scrollState,
             scrollBehavior = scrollBehavior,
+            pageType = pageType,
+            pageParam = pageParam,
+            placeholder = placeholder,
         )
     }
     LaunchedEffect(state.expanded) {
@@ -184,6 +212,14 @@ internal fun rememberInPlaceSearchState(): InPlaceSearchState {
  * The two back steps that sit above the bar's own live here, registered after it so they win: back
  * from the results returns to the history first, and back with a page pushed over the search leaves
  * that page instead of closing the search under it.
+ *
+ * [titleContent] is the leading slot a page with its own title fills (a topic's back key and name);
+ * it fades out under the field the way the title itself does. [showSearchButton] lets a page that
+ * has nothing to search hide the key without taking the title out of the bar.
+ *
+ * [overlayAbove] says whether another page is stacked over this one. The main screen can read that
+ * straight off the stack; a page that is itself pushed must count what sits above its own entry, or
+ * back would leave the page instead of closing the search.
  */
 @Composable
 internal fun InPlaceSearchBar(
@@ -191,8 +227,12 @@ internal fun InPlaceSearchBar(
     backdrop: LayerBackdrop?,
     modifier: Modifier = Modifier,
     extraActions: (@Composable RowScope.() -> Unit)? = null,
+    showSearchButton: Boolean = true,
+    titleContent: (@Composable () -> Unit)? = null,
+    overlayAbove: Boolean? = null,
 ) {
     val navigator = LocalNavigator.current
+    val covered = overlayAbove ?: navigator.hasOverlay
     ChromeDensity {
         TopAppBarSearchBar(
             query = state.query,
@@ -202,20 +242,22 @@ internal fun InPlaceSearchBar(
             expanded = state.expanded,
             onExpandedChange = { state.expanded = it },
             modifier = modifier,
-            placeholder = "搜索",
+            placeholder = state.placeholder,
             cancelText = "取消",
             onSearch = state::submit,
             onCancel = state::close,
             searchButtonContentDescription = "搜索",
+            showSearchButton = showSearchButton,
             backdrop = backdrop,
             // Embedded: the bar's own material is drawn behind it, not a capsule of its own.
             gradientColor = Color.Transparent,
             extraActions = extraActions,
+            titleContent = titleContent,
         )
-        BackHandler(state.expanded && !navigator.hasOverlay && state.submitted != null) {
+        BackHandler(state.expanded && !covered && state.submitted != null) {
             state.submitted = null
         }
-        BackHandler(state.expanded && navigator.hasOverlay) { navigator.pop() }
+        BackHandler(state.expanded && covered) { navigator.pop() }
     }
 }
 
@@ -288,8 +330,8 @@ internal fun InPlaceSearchPanel(
                             pagerState = state.pagerState,
                             searchType = state.searchType,
                             sortType = state.sortType,
-                            pageType = null,
-                            pageParam = null,
+                            pageType = state.pageType,
+                            pageParam = state.pageParam,
                             scrollBehavior = state.scrollBehavior,
                             contentPadding = resultContentPadding,
                             modifier = Modifier.fillMaxSize(),

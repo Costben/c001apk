@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.topic
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -91,9 +93,14 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
+import app.awavenue.c001apk.ui.search.InPlaceSearchBar
+import app.awavenue.c001apk.ui.search.InPlaceSearchPanel
+import app.awavenue.c001apk.ui.search.SearchResultTabs
+import app.awavenue.c001apk.ui.search.rememberInPlaceSearchState
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.EmptyState
@@ -115,7 +122,6 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.icon.extended.Search
 import io.github.suqi8.coui.kmp.overlay.OverlayListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
@@ -130,6 +136,10 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val TAB_ROW_VERTICAL_PADDING = 6.dp
+
+/** The gap and the chip height the search's content types take when they ride on the panel. */
+private val SEARCH_CHIP_GAP = 8.dp
+private val SEARCH_CHIP_HEIGHT = ChipTabDefaults.Height
 
 /** Page-memory key for the discussion sort the user picked on a product page. */
 private const val TOPIC_SORT_KEY = "topic-sort"
@@ -232,6 +242,28 @@ private fun TopicPage(tag: String?, id: String?) {
         }
     }
     val backdrop = rememberGlassBackdrop()
+    // Search runs in place, the way 首页's and 关注's do: the key in the title row stretches into the
+    // field, the history drops in under it, and a keyword lists this topic's results there instead
+    // of pushing the old search page. The scope is the page itself, as that page carried it.
+    val search = rememberInPlaceSearchState(
+        pageType = if (isTopic) "tag" else "product_phone",
+        pageParam = if (isTopic) title else topic.string("id"),
+        placeholder = "在 $title 中搜索",
+    )
+    val searchFade = search.searchFade
+    val resultsFade = search.resultsFade
+    val resultScrollState = search.scrollState
+    val resultsShown = search.resultsShown
+    // The tab row only fades once the field has fully taken over; its slot keeps its height, so the
+    // bar and the list under it stay where they were.
+    val segmentsGone by remember(searchFade) { derivedStateOf { searchFade.value >= 1f } }
+    // True while the search is open and no page sits above this one. Back from the history closes
+    // the search; the bar's own handlers run later and take the results and a pushed page first.
+    // This page is itself a pushed route, so "above" means a deeper stack than the one it entered on.
+    val entryDepth = remember { navigator.stack.size }
+    val overlayAbove = navigator.stack.size > entryDepth
+    val searchActive = search.expanded && !overlayAbove
+    BackHandler(enabled = searchActive) { search.close() }
     val pagerState = rememberPagerState(
         initialPage = pageMemoryPage(fallback = selected.coerceAtLeast(0)),
     ) { tabList.size }
@@ -260,6 +292,9 @@ private fun TopicPage(tag: String?, id: String?) {
     val sortUrls = remember(topic) { mutableStateMapOf<Int, String>() }
 
     val sortable = entityType == "product" && tabList.getOrNull(pagerState.currentPage)?.title == "讨论"
+    // The search reuses this row for its content types when the bar carries one; a page with a
+    // single tab has no slot, so its chips ride on the panel the way 关注's do.
+    val hasTabSlot = !isBlocked && tabList.size > 1
     val shareUrl = Protocol.shareLink(if (isTopic) "t" else "product", if (isTopic) title else topic.string("id"))
 
     val comparisons by app.productComparison.selections.collectAsState()
@@ -407,7 +442,14 @@ private fun TopicPage(tag: String?, id: String?) {
                 val barHeightDp = statusBar + TopAppBarDefaults.CollapsedHeight +
                     TabRowDefaults.TabRowWithContourHeight + TAB_ROW_VERTICAL_PADDING * 2
                 val materialExtra = AppBarBlurOverlayDefaults.ExtraHeight
-                val materialScrollFraction = remember(scrolledPx, scrollBehavior, density) {
+                val materialScrollFraction = remember(
+                    scrolledPx,
+                    scrollBehavior,
+                    density,
+                    searchFade,
+                    resultsFade,
+                    resultScrollState,
+                ) {
                     {
                         // contentOffset lives in the bar's saved state, so a page rebuilt after a
                         // post detail closes still knows how far its list is scrolled and keeps the
@@ -419,7 +461,15 @@ private fun TopicPage(tag: String?, id: String?) {
                             // stay on even if the scroll counters were reset on the way back.
                             -scrollBehavior.state.heightOffset,
                         )
-                        AppBarBlurOverlayDefaults.scrollAlpha(scrolled, density)
+                        val ramp = AppBarBlurOverlayDefaults.scrollAlpha(scrolled, density)
+                        val resultRamp = AppBarBlurOverlayDefaults.scrollAlpha(
+                            abs(resultScrollState.contentOffset),
+                            density,
+                        )
+                        // The history panel shares the bar's surface colour, so the material clears
+                        // while it is open: no bar edge is left drawn across the panel. The results
+                        // scroll under the bar like the stream does, so it returns with them.
+                        ramp * (1f - searchFade.value) + resultRamp * resultsFade.value
                     }
                 }
                 AppBarBlurOverlay(
@@ -458,131 +508,176 @@ private fun TopicPage(tag: String?, id: String?) {
                                 }
                                 .graphicsLayer { clip = collapseFraction() > 0f },
                         ) {
-                            Row(
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(TopAppBarDefaults.CollapsedHeight)
                                     .graphicsLayer {
                                         translationY = -topRowHeightPx * collapseFraction()
                                         alpha = 1f - collapseFraction()
-                                    }
-                                    .padding(start = 16.dp, end = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                    },
+                                contentAlignment = Alignment.Center,
                             ) {
-                                BackIcon(navigator)
-                                Text(
-                                    text = title,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = TopAppBarDefaults.NavigationIconGap),
-                                    fontSize = with(density) { AppBarTitleSize.toSp() },
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                InPlaceSearchBar(
+                                    state = search,
+                                    backdrop = backdrop,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    // A blocked page, or one with nothing to list, has nothing to
+                                    // search: the key goes, the title stays.
+                                    showSearchButton = !isBlocked && tabList.isNotEmpty(),
+                                    overlayAbove = overlayAbove,
+                                    // The bar runs in the system-app density; the title keeps the
+                                    // page's own scale, so it stays the size the row drew before.
+                                    titleContent = {
+                                        CompositionLocalProvider(LocalDensity provides density) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                BackIcon(navigator)
+                                                Text(
+                                                    text = title,
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .padding(start = TopAppBarDefaults.NavigationIconGap),
+                                                    fontSize = with(density) { AppBarTitleSize.toSp() },
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    // The key sits between the title and this menu at rest, and the
+                                    // menu leaves with it once the field is over it.
+                                    extraActions = {
+                                        Box {
+                                            TopBarIconButton(onClick = { menu = true }) {
+                                                Icon(COUIIcons.More, contentDescription = "菜单")
+                                            }
+                                            OverlayListPopup(
+                                                show = menu,
+                                                alignment = PopupPositionProvider.Align.End,
+                                                onDismissRequest = { menu = false },
+                                            ) {
+                                                ListPopupColumn {
+                                                    val entries = buildList {
+                                                        add("复制" to { context.copyText(shareUrl) })
+                                                        add("分享" to { context.shareText(shareUrl) })
+                                                        if (sortable) add("排序" to { showSort = true })
+                                                        add((if (isFollow) "取消关注" else "关注") to { onFollowClick() })
+                                                        add(
+                                                            (if (isBlocked) "取消屏蔽" else "屏蔽") to {
+                                                                if (isBlocked) {
+                                                                    app.blacklist.unblockTopic(title)
+                                                                } else {
+                                                                    app.blacklist.blockTopic(title)
+                                                                }
+                                                                isBlocked = !isBlocked
+                                                            },
+                                                        )
+                                                    }
+                                                    entries.forEachIndexed { index, entry ->
+                                                        DropdownImpl(
+                                                            item = DropdownItem(text = entry.first),
+                                                            optionSize = entries.size,
+                                                            isSelected = false,
+                                                            index = index,
+                                                            groupKey = "topic-menu",
+                                                            role = Role.Button,
+                                                            onSelectedIndexChange = {
+                                                                menu = false
+                                                                entry.second()
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            OverlayListPopup(
+                                                show = showSort,
+                                                alignment = PopupPositionProvider.Align.BottomEnd,
+                                                onDismissRequest = { showSort = false },
+                                            ) {
+                                                ListPopupColumn {
+                                                    TopicSortType.entries.forEachIndexed { index, item ->
+                                                        DropdownImpl(
+                                                            item = DropdownItem(text = item.label),
+                                                            optionSize = TopicSortType.entries.size,
+                                                            isSelected = sortType == item,
+                                                            index = index,
+                                                            groupKey = "topic-sort",
+                                                            onSelectedIndexChange = {
+                                                                showSort = false
+                                                                sortType = TopicSortType.entries[it]
+                                                            },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
                                 )
-                                if (!isBlocked) {
-                                    TopBarIconButton(onClick = {
-                                        navigator.push(
-                                            Route.Search(
-                                                title = title,
-                                                pageType = if (isTopic) "tag" else "product_phone",
-                                                pageParam = if (isTopic) title else topic.string("id"),
-                                            ),
-                                        )
-                                    }) {
-                                        Icon(COUIIcons.Search, contentDescription = "搜索")
-                                    }
-                                }
-                                Box(
-                                    modifier = Modifier.padding(
-                                        start = TopAppBarDefaults.ActionMenuItemSpacing,
-                                    ),
-                                ) {
-                                    TopBarIconButton(onClick = { menu = true }) {
-                                        Icon(COUIIcons.More, contentDescription = "菜单")
-                                    }
-                                    OverlayListPopup(
-                                        show = menu,
-                                        alignment = PopupPositionProvider.Align.End,
-                                        onDismissRequest = { menu = false },
-                                    ) {
-                                        ListPopupColumn {
-                                            val entries = buildList {
-                                                add("复制" to { context.copyText(shareUrl) })
-                                                add("分享" to { context.shareText(shareUrl) })
-                                                if (sortable) add("排序" to { showSort = true })
-                                                add((if (isFollow) "取消关注" else "关注") to { onFollowClick() })
-                                                add(
-                                                    (if (isBlocked) "取消屏蔽" else "屏蔽") to {
-                                                        if (isBlocked) {
-                                                            app.blacklist.unblockTopic(title)
-                                                        } else {
-                                                            app.blacklist.blockTopic(title)
-                                                        }
-                                                        isBlocked = !isBlocked
-                                                    },
-                                                )
-                                            }
-                                            entries.forEachIndexed { index, entry ->
-                                                DropdownImpl(
-                                                    item = DropdownItem(text = entry.first),
-                                                    optionSize = entries.size,
-                                                    isSelected = false,
-                                                    index = index,
-                                                    groupKey = "topic-menu",
-                                                    role = Role.Button,
-                                                    onSelectedIndexChange = {
-                                                        menu = false
-                                                        entry.second()
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    }
-                                    OverlayListPopup(
-                                        show = showSort,
-                                        alignment = PopupPositionProvider.Align.BottomEnd,
-                                        onDismissRequest = { showSort = false },
-                                    ) {
-                                        ListPopupColumn {
-                                            TopicSortType.entries.forEachIndexed { index, item ->
-                                                DropdownImpl(
-                                                    item = DropdownItem(text = item.label),
-                                                    optionSize = TopicSortType.entries.size,
-                                                    isSelected = sortType == item,
-                                                    index = index,
-                                                    groupKey = "topic-sort",
-                                                    onSelectedIndexChange = {
-                                                        showSort = false
-                                                        sortType = TopicSortType.entries[it]
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
-                        if (!isBlocked && tabList.size > 1) {
-                            Row(
+                        if (hasTabSlot) {
+                            // The slot keeps its height whether the tabs, nothing or the search's
+                            // content types are in it, so the bar and the pages under it never move.
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                    .height(
+                                        TabRowDefaults.TabRowWithContourHeight +
+                                            TAB_ROW_VERTICAL_PADDING * 2,
+                                    ),
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(vertical = TAB_ROW_VERTICAL_PADDING)
-                                        .height(TabRowDefaults.TabRowWithContourHeight),
-                                ) {
-                                    TabRowWithContour(
-                                        tabs = tabList.map { it.title },
-                                        selectedTabIndex = pagerState.currentPage,
-                                        onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = appTabRowColors(),
-                                    )
+                                if (!segmentsGone) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .graphicsLayer { alpha = 1f - searchFade.value }
+                                            .padding(horizontal = 16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(vertical = TAB_ROW_VERTICAL_PADDING)
+                                                .height(TabRowDefaults.TabRowWithContourHeight),
+                                        ) {
+                                            TabRowWithContour(
+                                                tabs = tabList.map { it.title },
+                                                selectedTabIndex = pagerState.currentPage,
+                                                onTabSelected = {
+                                                    scope.launch { pagerState.animateScrollToPage(it) }
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = appTabRowColors(),
+                                            )
+                                        }
+                                    }
+                                }
+                                // While results show, the slot carries the search's content types
+                                // instead: the one 动态 chip and the grid key that opens its filters.
+                                if (resultsShown) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer { alpha = resultsFade.value },
+                                        contentAlignment = Alignment.CenterStart,
+                                    ) {
+                                        SearchResultTabs(
+                                            tabs = search.tabs,
+                                            selectedIndex = search.pagerState.currentPage,
+                                            onSelectedChange = {
+                                                scope.launch { search.pagerState.animateScrollToPage(it) }
+                                            },
+                                            searchType = search.searchType,
+                                            onSearchType = { search.searchType = it },
+                                            sortType = search.sortType,
+                                            onSortType = { search.sortType = it },
+                                            backdrop = backdrop,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -592,7 +687,8 @@ private fun TopicPage(tag: String?, id: String?) {
         },
         floatingActionButton = {
             AppFloatingActionButton(
-                visible = app.session.isLogin && !isBlocked,
+                // The search takes the page over: the compose key belongs to the list it covers.
+                visible = app.session.isLogin && !isBlocked && !search.expanded,
                 backdrop = backdrop,
                 onClick = { showCompose = true },
                 icon = COUIIcons.Add,
@@ -685,6 +781,43 @@ private fun TopicPage(tag: String?, id: String?) {
                     )
                 }
             }
+            // The history drops in under the expanded field and covers the streams, the way the old
+            // search page did; picking a keyword opens its results on top.
+            InPlaceSearchPanel(
+                state = search,
+                // Straight under the search field: the tab slot above is empty while searching.
+                historyTop = statusBar + TopAppBarDefaults.CollapsedHeight,
+                resultContentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() +
+                        (if (hasTabSlot) 0.dp else SEARCH_CHIP_GAP + SEARCH_CHIP_HEIGHT) + 12.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                ),
+                bottomPadding = innerPadding.calculateBottomPadding(),
+                topChromeHeight = if (hasTabSlot) 0.dp else SEARCH_CHIP_GAP + SEARCH_CHIP_HEIGHT,
+                // A page with no tab slot carries the content types on the panel itself: the
+                // results start below them and scroll out from under their band.
+                topChrome = if (hasTabSlot) {
+                    null
+                } else {
+                    ({ rowBackdrop ->
+                        SearchResultTabs(
+                            modifier = Modifier.padding(top = SEARCH_CHIP_GAP),
+                            tabs = search.tabs,
+                            selectedIndex = search.pagerState.currentPage,
+                            onSelectedChange = {
+                                scope.launch { search.pagerState.animateScrollToPage(it) }
+                            },
+                            searchType = search.searchType,
+                            onSearchType = { search.searchType = it },
+                            sortType = search.sortType,
+                            onSortType = { search.sortType = it },
+                            // The panel records the results into a layer of their own: the row is
+                            // drawn above it, so a chip frosts what scrolls behind its row.
+                            backdrop = rowBackdrop,
+                        )
+                    })
+                },
+            )
         }
     }
 
