@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -270,7 +271,11 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                         .onSizeChanged { barHeightPx = it.height }
                         // Sunk out of the window, so it paints nothing over the results and takes
                         // no taps meant for them; an invisible bar left in place would still answer.
-                        .offset { IntOffset(0, (barSlide * (barHeightPx + 1)).roundToInt()) },
+                        .offset { IntOffset(0, (barSlide * (barHeightPx + 1)).roundToInt()) }
+                        // Once it is out of the window the glass has nothing to show, so the whole
+                        // bar stops drawing instead of sampling a backdrop nobody sees. Read at
+                        // draw time: the slide itself recomposes nothing.
+                        .drawWithContent { if (barSlide < 1f) drawContent() },
                 ) {
                     // Both side slots stay configured, so the capsule keeps its width and stays in
                     // the middle whether a ball is out or not; a ball only melts out of the capsule
