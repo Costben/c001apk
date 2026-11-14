@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.search
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.nav.LocalNavigator
+import app.awavenue.c001apk.ui.nav.LocalOverlayBackHandler
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.LocalEdgeToEdge
@@ -232,7 +235,10 @@ internal fun InPlaceSearchBar(
     overlayAbove: Boolean? = null,
 ) {
     val navigator = LocalNavigator.current
-    val covered = overlayAbove ?: navigator.hasOverlay
+    val preview = LocalRouteTransition.current?.preview == true
+    val covered = preview || (overlayAbove ?: navigator.hasOverlay)
+    val overlayBack = LocalOverlayBackHandler.current
+    val usePredictiveOverlay = covered && overlayBack?.predictiveEnabled?.invoke() == true
     ChromeDensity {
         TopAppBarSearchBar(
             query = state.query,
@@ -257,7 +263,12 @@ internal fun InPlaceSearchBar(
         BackHandler(state.expanded && !covered && state.submitted != null) {
             state.submitted = null
         }
-        BackHandler(state.expanded && covered) { navigator.pop() }
+        BackHandler(state.expanded && covered && !usePredictiveOverlay) {
+            overlayBack?.onImmediateBack?.invoke() ?: navigator.pop()
+        }
+        PredictiveBackHandler(enabled = state.expanded && usePredictiveOverlay) { progress ->
+            overlayBack?.onPredictiveBack?.invoke(progress)
+        }
     }
 }
 

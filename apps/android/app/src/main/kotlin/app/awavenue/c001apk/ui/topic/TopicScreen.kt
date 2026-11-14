@@ -98,6 +98,7 @@ import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalPageMemory
+import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.Navigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
@@ -320,9 +321,11 @@ private fun TopicPage(tag: String?, id: String?) {
     val segmentsGone by remember(searchFade) { derivedStateOf { searchFade.value >= 1f } }
     // True while the search is open and no page sits above this one. Back from the history closes
     // the search; the bar's own handlers run later and take the results and a pushed page first.
-    // This page is itself a pushed route, so "above" means a deeper stack than the one it entered on.
+    // This page is itself a pushed route, so "above" means a deeper stack than the one it entered on
+    // (or a revealed preview composition while an overlay route above it is being dragged away).
+    val preview = LocalRouteTransition.current?.preview == true
     val entryDepth = remember { navigator.stack.size }
-    val overlayAbove = navigator.stack.size > entryDepth
+    val overlayAbove = preview || navigator.stack.size > entryDepth
     val searchActive = search.expanded && !overlayAbove
     BackHandler(enabled = searchActive) { search.close() }
     val pagerState = rememberPagerState(

@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.nav
 
 import android.app.Activity
+import androidx.activity.BackEventCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
@@ -35,9 +36,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -164,11 +167,150 @@ fun AppNavHost(
     val paneEntry = navigator.stack.lastOrNull()?.takeIf { wide && it.route is Route.Feed }
     val readingSidebar = remember { ReadingSidebar() }
     val paneOpen = paneEntry != null && !readingSidebar.hidden
+    val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
+    val usePredictiveOverlay = predictiveBack && paneEntry == null
+
+    suspend fun handlePredictiveBack(progress: Flow<BackEventCompat>) {
+        // A gesture that starts while the last one is still settling takes it over.
+        settleJob?.cancel()
+
+        // If a previous return animation is still playing when another back gesture arrives,
+        // immediately finish the previous animation and pop it, then swallow this new gesture
+        // so it doesn't trigger a second return on the screen underneath (e.g. image return or desktop).
+        val interrupting = committingEntry ?: interruptedEntry
+        if (interrupting != null) {
+            committingEntry = null
+            interruptedEntry = null
+            interrupting.previewed = true
+            if (navigator.stack.lastOrNull() === interrupting) {
+                navigator.pop()
+            }
+            gestureEntry = null
+            gestureProgress = 1f
+            try {
+                progress.collect { }
+            } catch (_: CancellationException) { }
+            return
+        }
+
+        if (navigator.stack.size <= 1) {
+            gestureEntry = null
+            gestureProgress = 1f
+            // Nothing to preview: back returns the main screen to its first tab, and that does
+            // not happen until the gesture is released. The 主页 tab is not this branch — the
+            // handler is off there, so the system owns the gesture.
+            try {
+                progress.collect { }
+            } catch (_: CancellationException) {
+                return
+            }
+            val justPopped = System.currentTimeMillis() - navigator.lastPopTime < 350L
+            if (!justPopped) {
+                // The tab switch is the expected path. moveTaskToBack only covers a stale
+                // registration — the tab changed under a gesture that was already running.
+                if (navigator.onMainBack?.invoke() != true) (context as? Activity)?.moveTaskToBack(true)
+            }
+            return
+        }
+        val run = ++gestureRun
+        val top = navigator.stack.last()
+        gestureEntry = top
+        var committed = false
+        try {
+            progress.collect { event -> gestureProgress = 1f - event.progress }
+            committed = true
+            committingEntry = top
+            // Released past the threshold: the page finishes leaving from wherever the finger
+            // left it, then goes. Popping it while it is still only part way out would make it
+            // disappear from mid-air.
+            if (gestureProgress < 1f) {
+                // The row is about to come back; lift the list so its header clears the bar.
+                val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+                // The main tabs stay composed under the gesture, so their list can move right
+                // away. A page with its own bar only comes back after the pop and is aligned
+                // from the transition below instead.
+                if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
+                    top.returnScrolled = true
+                    alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
+                }
+                // The commit finishes whatever travel the finger left at the rate the page
+                // opened at. A fixed short duration snapped the last stretch shut, which read
+                // faster than the way in and made the card look like it jumped back.
+                val remaining = gestureProgress
+                animate(
+                    remaining,
+                    0f,
+                    animationSpec = tween(
+                        (ExpandDurationMillis * remaining).roundToInt().coerceAtLeast(1),
+                        easing = ExpandEasing,
+                    ),
+                ) { value, _ ->
+                    gestureProgress = value
+                }
+                top.previewed = true
+            }
+            if (navigator.stack.lastOrNull() === top) {
+                navigator.pop()
+            }
+        } catch (e: CancellationException) {
+            if (!committed) {
+                // Released early: the page eases back under the finger — unless a later callback
+                // has already taken the gesture over, in which case easing back would fight it.
+                settleJob = scope.launch {
+                    withFrameNanos { }
+                    if (run != gestureRun) return@launch
+                    animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
+                        gestureProgress = value
+                    }
+                    if (gestureEntry === top) {
+                        gestureEntry = null
+                        gestureProgress = 1f
+                    }
+                }
+                return
+            } else {
+                // Interrupted during commit by another back gesture: fast-finish immediately.
+                top.previewed = true
+                interruptedEntry = top
+                if (navigator.stack.lastOrNull() === top) {
+                    navigator.pop()
+                }
+            }
+        } finally {
+            if (committingEntry === top) {
+                committingEntry = null
+            }
+            if (gestureEntry === top) {
+                gestureEntry = null
+                gestureProgress = 1f
+            }
+        }
+    }
+
+    fun handleImmediateBack() {
+        if (paneEntry != null || navigator.stack.size > 1) {
+            navigator.pop()
+        } else if (navigator.onMainBack?.invoke() != true) {
+            (context as? Activity)?.moveTaskToBack(true)
+        }
+    }
+
+    val currentPredictiveEnabled by rememberUpdatedState(usePredictiveOverlay)
+    val currentPredictiveBack by rememberUpdatedState(::handlePredictiveBack)
+    val currentImmediateBack by rememberUpdatedState(::handleImmediateBack)
+    val overlayBackHandler = remember {
+        OverlayBackHandler(
+            predictiveEnabled = { currentPredictiveEnabled },
+            onPredictiveBack = { progress -> currentPredictiveBack(progress) },
+            onImmediateBack = { currentImmediateBack() },
+        )
+    }
 
     CompositionLocalProvider(
         LocalNavigator provides navigator,
         LocalImageOrigins provides imageOrigins,
         LocalAppBarBounds provides appBarBounds,
+        LocalOverlayBackHandler provides overlayBackHandler,
     ) {
         // One collector for the host's lifetime: a link is opened against whichever page is on top
         // when it arrives, and recomposition does not restart the collection and replay it.
@@ -176,17 +318,11 @@ fun AppNavHost(
             deepLinks.collect { url -> openCoolapkLink(context, navigator, url, "", openInBrowser) }
         }
 
-        val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
-
         // A pane is closed by back directly: there is no page to pull across the window, and the
         // list beside it is already in place. With the predictive gesture switched off, back is the
         // plain pop it was before the gesture existed — no preview, no travel, just the page gone.
         BackHandler(enabled = paneEntry != null || (!predictiveBack && rootHasWork)) {
-            if (paneEntry != null || navigator.stack.size > 1) {
-                navigator.pop()
-            } else if (navigator.onMainBack?.invoke() != true) {
-                (context as? Activity)?.moveTaskToBack(true)
-            }
+            handleImmediateBack()
         }
 
         // At the root with nothing left to do there, stay out of back's way: the system then runs
@@ -194,120 +330,7 @@ fun AppNavHost(
         // the gesture here and backgrounding the task is what made back look like the app simply
         // vanishing — no preview under the finger, no motion after it.
         PredictiveBackHandler(enabled = predictiveBack && paneEntry == null && rootHasWork) { progress ->
-            // A gesture that starts while the last one is still settling takes it over.
-            settleJob?.cancel()
-
-            // If a previous return animation is still playing when another back gesture arrives,
-            // immediately finish the previous animation and pop it, then swallow this new gesture
-            // so it doesn't trigger a second return on the screen underneath (e.g. image return or desktop).
-            val interrupting = committingEntry ?: interruptedEntry
-            if (interrupting != null) {
-                committingEntry = null
-                interruptedEntry = null
-                interrupting.previewed = true
-                if (navigator.stack.lastOrNull() === interrupting) {
-                    navigator.pop()
-                }
-                gestureEntry = null
-                gestureProgress = 1f
-                try {
-                    progress.collect { }
-                } catch (_: CancellationException) { }
-                return@PredictiveBackHandler
-            }
-
-            if (navigator.stack.size <= 1) {
-                gestureEntry = null
-                gestureProgress = 1f
-                // Nothing to preview: back returns the main screen to its first tab, and that does
-                // not happen until the gesture is released. The 主页 tab is not this branch — the
-                // handler is off there, so the system owns the gesture.
-                try {
-                    progress.collect { }
-                } catch (_: CancellationException) {
-                    return@PredictiveBackHandler
-                }
-                val justPopped = System.currentTimeMillis() - navigator.lastPopTime < 350L
-                if (!justPopped) {
-                    // The tab switch is the expected path. moveTaskToBack only covers a stale
-                    // registration — the tab changed under a gesture that was already running.
-                    if (navigator.onMainBack?.invoke() != true) (context as? Activity)?.moveTaskToBack(true)
-                }
-                return@PredictiveBackHandler
-            }
-            val run = ++gestureRun
-            val top = navigator.stack.last()
-            gestureEntry = top
-            var committed = false
-            try {
-                progress.collect { event -> gestureProgress = 1f - event.progress }
-                committed = true
-                committingEntry = top
-                // Released past the threshold: the page finishes leaving from wherever the finger
-                // left it, then goes. Popping it while it is still only part way out would make it
-                // disappear from mid-air.
-                if (gestureProgress < 1f) {
-                    // The row is about to come back; lift the list so its header clears the bar.
-                    val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
-                    // The main tabs stay composed under the gesture, so their list can move right
-                    // away. A page with its own bar only comes back after the pop and is aligned
-                    // from the transition below instead.
-                    if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
-                        top.returnScrolled = true
-                        alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
-                    }
-                    // The commit finishes whatever travel the finger left at the rate the page
-                    // opened at. A fixed short duration snapped the last stretch shut, which read
-                    // faster than the way in and made the card look like it jumped back.
-                    val remaining = gestureProgress
-                    animate(
-                        remaining,
-                        0f,
-                        animationSpec = tween(
-                            (ExpandDurationMillis * remaining).roundToInt().coerceAtLeast(1),
-                            easing = ExpandEasing,
-                        ),
-                    ) { value, _ ->
-                        gestureProgress = value
-                    }
-                    top.previewed = true
-                }
-                if (navigator.stack.lastOrNull() === top) {
-                    navigator.pop()
-                }
-            } catch (e: CancellationException) {
-                if (!committed) {
-                    // Released early: the page eases back under the finger — unless a later callback
-                    // has already taken the gesture over, in which case easing back would fight it.
-                    settleJob = scope.launch {
-                        withFrameNanos { }
-                        if (run != gestureRun) return@launch
-                        animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
-                            gestureProgress = value
-                        }
-                        if (gestureEntry === top) {
-                            gestureEntry = null
-                            gestureProgress = 1f
-                        }
-                    }
-                    return@PredictiveBackHandler
-                } else {
-                    // Interrupted during commit by another back gesture: fast-finish immediately.
-                    top.previewed = true
-                    interruptedEntry = top
-                    if (navigator.stack.lastOrNull() === top) {
-                        navigator.pop()
-                    }
-                }
-            } finally {
-                if (committingEntry === top) {
-                    committingEntry = null
-                }
-                if (gestureEntry === top) {
-                    gestureEntry = null
-                    gestureProgress = 1f
-                }
-            }
+            handlePredictiveBack(progress)
         }
 
         Box(Modifier.fillMaxSize().background(COUITheme.colorScheme.surface)) {
@@ -569,6 +592,18 @@ fun AppNavHost(
         }
     }
 }
+
+/**
+ * Predictive/immediate overlay back runner shared with descendants (like in-place search bars)
+ * whose own inner back handlers sit higher in the dispatcher stack while an overlay route is open.
+ */
+internal class OverlayBackHandler(
+    val predictiveEnabled: () -> Boolean,
+    val onPredictiveBack: suspend (Flow<BackEventCompat>) -> Unit,
+    val onImmediateBack: () -> Unit,
+)
+
+internal val LocalOverlayBackHandler = staticCompositionLocalOf<OverlayBackHandler?> { null }
 
 /** The progress a page reports while no gesture is pulling it away. */
 private val SettledGesture: () -> Float = { 1f }
