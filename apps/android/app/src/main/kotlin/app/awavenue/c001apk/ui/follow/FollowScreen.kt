@@ -111,7 +111,12 @@ internal fun localFollowLabel(): String = if (LocalApp.current.session.isLogin) 
  * its follow streams or its local list from the title menu; a guest only has the local list.
  */
 @Composable
-fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, barSlot: Int) {
+fun FollowScreen(
+    outerPadding: PaddingValues,
+    returnTop: ReturnTopController,
+    barSlot: Int,
+    onSearchExpandedChange: (Boolean) -> Unit,
+) {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val isLogin = app.session.isLogin
@@ -129,6 +134,8 @@ fun FollowScreen(outerPadding: PaddingValues, returnTop: ReturnTopController, ba
     // Search runs in place, the way 首页's does: the 搜索 key stretches into the field, the history
     // drops in under it and a keyword lists its results there instead of pushing a page.
     val search = rememberInPlaceSearchState()
+    // An open search covers the whole page, so the floating bar steps out of the way beneath it.
+    LaunchedEffect(search.expanded) { onSearchExpandedChange(search.expanded) }
     // 关注 is one of the main tabs and all of them stay composed, so this page has to know when it is
     // the one on screen: a search left open behind another tab would still answer its back presses.
     val mainPager = LocalMainPager.current

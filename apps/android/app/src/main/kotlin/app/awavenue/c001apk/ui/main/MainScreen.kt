@@ -3,6 +3,7 @@ package app.awavenue.c001apk.ui.main
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -35,9 +37,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -75,6 +79,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.icon.extended.NotesFill
 import io.github.suqi8.coui.kmp.icon.extended.Update
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -87,6 +92,9 @@ private const val TabFadeInMillis = 100
 private const val AccessoryShrinkMillis = 90
 private const val AccessoryGrowMillis = 170
 private const val AccessoryFadeMillis = 70
+
+/** How long the floating bar takes to leave the window under an open search page. */
+private const val SearchBarSlideMillis = 180
 
 private enum class MainTab(
     val label: String,
@@ -165,6 +173,13 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
     val backdrop = rememberGlassBackdrop()
     val returnTop = remember { ReturnTopController() }
     val followReturnTop = remember { ReturnTopController() }
+    // A search runs over the whole page, the floating bar included: the panel reaches the bottom
+    // edge, so the bar drops out of the window instead of floating above the results. Each page
+    // reports its own search, since every tab stays composed.
+    var homeSearchOpen by remember { mutableStateOf(false) }
+    var followSearchOpen by remember { mutableStateOf(false) }
+    val searchOpen = homeSearchOpen || followSearchOpen
+    var barHeightPx by remember { mutableIntStateOf(0) }
     val onHome = pagerState.currentPage == MainTab.Home.ordinal
     val app = LocalApp.current
     val session = app.session
@@ -237,11 +252,26 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             // It is measured in the system-app density so 显示大小 leaves the bar the size 相册's
             // is, while every page inside keeps following that setting.
             val barDensity = rememberChromeDensity()
+            // The bar leaves by placement alone: the Scaffold keeps reporting its height, so the
+            // pages below never relayout as the search page covers the bottom edge.
+            val barSlide by animateFloatAsState(
+                targetValue = if (searchOpen) 1f else 0f,
+                animationSpec = tween(SearchBarSlideMillis),
+                label = "search-bar-slide",
+            )
             CompositionLocalProvider(
                 LocalBackdrop provides backdrop,
                 LocalDensity provides barDensity,
             ) {
-                Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .onSizeChanged { barHeightPx = it.height }
+                        // Sunk out of the window, so it paints nothing over the results and takes
+                        // no taps meant for them; an invisible bar left in place would still answer.
+                        .offset { IntOffset(0, (barSlide * (barHeightPx + 1)).roundToInt()) },
+                ) {
                     // Both side slots stay configured, so the capsule keeps its width and stays in
                     // the middle whether a ball is out or not; a ball only melts out of the capsule
                     // into its slot, the way 相册's five-slot bar behaves. 筛选 takes the slot before
@@ -345,8 +375,14 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                         pagerState = homePagerState,
                         returnTop = returnTop,
                         barSlot = page,
+                        onSearchExpandedChange = { homeSearchOpen = it },
                     )
-                    MainTab.Follow -> FollowScreen(outerPadding = padding, returnTop = followReturnTop, barSlot = page)
+                    MainTab.Follow -> FollowScreen(
+                        outerPadding = padding,
+                        returnTop = followReturnTop,
+                        barSlot = page,
+                        onSearchExpandedChange = { followSearchOpen = it },
+                    )
                     MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
                 }
             }

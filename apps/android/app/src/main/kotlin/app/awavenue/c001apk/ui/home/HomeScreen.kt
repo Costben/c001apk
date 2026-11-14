@@ -180,6 +180,7 @@ fun HomeScreen(
     pagerState: PagerState,
     returnTop: ReturnTopController,
     barSlot: Int,
+    onSearchExpandedChange: (Boolean) -> Unit,
 ) {
     val app = LocalApp.current
     val settings = app.settings
@@ -212,6 +213,8 @@ fun HomeScreen(
     // Search runs in place: the bar's round search key stretches into the field, the history fades
     // in under it, and a submitted keyword lists its results right there instead of pushing a page.
     val search = rememberInPlaceSearchState()
+    // An open search covers the whole page, so the floating bar steps out of the way beneath it.
+    LaunchedEffect(search.expanded) { onSearchExpandedChange(search.expanded) }
     val searchExpanded = search.expanded
     val searchFade = search.searchFade
     val resultsFade = search.resultsFade
