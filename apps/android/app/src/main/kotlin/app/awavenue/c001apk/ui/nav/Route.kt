@@ -73,6 +73,11 @@ sealed interface Route {
     data class Apk(val packageName: String) : Route
     data class Topic(val tag: String) : Route
     data class Product(val id: String) : Route
+    /**
+     * The ranking of other products a 机型话题 lists under its own: the row the API labels 参数 but
+     * fills with 数码 entries. The bar offers it as 相关话题, since 参数 itself is the spec sheet.
+     */
+    data class RelatedTopics(val url: String) : Route
     data class Event(val id: String) : Route
     data class Search(val title: String, val pageType: String? = null, val pageParam: String? = null) : Route
     data class SearchResult(

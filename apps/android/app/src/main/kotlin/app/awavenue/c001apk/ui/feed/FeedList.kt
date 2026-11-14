@@ -60,6 +60,8 @@ fun FeedList(
     onSortSelected: ((Entity) -> Unit)? = null,
     itemFilter: ((Entity) -> Boolean)? = null,
     header: (@Composable () -> Unit)? = null,
+    // A page that offers the order from its bar menu does not repeat it as a card in the list.
+    showSortCard: Boolean = true,
 ) {
     val context = LocalContext.current
     val app = LocalApp.current
@@ -190,17 +192,19 @@ fun FeedList(
                         contentPadding = contentPadding,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        viewModel.sortCard?.let { card ->
-                            item(contentType = "sortCard") {
-                                SortSelectCard(
-                                    card,
-                                    Modifier.padding(horizontal = itemPadding),
-                                    viewModel.selectedSort,
-                                ) { option ->
-                                    if (onSortSelected != null) {
-                                        onSortSelected(option)
-                                    } else {
-                                        openLink(option.url, "")
+                        if (showSortCard) {
+                            viewModel.sortCard?.let { card ->
+                                item(contentType = "sortCard") {
+                                    SortSelectCard(
+                                        card,
+                                        Modifier.padding(horizontal = itemPadding),
+                                        viewModel.selectedSort,
+                                    ) { option ->
+                                        if (onSortSelected != null) {
+                                            onSortSelected(option)
+                                        } else {
+                                            openLink(option.url, "")
+                                        }
                                     }
                                 }
                             }

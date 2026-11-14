@@ -93,6 +93,7 @@ import app.awavenue.c001apk.ui.settings.ParamsScreen
 import app.awavenue.c001apk.ui.settings.SettingsScreen
 import app.awavenue.c001apk.ui.settings.TwilightRulesScreen
 import app.awavenue.c001apk.ui.topic.ProductScreen
+import app.awavenue.c001apk.ui.topic.RelatedTopicsScreen
 import app.awavenue.c001apk.ui.topic.TopicScreen
 import app.awavenue.c001apk.ui.user.UserScreen
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
@@ -813,6 +814,7 @@ private fun RouteHost(route: Route) {
         is Route.Apk -> ApkScreen(packageName = route.packageName)
         is Route.Topic -> TopicScreen(tag = route.tag)
         is Route.Product -> ProductScreen(id = route.id)
+        is Route.RelatedTopics -> RelatedTopicsScreen(url = route.url)
         is Route.Event -> EventScreen(id = route.id)
         is Route.Search -> SearchScreen(title = route.title, pageType = route.pageType, pageParam = route.pageParam)
         is Route.SearchResult -> SearchResultScreen(

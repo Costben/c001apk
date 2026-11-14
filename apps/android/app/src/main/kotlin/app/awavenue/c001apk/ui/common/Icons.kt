@@ -101,6 +101,14 @@ object AppIcons {
         )
     }
 
+    /** The topic header's rating mark: the COUI set has no star. */
+    val StarFilled: ImageVector by lazy {
+        icon(
+            "StarFilled",
+            "M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z",
+        )
+    }
+
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
