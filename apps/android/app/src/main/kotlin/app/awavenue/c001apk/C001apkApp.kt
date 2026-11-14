@@ -19,6 +19,7 @@ import app.awavenue.c001apk.data.UpdateService
 import app.awavenue.c001apk.network.ApiClient
 import app.awavenue.c001apk.network.TwilightRulesClient
 import app.awavenue.c001apk.platform.MessageCheckWorker
+import app.awavenue.c001apk.platform.ShaderCacheGuard
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -66,6 +67,8 @@ class C001apkApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // Before any window exists: the renderer reads this file when the first canvas is created.
+        ShaderCacheGuard.resetIfSaturated(this)
         settings = AppSettings(this)
         session = SessionStore(this)
         accounts = AccountStore(this, session)
