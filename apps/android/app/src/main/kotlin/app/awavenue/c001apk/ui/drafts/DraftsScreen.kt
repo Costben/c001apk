@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -40,6 +39,7 @@ import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
@@ -239,7 +239,7 @@ private fun DraftCard(draft: Draft, onOpen: () -> Unit, onDelete: () -> Unit) {
                     AsyncImage(
                         model = File(image.path),
                         contentDescription = null,
-                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.size(52.dp).clip(rememberSquircleShape(8.dp)),
                     )
                 }
             }

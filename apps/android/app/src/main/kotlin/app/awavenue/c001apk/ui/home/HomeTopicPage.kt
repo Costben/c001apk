@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +42,7 @@ import app.awavenue.c001apk.model.catalogCategories
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -255,7 +255,7 @@ private fun RailItem(title: String, selected: Boolean, child: Boolean, onClick: 
         Modifier
             .fillMaxWidth()
             .height(if (child) RailChildHeight else RailItemHeight)
-            .clip(RoundedCornerShape(topEnd = 13.dp, bottomEnd = 13.dp))
+            .clip(rememberSquircleShape(topEnd = 13.dp, bottomEnd = 13.dp))
             // A ripple would paint a square over the row, so the press feedback is the same
             // translucent pill the rest of the app uses.
             .background(COUITheme.colorScheme.onSurface.copy(alpha = 0.08f * pressAlpha))
@@ -272,7 +272,7 @@ private fun RailItem(title: String, selected: Boolean, child: Boolean, onClick: 
                     .padding(start = RailIndicatorInset)
                     .width(3.dp)
                     .height(18.dp)
-                    .background(accent, RoundedCornerShape(2.dp)),
+                    .background(accent, rememberSquircleShape(2.dp)),
             )
         }
         Text(

@@ -30,8 +30,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -82,6 +80,8 @@ import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.fromToday
+import app.awavenue.c001apk.ui.common.rememberCapsuleShape
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.OssUploadModel
@@ -540,7 +540,7 @@ fun ReplyComposerSheet(
                         AsyncImage(
                             model = java.io.File(image.path),
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                            modifier = Modifier.size(64.dp).clip(rememberSquircleShape(10.dp)),
                         )
                         IconButton(
                             onClick = { images = images - image },
@@ -586,7 +586,7 @@ fun ReplyComposerSheet(
                 // choice is visible without opening the sheet.
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(50))
+                        .clip(rememberCapsuleShape())
                         .clickable { openVisibility() }
                         .padding(start = 8.dp, end = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -616,7 +616,7 @@ fun ReplyComposerSheet(
             } else {
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(50))
+                        .clip(rememberCapsuleShape())
                         .clickable { onlySelf = !onlySelf }
                         .padding(start = 4.dp, end = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -886,21 +886,22 @@ private fun PanelToolbarButton(
     val isDark = COUITheme.colorScheme.background.luminance() < 0.5f
     val fill = if (isDark) ComposerPanel.ToolbarFillDark else Color.Transparent
     val halo = if (isDark) ComposerPanel.ToolbarHaloDark else ComposerPanel.ToolbarHaloLight
+    val capsuleShape = rememberCapsuleShape()
     Box {
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .drawWithContent {
                     val capsule = Path().apply {
-                        addOutline(CircleShape.createOutline(size, layoutDirection, this@drawWithContent))
+                        addOutline(capsuleShape.createOutline(size, layoutDirection, this@drawWithContent))
                     }
                     clipPath(capsule, ClipOp.Difference) { this@drawWithContent.drawContent() }
                 }
-                .dropShadow(CircleShape, halo),
+                .dropShadow(capsuleShape, halo),
         )
         Box(
             modifier = Modifier
-                .clip(CircleShape)
+                .clip(capsuleShape)
                 .background(fill)
                 .materialShadowEdge(
                     stroke = ComposerPanel.ToolbarButtonStroke,
@@ -1001,6 +1002,7 @@ private fun ActionCapsule(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val capsuleShape = rememberCapsuleShape()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1008,11 +1010,12 @@ private fun ActionCapsule(
             // The fade has to wrap the fill as well as the label, so it is the outermost layer:
             // applied after the background it would only wash out the text.
             .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .clip(CircleShape)
+            .clip(capsuleShape)
             .background(Brush.verticalGradient(ComposerPanel.ActionGradient))
             // The native capsule is lit along its top and bottom edge only, fading across the middle.
             .border(
                 BorderStroke(1.dp, Brush.verticalGradient(ComposerPanel.ActionEdgeGradient)),
+                capsuleShape,
             )
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -1216,7 +1219,7 @@ private fun VisibilityOption(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(rememberSquircleShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1269,7 +1272,7 @@ private fun DraftPickerRow(draft: Draft, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(rememberSquircleShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1278,7 +1281,7 @@ private fun DraftPickerRow(draft: Draft, onClick: () -> Unit) {
             AsyncImage(
                 model = File(draft.images.first().path),
                 contentDescription = null,
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
+                modifier = Modifier.size(44.dp).clip(rememberSquircleShape(10.dp)),
             )
             Spacer(Modifier.width(12.dp))
         }

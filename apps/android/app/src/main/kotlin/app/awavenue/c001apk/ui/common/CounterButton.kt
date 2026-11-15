@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,7 +85,7 @@ fun CounterButton(
             )
             // Clip inside the touch target so the layer's own size, not the 48dp minimum, is the
             // capsule. The padding keeps the rounded ends clear of the icon and the digits.
-            .clip(RoundedCornerShape(50))
+            .clip(rememberCapsuleShape())
             .drawBehind {
                 if (alpha.value > 0f) drawRect(overlay, alpha = alpha.value * strength)
             }

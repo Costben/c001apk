@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +42,7 @@ import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
@@ -386,7 +386,7 @@ private fun CloudHistoryRow(entry: CloudHistoryEntry, onClick: () -> Unit) {
         ) {
             NetworkImage(
                 url = entry.logo,
-                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)),
+                modifier = Modifier.size(42.dp).clip(rememberSquircleShape(10.dp)),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

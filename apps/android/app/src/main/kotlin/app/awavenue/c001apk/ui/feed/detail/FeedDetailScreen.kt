@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +58,7 @@ import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
+import app.awavenue.c001apk.ui.common.rememberCapsuleShape
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -542,7 +542,7 @@ private fun ReplyHeader(viewModel: FeedDetailViewModel) {
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.width(10.dp))
-            // The same segmented capsule as the home bar, in the tiny style: four labels plus
+            // The same segmented capsule as the home bar, in the tiny style: three labels plus
             // the reply count have to share one line, so the count is measured first and the
             // capsule takes what is left.
             TabRowWithContour(
@@ -715,7 +715,7 @@ private fun ExtraLink(feed: Entity) {
     val openLink = rememberLinkOpener()
     InsetBlock(onClick = { openLink(feed.extraUrl, feed.extraTitle) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(feed.extraPic, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
+            NetworkImage(feed.extraPic, Modifier.size(40.dp).clip(rememberSquircleShape(8.dp)))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(feed.extraTitle.ifEmpty { feed.extraUrl }, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -811,7 +811,7 @@ private fun SectionBadgeRow(feed: Entity, modifier: Modifier = Modifier) {
     val openLink = rememberLinkOpener()
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(rememberCapsuleShape())
             .background(COUITheme.colorScheme.surfaceContainerHigh)
             .clickable { openLink(url, title) }
             .padding(start = 5.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),

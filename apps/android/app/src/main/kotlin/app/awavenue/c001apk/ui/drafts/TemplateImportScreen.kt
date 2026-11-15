@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -43,6 +42,7 @@ import app.awavenue.c001apk.data.LongPostPackageSpec
 import app.awavenue.c001apk.data.LongPostTemplate
 import app.awavenue.c001apk.data.LongPostTemplateSpec
 import app.awavenue.c001apk.data.TemplateImage
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.data.TemplateParse
 import app.awavenue.c001apk.data.parseLongPostTemplate
 import app.awavenue.c001apk.data.readLongPostPackage
@@ -365,7 +365,7 @@ private fun SpecCard() {
             LongPostTemplateSpec.DOCUMENT,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(rememberSquircleShape(10.dp))
                 .padding(8.dp),
             style = COUITheme.textStyles.footnote2.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
             color = COUITheme.colorScheme.onSurfaceVariantSummary,
@@ -426,7 +426,7 @@ private fun TemplatePreview(
                     AsyncImage(
                         model = if (image.isRemote) image.source else File(image.source),
                         contentDescription = image.caption.ifEmpty { null },
-                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.size(56.dp).clip(rememberSquircleShape(8.dp)),
                     )
                 }
             }

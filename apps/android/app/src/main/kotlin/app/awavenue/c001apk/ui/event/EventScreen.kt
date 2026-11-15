@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -286,7 +285,7 @@ private fun EventHeaderPage(
                         ) {
                             NetworkImage(
                                 url = prize.string("logo"),
-                                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)),
+                                modifier = Modifier.size(64.dp).clip(rememberSquircleShape(8.dp)),
                                 contentDescription = prize.string("title"),
                             )
                             Text(

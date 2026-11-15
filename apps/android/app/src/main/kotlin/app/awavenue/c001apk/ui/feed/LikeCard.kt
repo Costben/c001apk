@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,7 +96,7 @@ fun LikeCard(item: Entity, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (previewPic.isNotEmpty()) {
-                    NetworkImage(previewPic, Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)))
+                    NetworkImage(previewPic, Modifier.size(30.dp).clip(rememberSquircleShape(8.dp)))
                     Spacer(Modifier.width(10.dp))
                 }
                 Column(Modifier.weight(1f)) {

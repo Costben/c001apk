@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,7 +106,7 @@ private fun GridImage(url: String, width: Dp, height: Dp, more: Int = 0, onClick
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(5.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(rememberSquircleShape(4.dp))
                     .background(COUITheme.colorScheme.primaryContainer)
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 style = COUITheme.textStyles.footnote2,

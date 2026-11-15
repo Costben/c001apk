@@ -6,7 +6,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Composable
@@ -33,6 +32,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextOverflow
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -223,7 +223,7 @@ private fun AuthorTag(tag: String, modifier: Modifier = Modifier) {
     val op = tag == "楼主"
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(rememberSquircleShape(4.dp))
             .background(if (op) scheme.tertiaryContainer else scheme.secondaryContainer),
         contentAlignment = Alignment.Center,
     ) {

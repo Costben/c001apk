@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -212,7 +211,7 @@ private fun AppRow(item: Entity, modifier: Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
                 item.logo,
-                Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)),
+                Modifier.size(40.dp).clip(rememberSquircleShape(8.dp)),
                 contentDescription = item.title,
             )
             Spacer(Modifier.width(10.dp))
@@ -279,7 +278,7 @@ private fun CollectionRow(item: Entity, modifier: Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
                 item.string("cover_pic"),
-                Modifier.size(width = 53.dp, height = 40.dp).clip(RoundedCornerShape(8.dp)),
+                Modifier.size(width = 53.dp, height = 40.dp).clip(rememberSquircleShape(8.dp)),
                 contentDescription = item.title,
             )
             Spacer(Modifier.width(10.dp))
@@ -521,12 +520,12 @@ private fun MiniItem(entry: Entity, modifier: Modifier = Modifier) {
     val openLink = rememberLinkOpener()
     Row(
         modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(rememberSquircleShape(8.dp))
             .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NetworkImage(entry.logo.ifEmpty { entry.pic }, Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
+        NetworkImage(entry.logo.ifEmpty { entry.pic }, Modifier.size(18.dp).clip(rememberSquircleShape(4.dp)))
         Spacer(Modifier.width(6.dp))
         Text(entry.title, style = COUITheme.textStyles.footnote1, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

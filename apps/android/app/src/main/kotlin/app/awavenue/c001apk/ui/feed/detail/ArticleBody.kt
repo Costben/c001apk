@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,7 +167,7 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(5.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(rememberSquircleShape(4.dp))
                             .background(COUITheme.colorScheme.primaryContainer)
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         style = COUITheme.textStyles.footnote2,

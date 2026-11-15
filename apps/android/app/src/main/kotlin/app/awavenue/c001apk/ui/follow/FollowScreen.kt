@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.awavenue.c001apk.ui.common.rememberCapsuleShape
 import kotlin.math.abs
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.NotificationBell
@@ -217,7 +217,7 @@ fun FollowScreen(
                                     ) {
                                         Row(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(50))
+                                                .clip(rememberCapsuleShape())
                                                 .background(
                                                     COUITheme.colorScheme.onSurface.copy(
                                                         alpha = 0.08f * pressAlpha,

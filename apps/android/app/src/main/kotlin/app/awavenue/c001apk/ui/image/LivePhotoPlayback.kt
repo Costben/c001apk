@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +32,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import app.awavenue.c001apk.C001apkApp
 import app.awavenue.c001apk.R
+import app.awavenue.c001apk.ui.common.rememberCapsuleShape
 import app.awavenue.c001apk.media.LivePhotoSource
 import app.awavenue.c001apk.media.extractEmbeddedVideo
 import app.awavenue.c001apk.ui.LocalApp
@@ -223,7 +223,7 @@ internal fun LivePhotoControls(
     ) {
         Row(
             Modifier
-                .clip(RoundedCornerShape(50))
+                .clip(rememberCapsuleShape())
                 .background(LivePhotoChrome)
                 .clickable(enabled = ready, onClick = onTogglePlayback)
                 .padding(horizontal = 12.dp, vertical = 8.dp),

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -373,7 +372,7 @@ private fun NestedFeed(feed: Entity, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (feed.pic.isNotEmpty()) {
-            NetworkImage(feed.pic, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
+            NetworkImage(feed.pic, Modifier.size(40.dp).clip(rememberSquircleShape(8.dp)))
             Spacer(Modifier.width(10.dp))
         }
         Column(Modifier.weight(1f)) {

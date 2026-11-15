@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -54,13 +53,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
@@ -95,6 +93,7 @@ import app.awavenue.c001apk.ui.common.isGifUrl
 import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.openBrowser
 import app.awavenue.c001apk.ui.common.originalImageUrl
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.saveOriginalImage
 import app.awavenue.c001apk.ui.common.saveLivePhoto
 import app.awavenue.c001apk.ui.common.shareImage
@@ -113,6 +112,8 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.squircle.addSquircleRect
+import io.github.suqi8.coui.kmp.squircle.isSquircleEnabled
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.Copy
@@ -244,6 +245,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                 Text("暂无内容", color = Color.White)
             }
         } else {
+            val squircleEnabled = isSquircleEnabled()
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -261,7 +263,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                         null
                     }
                     val thumb = live ?: url?.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
-                    openFrame(p, thumb, url?.let { frame.aspectOf(it) })
+                    openFrame(p, thumb, url?.let { frame.aspectOf(it) }, squircleEnabled)
                 },
                 pageSpacing = 16.dp,
                 beyondViewportPageCount = 1,
@@ -328,7 +330,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                     modifier = Modifier
                         .navigationBarsPadding()
                         .padding(bottom = 30.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(rememberSquircleShape(10.dp))
                         .background(Color.Black.copy(alpha = 0.72f))
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
@@ -429,7 +431,12 @@ private fun GraphicsLayerScope.settle() {
  * long strip, which rests taller than the screen and so cannot be mapped back onto a thumbnail —
  * it just fades and settles in.
  */
-private fun GraphicsLayerScope.openFrame(progress: Float, thumb: ThumbBounds?, aspect: Float?) {
+private fun GraphicsLayerScope.openFrame(
+    progress: Float,
+    thumb: ThumbBounds?,
+    aspect: Float?,
+    squircleEnabled: Boolean,
+) {
     val source = thumb?.rect
     val rest = (aspect ?: source?.let { it.width / it.height })
         ?.let { restSize(size.width, size.height, it) }
@@ -456,15 +463,25 @@ private fun GraphicsLayerScope.openFrame(progress: Float, thumb: ThumbBounds?, a
         width = lerp(source.width, width, progress) / scale,
         height = lerp(source.height, height, progress) / scale,
         radius = lerp(thumb.cornerRadius, 0f, progress) / scale,
+        squircleEnabled = squircleEnabled,
     )
     clip = true
 }
 
-private class CenteredWindow(private val width: Float, private val height: Float, private val radius: Float) : Shape {
+private class CenteredWindow(
+    private val width: Float,
+    private val height: Float,
+    private val radius: Float,
+    private val squircleEnabled: Boolean,
+) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val left = (size.width - width) / 2f
         val top = (size.height - height) / 2f
-        return Outline.Rounded(RoundRect(left, top, left + width, top + height, CornerRadius(radius)))
+        val path = Path().apply {
+            addSquircleRect(width = width, height = height, cornerRadius = radius, squircleEnabled = squircleEnabled)
+            translate(Offset(left, top))
+        }
+        return Outline.Generic(path)
     }
 }
 

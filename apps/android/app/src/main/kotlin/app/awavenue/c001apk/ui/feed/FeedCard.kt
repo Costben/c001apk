@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -420,11 +419,12 @@ private fun FeedHeader(
 
 @Composable
 private fun StickTopTag() {
+    val tagShape = rememberSquircleShape(4.dp)
     Text(
         "置顶",
         modifier = Modifier
-            .border(1.25.dp, COUITheme.colorScheme.primary, RoundedCornerShape(4.dp))
-            .background(COUITheme.colorScheme.surface, RoundedCornerShape(4.dp))
+            .border(1.25.dp, COUITheme.colorScheme.primary, tagShape)
+            .background(COUITheme.colorScheme.surface, tagShape)
             .padding(horizontal = 4.dp, vertical = 2.dp),
         fontSize = 12.sp,
         color = COUITheme.colorScheme.primary,
@@ -474,7 +474,7 @@ private fun ExtraLink(feed: Entity) {
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(feed.extraPic, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)))
+            NetworkImage(feed.extraPic, Modifier.size(40.dp).clip(rememberSquircleShape(8.dp)))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(feed.extraTitle.ifEmpty { feed.extraUrl }, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -507,13 +507,13 @@ private fun RelationChip(entry: Entity) {
     val openLink = rememberLinkOpener()
     Row(
         Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(rememberSquircleShape(8.dp))
             .background(COUITheme.colorScheme.surface)
             .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
             .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NetworkImage(entry.logo, Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
+        NetworkImage(entry.logo, Modifier.size(18.dp).clip(rememberSquircleShape(4.dp)))
         Spacer(Modifier.width(4.dp))
         Text(entry.title, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

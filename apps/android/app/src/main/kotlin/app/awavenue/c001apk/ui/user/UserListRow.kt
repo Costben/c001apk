@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +20,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -70,7 +70,7 @@ fun UserRow(item: Entity, onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
                 avatar,
-                Modifier.size(40.dp).clip(if (circle) CircleShape else RoundedCornerShape(8.dp)),
+                Modifier.size(40.dp).clip(if (circle) CircleShape else rememberSquircleShape(8.dp)),
                 contentDescription = title,
             )
             Spacer(Modifier.width(10.dp))
