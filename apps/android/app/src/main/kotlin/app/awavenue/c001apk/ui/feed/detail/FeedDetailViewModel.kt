@@ -29,11 +29,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** The four reply orderings of the pinned header, matching the Flutter `ReplySortType`. */
+/** The three reply orderings of the pinned header. */
 enum class ReplySortType(val label: String) {
     Def("默认"),
     Dateline("最新"),
-    Hot("热门"),
     Author("楼主"),
 }
 
@@ -353,10 +352,6 @@ class FeedDetailViewModel(
             }
             ReplySortType.Dateline -> {
                 listType = "dateline_desc"
-                fromFeedAuthor = 0
-            }
-            ReplySortType.Hot -> {
-                listType = "popular"
                 fromFeedAuthor = 0
             }
             ReplySortType.Author -> {
