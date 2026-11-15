@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
@@ -196,14 +197,20 @@ fun ReplyCard(
                 }
             }
         }
-        Box(Modifier.align(Alignment.TopEnd)) {
-            IconButton(onClick = { panelOpen = true }) {
+        val moreTopPadding = with(LocalDensity.current) {
+            val topPadding = if (isContainer) 10.dp else 12.dp
+            // Align the 36dp button center with the 15sp username's first-line visual center (~9.2sp).
+            (topPadding + 9.2.sp.toDp() - 18.dp).coerceAtLeast(0.dp)
+        }
+        Box(Modifier.align(Alignment.TopEnd).padding(top = moreTopPadding)) {
+            IconButton(
+                onClick = { panelOpen = true },
+                minHeight = 36.dp,
+            ) {
                 Icon(
                     COUIIcons.More,
                     contentDescription = "更多",
                     tint = COUITheme.colorScheme.onSurfaceVariantSummary,
-                    // The 48dp button keeps the touch target; the glyph stays at the username's
-                    // height instead of towering over the first line.
                     modifier = Modifier.size(16.dp),
                 )
             }
