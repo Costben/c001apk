@@ -4,10 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -39,6 +43,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -47,12 +52,14 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -63,10 +70,13 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
@@ -74,6 +84,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
@@ -101,6 +112,7 @@ import app.awavenue.c001apk.ui.common.SUFFIX_THUMBNAIL
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ActionSheetItem
+import app.awavenue.c001apk.ui.nav.ExpandEasing
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
@@ -109,7 +121,6 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
-import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.squircle.addSquircleRect
@@ -124,6 +135,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Share
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import kotlin.math.abs
 import kotlin.math.max
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -156,11 +168,8 @@ private const val ChromeFadeStart = 0.6f
 // Below this the picture counts as unzoomed, so float residue from pinching never blocks a swipe.
 private const val ZoomEpsilon = 0.01f
 
-// The full picture fades in and the loading spinner fades out over this, so neither is a hard cut.
+// The full picture fades in over the thumbnail so the transition is not a hard cut.
 private const val LoadFadeMillis = 200
-
-// A picture already in the cache arrives at once; hold the spinner back so it does not blink.
-private const val IndicatorDelayMillis = 150
 
 /**
  * Full-screen picture pager. The picture sits under translucent bars, fitted to the whole screen —
@@ -191,12 +200,22 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     var saveHud by remember { mutableStateOf("") }
     val frame = remember { ViewerFrame() }
     val progress: () -> Float = remember(transition) { transition?.progress ?: { 1f } }
+    val currentUrl = images.getOrNull(pagerState.currentPage).orEmpty()
 
-    LightSystemBarIcons(leaving = { transition?.exiting?.invoke() == true })
+    // 记下正在看的是哪一张：被它盖住的缩略图要等这一页撤走再恢复显示，避免半透明背景透出两张一样的图。
+    SideEffect { origins.viewing = currentUrl.ifEmpty { null } }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (origins.dismissFlight == null) origins.viewing = null
+        }
+    }
+
+    val leaving: () -> Boolean = { transition?.exiting?.invoke() == true }
+    LightSystemBarIcons(leaving = leaving)
     // 控件收起时状态栏跟着收，长图才能顶到屏幕最上沿；从顶部划一下可以临时叫出来。
     ImmersiveStatusBar(
         hidden = !chromeVisible,
-        leaving = { transition?.exiting?.invoke() == true },
+        leaving = leaving,
     )
 
     fun saveOriginals(urls: List<String>) {
@@ -237,8 +256,19 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
         }
     }
 
-    Box(Modifier.fillMaxSize().onPlaced { frame.host = it }) {
-        Box(Modifier.fillMaxSize().drawBehind { drawRect(Color.Black, alpha = progress()) })
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onPlaced { frame.host = it }
+            .onSizeChanged { frame.dismiss.boxSize = it },
+    ) {
+        Box(
+            Modifier.fillMaxSize().drawBehind {
+                val d = frame.dismiss
+                val bgAlpha = if (d.active) d.currentBgAlpha() else progress()
+                if (bgAlpha > 0f) drawRect(Color.Black, alpha = bgAlpha)
+            },
+        )
 
         if (images.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -248,23 +278,8 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
             val squircleEnabled = isSquircleEnabled()
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    val p = progress()
-                    if (p >= 1f) {
-                        settle()
-                        return@graphicsLayer
-                    }
-                    val url = images.getOrNull(pagerState.currentPage)
-                    val host = frame.host
-                    // A zoomed picture no longer sits where its thumbnail would crop it from.
-                    val live = if (url != null && host != null && !frame.zoomed) {
-                        origins.boundsOf(url, host, density)?.also { frame.thumbs[url] = it }
-                    } else {
-                        null
-                    }
-                    val thumb = live ?: url?.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
-                    openFrame(p, thumb, url?.let { frame.aspectOf(it) }, squircleEnabled)
-                },
+                userScrollEnabled = images.size > 1 && !frame.dismiss.active,
+                modifier = Modifier.fillMaxSize(),
                 pageSpacing = 16.dp,
                 beyondViewportPageCount = 1,
             ) { page ->
@@ -273,16 +288,46 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                     isCurrent = pagerState.currentPage == page,
                     isSettled = pagerState.settledPage == page,
                     isSettledElsewhere = pagerState.settledPage != page,
+                    canPage = images.size > 1,
+                    isPagerScrolling = { abs(pagerState.currentPageOffsetFraction) > 0.01f },
+                    canStartDismiss = {
+                        transition?.exiting?.invoke() != true && progress() >= 0.35f
+                    },
+                    progress = progress,
+                    origins = origins,
+                    squircleEnabled = squircleEnabled,
                     frame = frame,
                     onTap = { chromeVisible = !chromeVisible },
-                    onLongPress = { if (!saving) sheetPage = page },
+                    onLongPress = {
+                        if (!saving && !frame.dismiss.active) {
+                            sheetPage = page
+                        }
+                    },
+                    onDismissRelease = { velocity ->
+                        handleDismissRelease(
+                            velocity = velocity,
+                            dismiss = frame.dismiss,
+                            frame = frame,
+                            origins = origins,
+                            url = images.getOrNull(pagerState.currentPage),
+                            density = density,
+                            squircleEnabled = squircleEnabled,
+                            scope = scope,
+                            onPopImmediate = { navigator.popImmediate() },
+                        )
+                    },
                 )
             }
         }
 
+        val dismissChromeAlpha by animateFloatAsState(
+            targetValue = if (frame.dismiss.dragging) 0f else 1f,
+            animationSpec = tween(150),
+            label = "dismissChrome",
+        )
         Box(
             Modifier.fillMaxSize().graphicsLayer {
-                alpha = ((progress() - ChromeFadeStart) / (1f - ChromeFadeStart)).coerceIn(0f, 1f)
+                alpha = ((progress() - ChromeFadeStart) / (1f - ChromeFadeStart)).coerceIn(0f, 1f) * dismissChromeAlpha
             },
         ) {
             AnimatedVisibility(
@@ -298,7 +343,14 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                     titleColor = Color.White,
                     showDivider = false,
                     navigationIcon = {
-                        TopBarIconButton(onClick = { navigator.pop() }) {
+                        TopBarIconButton(
+                            onClick = {
+                                if (!frame.dismiss.dragging) {
+                                    frame.dismiss.cancelActive()
+                                    navigator.pop()
+                                }
+                            },
+                        ) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
                     },
@@ -399,11 +451,19 @@ private class ViewerFrame {
     /** True while the picture on screen is zoomed in. */
     var zoomed by mutableStateOf(false)
 
+    /** 拖拽/甩出退出的共享状态。 */
+    val dismiss = DragDismissState()
+
     /** Width over height per picture, once a page has read it from the decoded image. */
     val aspects = mutableStateMapOf<String, Float>()
 
     /** Where each thumbnail was last seen, kept for the closing frame while its page is not composed. */
     val thumbs = HashMap<String, ThumbBounds>()
+
+    /** 每页当前帧的独立图元图层，松手退出时无缝移交给导航宿主的非拦截飞行层继续播放。 */
+    val pageLayers = HashMap<String, GraphicsLayer>()
+    val handedOffLayers = HashSet<GraphicsLayer>()
+    var onReleaseLayer: ((GraphicsLayer) -> Unit)? = null
 
     fun aspectOf(url: String): Float? {
         aspects[url]?.let { return it }
@@ -468,7 +528,7 @@ private fun GraphicsLayerScope.openFrame(
     clip = true
 }
 
-private class CenteredWindow(
+internal class CenteredWindow(
     private val width: Float,
     private val height: Float,
     private val radius: Float,
@@ -493,7 +553,7 @@ private fun fitSize(boxWidth: Float, boxHeight: Float, aspect: Float): Size =
  * The size a picture of [aspect] (width over height) rests at in a box: fitted inside it, or for a
  * long strip the box's full width, so that its height overruns the box and can be scrolled.
  */
-private fun restSize(boxWidth: Float, boxHeight: Float, aspect: Float): Size =
+internal fun restSize(boxWidth: Float, boxHeight: Float, aspect: Float): Size =
     if (aspect < LongImageAspect) Size(boxWidth, boxWidth / aspect) else fitSize(boxWidth, boxHeight, aspect)
 
 @Composable
@@ -502,13 +562,38 @@ private fun ZoomablePage(
     isCurrent: Boolean,
     isSettled: Boolean,
     isSettledElsewhere: Boolean,
+    canPage: Boolean,
+    isPagerScrolling: () -> Boolean,
+    canStartDismiss: () -> Boolean,
+    progress: () -> Float,
+    origins: ImageOrigins,
+    squircleEnabled: Boolean,
     frame: ViewerFrame,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
+    onDismissRelease: (Velocity) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val graphicsContext = LocalGraphicsContext.current
+    val pageLayer = remember(url) { graphicsContext.createGraphicsLayer() }
+    SideEffect {
+        frame.pageLayers[url] = pageLayer
+        frame.onReleaseLayer = { graphicsContext.releaseGraphicsLayer(it) }
+    }
+    DisposableEffect(url, pageLayer) {
+        onDispose {
+            if (frame.pageLayers[url] === pageLayer) frame.pageLayers.remove(url)
+            if (!frame.handedOffLayers.remove(pageLayer)) {
+                graphicsContext.releaseGraphicsLayer(pageLayer)
+            }
+        }
+    }
+    val currentCanPage by rememberUpdatedState(canPage)
+    val currentIsPagerScrolling by rememberUpdatedState(isPagerScrolling)
+    val currentCanStartDismiss by rememberUpdatedState(canStartDismiss)
+    val currentOnDismissRelease by rememberUpdatedState(onDismissRelease)
     var box by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -656,147 +741,244 @@ private fun ZoomablePage(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // The picture and its live-photo video share the zoom transform.
+        // 视觉层独立做进场与拖拽退出变换；手势层留在原位不跟着移动，保证拖拽距离与甩出速度采样不失真。
         Box(
             Modifier
                 .fillMaxSize()
-                .onSizeChanged { box = it }
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offset.x
-                    translationY = offset.y
+                    if (!isCurrent) {
+                        if (frame.dismiss.active || progress() < 1f) {
+                            alpha = 0f
+                        } else {
+                            settle()
+                        }
+                        return@graphicsLayer
+                    }
+                    val d = frame.dismiss
+                    when {
+                        d.active -> applyDismissDrag(d)
+                        else -> {
+                            val p = progress()
+                            if (p >= 1f) {
+                                settle()
+                            } else {
+                                val host = frame.host
+                                // A zoomed picture no longer sits where its thumbnail would crop it from.
+                                val liveThumb = if (host != null && !frame.zoomed) {
+                                    origins.boundsOf(url, host, density.density)?.also { frame.thumbs[url] = it }
+                                } else {
+                                    null
+                                }
+                                val thumb = liveThumb ?: url.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
+                                openFrame(p, thumb, frame.aspectOf(url), squircleEnabled)
+                            }
+                        }
+                    }
                 },
         ) {
-            // The picture rests at the size it shows at. A long strip is taller than this box and
-            // overhangs it, which is what the gesture layer below scrolls; every other picture
-            // rests fitted inside the box.
-            val rest = shown()
-            val resting = if (rest.height > box.height + 0.5f) {
-                Modifier.requiredSize(
-                    with(density) { rest.width.toDp() },
-                    with(density) { rest.height.toDp() },
-                )
-            } else {
-                Modifier.fillMaxSize()
-            }
-            Box(Modifier.align(Alignment.Center).then(resting)) {
-                // The thumbnail the list already decoded stands in until the full picture arrives,
-                // and stays under it while it fades in, so the growth out of the thumbnail shows the
-                // picture itself and not an empty frame.
-                if (!loaded || reveal < 1f) {
+            // The picture and its live-photo video share the zoom transform.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { box = it }
+                    .drawWithContent {
+                        pageLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(pageLayer)
+                    }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+            ) {
+                // The picture rests at the size it shows at. A long strip is taller than this box and
+                // overhangs it, which is what the gesture layer below scrolls; every other picture
+                // rests fitted inside the box.
+                val rest = shown()
+                val resting = if (rest.height > box.height + 0.5f) {
+                    Modifier.requiredSize(
+                        with(density) { rest.width.toDp() },
+                        with(density) { rest.height.toDp() },
+                    )
+                } else {
+                    Modifier.fillMaxSize()
+                }
+                Box(Modifier.align(Alignment.Center).then(resting)) {
+                    // The thumbnail the list already decoded stands in until the full picture arrives,
+                    // and stays under it while it fades in, so the growth out of the thumbnail shows the
+                    // picture itself and not an empty frame.
+                    if (!loaded || reveal < 1f) {
+                        AsyncImage(
+                            model = (if (url.isLivePhotoUrl() || isGifUrl(url)) url else thumbnail(url))
+                                .takeIf { it.startsWith("http://") || it.startsWith("https://") },
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     AsyncImage(
-                        model = (if (url.isLivePhotoUrl() || isGifUrl(url)) url else thumbnail(url))
-                            .takeIf { it.startsWith("http://") || it.startsWith("https://") },
+                        model = ImageRequest.Builder(context)
+                            .data(source.takeIf { remote })
+                            .apply { decodeSize?.let { size(it) } }
+                            .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+                        onSuccess = { state ->
+                            loaded = true
+                            val picture = state.painter.intrinsicSize
+                            if (picture.width > 0f && picture.height > 0f) {
+                                frame.aspects[url] = picture.width / picture.height
+                            }
+                        },
+                        onError = {
+                            if (!useOriginal && originalUrl != baseUrl) useOriginal = true else failed = true
+                        },
                     )
                 }
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(source.takeIf { remote })
-                        .apply { decodeSize?.let { size(it) } }
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
-                    onSuccess = { state ->
-                        loaded = true
-                        val picture = state.painter.intrinsicSize
-                        if (picture.width > 0f && picture.height > 0f) {
-                            frame.aspects[url] = picture.width / picture.height
-                        }
-                    },
-                    onError = {
-                        if (!useOriginal && originalUrl != baseUrl) useOriginal = true else failed = true
-                    },
-                )
-            }
-            if (live.playing && player != null) {
-                val fit = shown()
-                LivePhotoPlayerView(
-                    player = player,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(
-                            with(density) { fit.width.toDp() },
-                            with(density) { fit.height.toDp() },
-                        ),
-                )
+                if (live.playing && player != null) {
+                    val fit = shown()
+                    LivePhotoPlayerView(
+                        player = player,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(
+                                with(density) { fit.width.toDp() },
+                                with(density) { fit.height.toDp() },
+                            ),
+                    )
+                }
             }
         }
 
-        // Gestures sit above the picture and the video surface, so neither can swallow a swipe.
+        // Gestures sit on an untransformed full-screen layer so screen-space drag and fling velocity stay exact.
         Box(
             Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = { onTap() },
-                        onDoubleTap = { toggleZoom(it) },
-                        onLongPress = { onLongPress() },
+                        onTap = { if (!frame.dismiss.active) onTap() },
+                        onDoubleTap = { if (!frame.dismiss.active) toggleZoom(it) },
+                        onLongPress = { if (!frame.dismiss.active) onLongPress() },
                     )
                 }
                 .pointerInput(Unit) {
+                    var mode = GestureMode.UNDECIDED
                     detectZoomAndPan(
-                        onStart = { glide.value?.cancel() },
-                        onRelease = { velocity, taken ->
-                            if (scale < 1f - ZoomEpsilon) rebound() else if (taken) flingBy(velocity.y)
+                        onStart = {
+                            mode = GestureMode.UNDECIDED
+                            glide.value?.cancel()
+                            if (frame.dismiss.active) {
+                                frame.dismiss.animJob?.cancel()
+                            }
                         },
-                    ) { focus, pan, zoom, pointers ->
-                        val current = scale
-                        val target = (current * zoom).coerceIn(MinZoom, MaxZoom)
-                        // Shrinking past the resting size only creeps along, so the picture can go
-                        // under the screen's width but feels held; letting go springs it back.
-                        val next = if (target < current && current <= 1f) {
-                            current + (target - current) * ReboundResistance
-                        } else {
-                            target
+                        onRelease = { velocity, taken ->
+                            if (mode == GestureMode.DISMISS || frame.dismiss.active) {
+                                currentOnDismissRelease(velocity)
+                            } else if (scale < 1f - ZoomEpsilon) {
+                                rebound()
+                            } else if (taken) {
+                                flingBy(velocity.y)
+                            }
+                        },
+                    ) { focus, pan, direction, zoom, pointers ->
+                        if (mode == GestureMode.UNDECIDED) {
+                            if (frame.dismiss.active) {
+                                // 回弹中途被手指再次接住，按当前落点重算锚点，避免画面跳变。
+                                mode = GestureMode.DISMISS
+                                frame.dismiss.reanchor(focus)
+                                frame.dismiss.dragging = true
+                            } else if (pointers >= 2 || scale > 1f + ZoomEpsilon) {
+                                mode = GestureMode.ZOOM_PAN
+                            } else {
+                                val moved = clamp(zoomedOffset(offset, 1f, focus) + pan, scale)
+                                val longStripScrolls = abs(direction.y) > abs(direction.x) && moved.y != offset.y
+                                if (longStripScrolls) {
+                                    mode = GestureMode.ZOOM_PAN
+                                } else if (
+                                    currentCanPage &&
+                                    (currentIsPagerScrolling() || abs(direction.x) > abs(direction.y) * 1.25f)
+                                ) {
+                                    mode = GestureMode.PAGER
+                                    return@detectZoomAndPan false
+                                } else if (currentCanStartDismiss()) {
+                                    mode = GestureMode.DISMISS
+                                    frame.dismiss.startDrag(focus)
+                                } else {
+                                    mode = GestureMode.PAGER
+                                    return@detectZoomAndPan false
+                                }
+                            }
                         }
-                        val moved = clamp(zoomedOffset(offset, next / current, focus) + pan, next)
-                        // A one-finger drag belongs to the picture only where it can actually
-                        // travel — up and down a long strip, or around a zoomed one. Across a
-                        // picture with nothing to show there, the swipe is the pager's.
-                        if (pointers == 1) {
-                            val across = abs(pan.x) >= abs(pan.y)
-                            val travels = if (across) moved.x != offset.x else moved.y != offset.y
-                            if (!travels) return@detectZoomAndPan false
+
+                        when (mode) {
+                            GestureMode.PAGER -> false
+                            GestureMode.DISMISS -> {
+                                if (pointers == 1) {
+                                    frame.dismiss.dragOffset += pan
+                                }
+                                true
+                            }
+                            GestureMode.ZOOM_PAN -> {
+                                val current = scale
+                                val target = (current * zoom).coerceIn(MinZoom, MaxZoom)
+                                // Shrinking past the resting size only creeps along, so the picture can go
+                                // under the screen's width but feels held; letting go springs it back.
+                                val next = if (target < current && current <= 1f) {
+                                    current + (target - current) * ReboundResistance
+                                } else {
+                                    target
+                                }
+                                val moved = clamp(zoomedOffset(offset, next / current, focus) + pan, next)
+                                // A one-finger drag belongs to the picture only where it can actually
+                                // travel — up and down a long strip, or around a zoomed one. Across a
+                                // picture with nothing to show there, the swipe is the pager's.
+                                if (pointers == 1) {
+                                    val across = abs(pan.x) >= abs(pan.y)
+                                    val travels = if (across) moved.x != offset.x else moved.y != offset.y
+                                    if (!travels) return@detectZoomAndPan false
+                                }
+                                scale = next
+                                offset = moved
+                                true
+                            }
+                            GestureMode.UNDECIDED -> false
                         }
-                        scale = next
-                        offset = moved
-                        true
                     }
                 },
         )
 
-        // Nothing here takes pointer input, so zoom, pan and swipes still reach the gesture layer
-        // below. Only the page on screen shows it, and never over a live photo already playing.
-        AnimatedVisibility(
-            visible = isCurrent && remote && !loaded && !failed && !live.playing,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(tween(LoadFadeMillis, delayMillis = IndicatorDelayMillis)),
-            exit = fadeOut(tween(LoadFadeMillis)),
-        ) {
-            InfiniteProgressIndicator(color = Color.White, size = 24.dp)
-        }
-
         if (url.isLivePhotoUrl()) {
+            val controlsAlpha by animateFloatAsState(
+                targetValue = if (frame.dismiss.dragging) 0f else 1f,
+                animationSpec = tween(150),
+                label = "liveControlsDismiss",
+            )
             LivePhotoControls(
                 state = live,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
+                    .graphicsLayer {
+                        alpha = ((progress() - ChromeFadeStart) / (1f - ChromeFadeStart)).coerceIn(0f, 1f) * controlsAlpha
+                    }
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(start = 16.dp, bottom = 16.dp),
                 onTogglePlayback = {
-                    if (live.playing) {
-                        player?.pause()
-                        live.playing = false
-                    } else if (player != null) {
-                        live.playRequest++
+                    if (!frame.dismiss.dragging) {
+                        if (live.playing) {
+                            player?.pause()
+                            live.playing = false
+                        } else if (player != null) {
+                            live.playRequest++
+                        }
                     }
                 },
-                onToggleMute = { live.muted = !live.muted },
+                onToggleMute = {
+                    if (!frame.dismiss.dragging) {
+                        live.muted = !live.muted
+                    }
+                },
             )
         }
     }
@@ -804,17 +986,217 @@ private fun ZoomablePage(
 
 private const val ZoomMillis = 220
 
+/** 拖拽退出时的最小缩放比例（对齐相册下拉退出的 0.7×）。 */
+private const val DragMinScale = 0.7f
+
+/** 拖拽缩放曲线：跟手即刻开始缩小，越拖越柔和（对齐相册 PathInterpolator(0, 0, 0.4, 1)）。 */
+private val DragScaleEasing = CubicBezierEasing(0f, 0f, 0.4f, 1f)
+
+/** 拖拽退出时手势与背景状态：支持任意方向拖动与甩出退出，取消时平滑回弹、退出时接力回到原缩略图位置。 */
+@Stable
+private class DragDismissState {
+    var active by mutableStateOf(false)
+    var dragging by mutableStateOf(false)
+    var dragOffset by mutableStateOf(Offset.Zero)
+    var pivot by mutableStateOf(Offset.Zero)
+    var boxSize by mutableStateOf(IntSize.Zero)
+    var animJob: Job? = null
+
+    private fun refSpan(): Float =
+        minOf(boxSize.width, boxSize.height).toFloat().coerceAtLeast(1f)
+
+    fun currentScale(): Float {
+        val d = dragOffset.getDistance()
+        val scaleRange = refSpan() * 0.9f
+        val t = DragScaleEasing.transform((d / scaleRange).coerceIn(0f, 1f))
+        return lerp(1f, DragMinScale, t)
+    }
+
+    fun currentBgAlpha(): Float {
+        val d = dragOffset.getDistance()
+        val alphaRange = refSpan() * 0.75f
+        return (1f - d / alphaRange).coerceIn(0f, 1f)
+    }
+
+    fun currentTranslation(): Offset {
+        val s = currentScale()
+        return dragOffset + pivot * (1f - s)
+    }
+
+    fun startDrag(focus: Offset) {
+        animJob?.cancel()
+        pivot = focus - Offset(boxSize.width / 2f, boxSize.height / 2f)
+        dragOffset = Offset.Zero
+        active = true
+        dragging = true
+    }
+
+    fun reanchor(focus: Offset) {
+        val curScale = currentScale()
+        val curTrans = currentTranslation()
+        val newPivot = focus - Offset(boxSize.width / 2f, boxSize.height / 2f)
+        pivot = newPivot
+        dragOffset = curTrans - newPivot * (1f - curScale)
+    }
+
+    fun cancelActive() {
+        animJob?.cancel()
+        dragging = false
+        active = false
+        dragOffset = Offset.Zero
+    }
+}
+
+private fun handleDismissRelease(
+    velocity: Velocity,
+    dismiss: DragDismissState,
+    frame: ViewerFrame,
+    origins: ImageOrigins,
+    url: String?,
+    density: Float,
+    squircleEnabled: Boolean,
+    scope: CoroutineScope,
+    onPopImmediate: () -> Unit,
+) {
+    dismiss.dragging = false
+    val dragPos = dismiss.dragOffset
+    val dist = dragPos.getDistance()
+    val vel = Offset(velocity.x, velocity.y)
+    val speed = vel.getDistance()
+
+    val flingThreshold = 200f * density
+    val distanceThreshold = 80f * density
+    val backGuard = 36f * density
+    val backFlingThreshold = 320f * density
+    val dot = dragPos.x * vel.x + dragPos.y * vel.y
+    val isFlingBack = dist > backGuard && speed >= backFlingThreshold && dot < -0.6f * dist * speed
+    val shouldDismiss = !isFlingBack && (speed >= flingThreshold || dist >= distanceThreshold)
+
+    if (!shouldDismiss) {
+        dismiss.animJob?.cancel()
+        dismiss.animJob = scope.launch {
+            animate(
+                typeConverter = Offset.VectorConverter,
+                initialValue = dismiss.dragOffset,
+                targetValue = Offset.Zero,
+                initialVelocity = vel,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = 500f,
+                    visibilityThreshold = Offset(0.5f, 0.5f),
+                ),
+            ) { value, _ ->
+                dismiss.dragOffset = value
+            }
+            dismiss.dragOffset = Offset.Zero
+            dismiss.active = false
+        }
+        return
+    }
+
+    dismiss.animJob?.cancel()
+    val startScale = dismiss.currentScale()
+    val startTranslation = dismiss.currentTranslation()
+    val startBgAlpha = dismiss.currentBgAlpha()
+
+    val host = frame.host
+    val live = if (url != null && host != null && !frame.zoomed) {
+        origins.boundsOf(url, host, density)?.also { frame.thumbs[url] = it }
+    } else {
+        null
+    }
+    val thumb = live ?: url?.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
+    val aspect = url?.let { frame.aspectOf(it) ?: thumb?.let { b -> b.rect.width / b.rect.height } }
+
+    val w = dismiss.boxSize.width.toFloat()
+    val h = dismiss.boxSize.height.toFloat()
+    val effectiveAspect = aspect ?: thumb?.rect?.let { if (it.height > 0f) it.width / it.height else null }
+    val rest = if (w > 0f && h > 0f && effectiveAspect != null) restSize(w, h, effectiveAspect) else null
+    val hasThumb = thumb != null && rest != null && rest.height <= h + 0.5f
+
+    val layer = url?.let { frame.pageLayers[it] }
+    val onRelease = frame.onReleaseLayer
+    if (layer == null || onRelease == null) {
+        origins.finishDismissFlight()
+        origins.viewing = null
+        onPopImmediate()
+        return
+    }
+
+    val targetTranslation = if (hasThumb) {
+        val source = thumb.rect
+        Offset(source.center.x - w / 2f, source.center.y - h / 2f)
+    } else {
+        Offset.Zero
+    }
+    val maxFlingSpeed = 1200f * density
+    val clampedVel = if (speed > maxFlingSpeed && speed > 0f) vel * (maxFlingSpeed / speed) else vel
+    val dir = when {
+        speed >= flingThreshold && speed > 0f -> vel / speed
+        dist > 1f -> dragPos / dist
+        else -> Offset(0f, 1f)
+    }
+    val flyDistance = minOf(w, h).coerceAtLeast(1f) * 0.42f
+    val flyTarget = startTranslation + dir * flyDistance
+
+    // 移交图层所有权给宿主飞行层并立刻退栈，底层页面无需等待回缩即可马上滑动或点击。
+    origins.finishDismissFlight()
+    frame.handedOffLayers.add(layer)
+    onPopImmediate()
+
+    val flight = ImageDismissFlight(
+        url = url,
+        layer = layer,
+        onReleaseLayer = onRelease,
+        boxSize = dismiss.boxSize,
+        density = density,
+        squircleEnabled = squircleEnabled,
+        startScale = startScale,
+        startTranslation = startTranslation,
+        startBgAlpha = startBgAlpha,
+        flyTarget = flyTarget,
+        hasThumb = hasThumb,
+        initialThumb = thumb,
+        aspect = effectiveAspect,
+    )
+    origins.launchDismissFlight(
+        flight = flight,
+        initialTargetTranslation = targetTranslation,
+        initialVelocity = clampedVel,
+    )
+}
+
+private fun GraphicsLayerScope.applyDismissDrag(d: DragDismissState) {
+    val scale = d.currentScale()
+    val trans = d.currentTranslation()
+    alpha = 1f
+    transformOrigin = TransformOrigin.Center
+    scaleX = scale
+    scaleY = scale
+    translationX = trans.x
+    translationY = trans.y
+    shape = RectangleShape
+    clip = false
+}
+
+private enum class GestureMode {
+    UNDECIDED,
+    ZOOM_PAN,
+    DISMISS,
+    PAGER,
+}
+
 /**
  * Pinch and drag detection that only consumes what it uses. [onGesture] gets the centroid, the pan,
- * the zoom factor and the number of fingers down, and returns whether it took the movement; when it
- * did not, the pointer events stay free for a parent such as the pager. [onStart] runs as the
- * fingers land; [onRelease] once they are all up, with the speed the last one left at and whether
- * the gesture took anything at all.
+ * the cumulative direction before touch slop, the zoom factor and the number of fingers down, and
+ * returns whether it took the movement; when it did not, the pointer events stay free for a parent
+ * such as the pager. [onStart] runs as the fingers land; [onRelease] once they are all up, with the
+ * speed the last one left at and whether the gesture took anything at all.
  */
 private suspend fun PointerInputScope.detectZoomAndPan(
     onStart: () -> Unit = {},
     onRelease: (velocity: Velocity, taken: Boolean) -> Unit = { _, _ -> },
-    onGesture: (focus: Offset, pan: Offset, zoom: Float, pointers: Int) -> Boolean,
+    onGesture: (focus: Offset, pan: Offset, direction: Offset, zoom: Float, pointers: Int) -> Boolean,
 ) {
     awaitEachGesture {
         var zoom = 1f
@@ -824,25 +1206,37 @@ private suspend fun PointerInputScope.detectZoomAndPan(
         val tracker = VelocityTracker()
         val touchSlop = viewConfiguration.touchSlop
         val down = awaitFirstDown(requireUnconsumed = false)
-        tracker.addPosition(down.uptimeMillis, down.position)
+        var trackedId = down.id
+        tracker.addPointerInputChange(down)
         onStart()
         do {
             val event = awaitPointerEvent()
-            event.changes.fastForEach { tracker.addPosition(it.uptimeMillis, it.position) }
+            val tracked = event.changes.firstOrNull { it.id == trackedId } ?: event.changes.firstOrNull()
+            if (tracked != null) {
+                if (tracked.id != trackedId) {
+                    tracker.resetTracking()
+                    trackedId = tracked.id
+                }
+                tracker.addPointerInputChange(tracked)
+            }
             val canceled = event.changes.fastAny { it.isConsumed }
             if (!canceled) {
                 val zoomChange = event.calculateZoom()
                 val panChange = event.calculatePan()
+                var direction = panChange
                 if (!pastTouchSlop) {
                     zoom *= zoomChange
                     pan += panChange
                     val zoomMotion = abs(1f - zoom) * event.calculateCentroidSize(useCurrent = false)
-                    if (zoomMotion > touchSlop || pan.getDistance() > touchSlop) pastTouchSlop = true
+                    if (zoomMotion > touchSlop || pan.getDistance() > touchSlop) {
+                        pastTouchSlop = true
+                        direction = pan
+                    }
                 }
                 if (pastTouchSlop && (zoomChange != 1f || panChange != Offset.Zero)) {
                     val pointers = event.changes.count { it.pressed }
                     val focus = event.calculateCentroid(useCurrent = false)
-                    if (onGesture(focus, panChange, zoomChange, pointers)) {
+                    if (onGesture(focus, panChange, direction, zoomChange, pointers)) {
                         taken = true
                         event.changes.fastForEach { change: PointerInputChange ->
                             if (change.positionChanged()) change.consume()

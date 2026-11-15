@@ -166,7 +166,15 @@ fun AppFilterSearchPanel(
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.12f))
-                    .clickable(interactionSource = null, indication = null) { filter.searchOpen = false },
+                    .then(
+                        if (filter.searchOpen) {
+                            Modifier.clickable(interactionSource = null, indication = null) {
+                                filter.searchOpen = false
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
             )
             Column(
                 Modifier

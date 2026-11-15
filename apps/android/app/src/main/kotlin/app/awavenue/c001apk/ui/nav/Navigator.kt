@@ -39,6 +39,19 @@ class BackStackEntry internal constructor(
     internal var previewed = false
 
     /**
+     * Remaining transition progress [0f..1f] when a predictive back gesture commits on release.
+     * Allows popping immediately (so touches reach beneath at once) while smoothly finishing the
+     * exit from where the finger let go.
+     */
+    internal var exitStartProgress = 1f
+
+    /** Fast-forwards an ongoing exit transition when the user acts on the underlying screen. */
+    internal var fastForwarded by mutableStateOf(false)
+
+    /** Fast-forwards an ongoing enter expansion when the user taps before it settles. */
+    internal var enterFastForward by mutableStateOf(false)
+
+    /**
      * What the screen looked like when another one was stacked over it, kept while it is covered. A
      * back gesture reveals the screen under the one it pulls away from this picture: composing the
      * screen again would show every list at the top, and it would jump to where the user left it
@@ -116,8 +129,11 @@ class Navigator {
      */
     var mainBackAvailable: Boolean by mutableStateOf(false)
 
+    internal var onBeforeNavigate: (() -> Unit)? = null
+
     /** [origin] is the element the page grows out of, and shrinks back into on pop. */
     fun push(route: Route, origin: ExpandOrigin? = null) {
+        onBeforeNavigate?.invoke()
         if (route is Route.Feed) trimReadingStack()
         stack.add(BackStackEntry(route, origin))
     }
@@ -137,27 +153,37 @@ class Navigator {
 
     /** Replaces the top route, so a search can turn into a result without stacking twice. */
     fun replace(route: Route) {
+        onBeforeNavigate?.invoke()
         if (stack.size > 1) {
             val old = stack[stack.lastIndex]
             stack[stack.lastIndex] = BackStackEntry(route)
             old.remove()
         } else {
-            push(route)
+            if (route is Route.Feed) trimReadingStack()
+            stack.add(BackStackEntry(route))
         }
     }
 
     fun pop(): Boolean {
         if (stack.size <= 1) return false
+        onBeforeNavigate?.invoke()
         lastPopTime = System.currentTimeMillis()
         stack[stack.lastIndex].popped = true
         stack.removeAt(stack.lastIndex).remove()
         return true
     }
 
+    /** Removes the top entry immediately after a self-driven exit animation (e.g. drag-to-dismiss). */
+    fun popImmediate(): Boolean {
+        if (stack.size <= 1) return false
+        stack[stack.lastIndex].previewed = true
+        return pop()
+    }
+
     fun popToMain() {
-        if (stack.size > 1) {
-            lastPopTime = System.currentTimeMillis()
-        }
+        if (stack.size <= 1) return
+        onBeforeNavigate?.invoke()
+        lastPopTime = System.currentTimeMillis()
         while (stack.size > 1) {
             stack[stack.lastIndex].popped = true
             stack.removeAt(stack.lastIndex).remove()

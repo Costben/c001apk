@@ -466,10 +466,8 @@ fun ReplyComposerSheet(
         // Back is answered inside the panel rather than left to the sheet's own handler: that one
         // slides the panel away before it asks, and an unsaved composition has to be offered to the
         // draft box while the work is still in place. With the question up, an exit drops it.
-        BackHandler(enabled = true) {
-            // Swallow the exit that lands while the panel is already folding, or while a post is
-            // in flight: neither may fall through to the screen underneath.
-            if (closing) return@BackHandler
+        // Disable as soon as the sheet starts folding away so another Back immediately hits beneath.
+        BackHandler(enabled = shown && !closing) {
             if (askSave) discardDraft() else requestClose()
         }
 

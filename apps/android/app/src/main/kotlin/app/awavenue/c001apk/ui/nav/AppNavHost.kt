@@ -16,6 +16,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -33,6 +35,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,6 +56,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +89,7 @@ import app.awavenue.c001apk.ui.drafts.DraftsScreen
 import app.awavenue.c001apk.ui.drafts.TemplateImportScreen
 import app.awavenue.c001apk.ui.follow.LocalFollowListScreen
 import app.awavenue.c001apk.ui.history.HistoryScreen
+import app.awavenue.c001apk.ui.image.ImageDismissOverlay
 import app.awavenue.c001apk.ui.image.ImageOrigins
 import app.awavenue.c001apk.ui.image.ImageViewScreen
 import app.awavenue.c001apk.ui.image.LocalImageOrigins
@@ -152,11 +160,30 @@ fun AppNavHost(
     var gestureProgress by remember { mutableFloatStateOf(1f) }
     var gestureEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
-    var committingEntry by remember { mutableStateOf<BackStackEntry?>(null) }
-    var interruptedEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     // Bumped by every back callback, so the ease-back started by one callback can tell that a later
     // one has taken the gesture over and stand down instead of fighting it.
     var gestureRun by remember { mutableStateOf(0) }
+    var rootHost by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val leavingEntries = remember { mutableStateListOf<BackStackEntry>() }
+
+    fun fastForwardOngoingAnimations(includeEntering: Boolean) {
+        imageOrigins.finishDismissFlight()
+        if (settleJob?.isActive == true) {
+            settleJob?.cancel()
+            settleJob = null
+            gestureEntry = null
+            gestureProgress = 1f
+        }
+        leavingEntries.forEach { it.fastForwarded = true }
+        if (includeEntering) {
+            navigator.stack.lastOrNull()?.let { it.enterFastForward = true }
+        }
+    }
+
+    SideEffect {
+        imageOrigins.flightScope = scope
+        navigator.onBeforeNavigate = { fastForwardOngoingAnimations(includeEntering = true) }
+    }
     val gesture: () -> Float = remember { { gestureProgress } }
     // The page under the top one is only worth drawing while a gesture actually has the top page
     // pulled away. Derived so a running gesture does not recompose the host on every event.
@@ -171,27 +198,8 @@ fun AppNavHost(
     val usePredictiveOverlay = predictiveBack && paneEntry == null
 
     suspend fun handlePredictiveBack(progress: Flow<BackEventCompat>) {
-        // A gesture that starts while the last one is still settling takes it over.
-        settleJob?.cancel()
-
-        // If a previous return animation is still playing when another back gesture arrives,
-        // immediately finish the previous animation and pop it, then swallow this new gesture
-        // so it doesn't trigger a second return on the screen underneath (e.g. image return or desktop).
-        val interrupting = committingEntry ?: interruptedEntry
-        if (interrupting != null) {
-            committingEntry = null
-            interruptedEntry = null
-            interrupting.previewed = true
-            if (navigator.stack.lastOrNull() === interrupting) {
-                navigator.pop()
-            }
-            gestureEntry = null
-            gestureProgress = 1f
-            try {
-                progress.collect { }
-            } catch (_: CancellationException) { }
-            return
-        }
+        // 新返回手势到来时立刻快进之前的收尾/退场，绝不吞掉底层页面的连续返回。
+        fastForwardOngoingAnimations(includeEntering = true)
 
         if (navigator.stack.size <= 1) {
             gestureEntry = null
@@ -219,36 +227,20 @@ fun AppNavHost(
         try {
             progress.collect { event -> gestureProgress = 1f - event.progress }
             committed = true
-            committingEntry = top
-            // Released past the threshold: the page finishes leaving from wherever the finger
-            // left it, then goes. Popping it while it is still only part way out would make it
-            // disappear from mid-air.
-            if (gestureProgress < 1f) {
-                // The row is about to come back; lift the list so its header clears the bar.
-                val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
-                // The main tabs stay composed under the gesture, so their list can move right
-                // away. A page with its own bar only comes back after the pop and is aligned
-                // from the transition below instead.
-                if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
-                    top.returnScrolled = true
+            // 松手确认返回后立即出栈：通过 exitStartProgress 从当前手势位置平滑接力退场，同时
+            // LeavingPage 立即启用 OutOfReach，底层页面当下即可滚动、点击或再次触发返回。
+            val remaining = gestureProgress.coerceIn(0f, 1f)
+            val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+            if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
+                top.returnScrolled = true
+                scope.launch {
                     alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
                 }
-                // The commit finishes whatever travel the finger left at the rate the page
-                // opened at. A fixed short duration snapped the last stretch shut, which read
-                // faster than the way in and made the card look like it jumped back.
-                val remaining = gestureProgress
-                animate(
-                    remaining,
-                    0f,
-                    animationSpec = tween(
-                        (ExpandDurationMillis * remaining).roundToInt().coerceAtLeast(1),
-                        easing = ExpandEasing,
-                    ),
-                ) { value, _ ->
-                    gestureProgress = value
-                }
-                top.previewed = true
             }
+            top.exitStartProgress = remaining
+            top.previewed = remaining <= 0.01f
+            gestureEntry = null
+            gestureProgress = 1f
             if (navigator.stack.lastOrNull() === top) {
                 navigator.pop()
             }
@@ -268,18 +260,8 @@ fun AppNavHost(
                     }
                 }
                 return
-            } else {
-                // Interrupted during commit by another back gesture: fast-finish immediately.
-                top.previewed = true
-                interruptedEntry = top
-                if (navigator.stack.lastOrNull() === top) {
-                    navigator.pop()
-                }
             }
         } finally {
-            if (committingEntry === top) {
-                committingEntry = null
-            }
             if (gestureEntry === top) {
                 gestureEntry = null
                 gestureProgress = 1f
@@ -333,7 +315,41 @@ fun AppNavHost(
             handlePredictiveBack(progress)
         }
 
-        Box(Modifier.fillMaxSize().background(COUITheme.colorScheme.surface)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(COUITheme.colorScheme.surface)
+                .onPlaced { rootHost = it }
+                // 非消费式全局输入监听：任意新点击或按下时立刻快进旧动画，不影响滑动穿透与正常点击事件。
+                .pointerInput(Unit) {
+                    val touchSlop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        if (settleJob?.isActive == true) {
+                            settleJob?.cancel()
+                            settleJob = null
+                            gestureEntry = null
+                            gestureProgress = 1f
+                        }
+                        var isTap = true
+                        val pointer = down.id
+                        while (true) {
+                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == pointer } ?: event.changes.firstOrNull()
+                            if (change == null) break
+                            if (!change.pressed) {
+                                if (isTap) {
+                                    fastForwardOngoingAnimations(includeEntering = true)
+                                }
+                                break
+                            }
+                            if ((change.position - down.position).getDistance() > touchSlop) {
+                                isTap = false
+                            }
+                        }
+                    }
+                },
+        ) {
             Row(Modifier.fillMaxSize()) {
                 // The list keeps its composition even when the reader hides it, so its scroll
                 // position and tabs are still there when it comes back; at zero width it also
@@ -366,17 +382,22 @@ fun AppNavHost(
                 }
             }
 
-            // The page under the top one is drawn while a gesture is pulling the top one away; when
-            // the main screen is what sits underneath it is already composed above.
-            val below = gestureEntry?.takeIf { revealing }
-                ?.let { navigator.stack.getOrNull(navigator.stack.lastIndex - 1) }
+            // The page under the top one is drawn while a gesture is pulling the top one away, or
+            // while an image viewer sits on top so drag-to-dismiss reveals the real page and keeps
+            // its thumbnail coordinates live; when the main screen is underneath it is already
+            // composed above.
+            val overlay = if (paneEntry != null) null else navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
+            val below = when {
+                gestureEntry != null && revealing -> navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+                overlay?.route is Route.ImageView -> navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
+                else -> null
+            }
             if (below != null && below !== navigator.stack.firstOrNull()) {
                 RevealedRoute(below)
             }
 
             // A page in the pane is already on screen beside the list; sliding it in as well would
             // cover the very list it is meant to sit next to.
-            val overlay = if (paneEntry != null) null else navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
             AnimatedContent(
                 targetState = overlay,
                 transitionSpec = {
@@ -443,6 +464,13 @@ fun AppNavHost(
                         // place, so nothing has to stay composed for it.
                         popped?.shrinksToOrigin() == true ->
                             EnterTransition.None togetherWith ExitTransition.None
+                        // Predictive back committed on slide route: underlying page is already shown
+                        // cleanly by RevealedRoute/state, slide only the leaving card the rest of the way.
+                        popped != null && popped.exitStartProgress < 1f -> {
+                            val duration = (RouteSlideMillis * popped.exitStartProgress).roundToInt().coerceAtLeast(1)
+                            EnterTransition.None togetherWith
+                                slideOutHorizontally(tween(duration, easing = LinearEasing)) { 0 }
+                        }
                         popped == null ->
                             // The whole page slides in from the right edge, fully opaque; the page
                             // under it trails a quarter of the width, as the system's card stack
@@ -483,45 +511,71 @@ fun AppNavHost(
                         }
                     val progress = transition.animateFloat(
                         transitionSpec = {
-                            // A gesture already handed the page back under the finger. Replaying
-                            // that last frame as a shrinking card would park its picture over the
-                            // list for the whole exit, so a previewed page goes at once.
-                            // The way back runs at the way in's rate: a shorter exit read as the
-                            // card snapping shut under the finger.
-                            val duration = if (targetState == EnterExitState.PostExit && entry.previewed) {
-                                0
-                            } else {
-                                ExpandDurationMillis
+                            val duration = when {
+                                targetState == EnterExitState.PostExit && (entry.previewed || entry.fastForwarded) -> 0
+                                targetState == EnterExitState.PostExit ->
+                                    (ExpandDurationMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                                else -> ExpandDurationMillis
                             }
                             tween(duration, easing = ExpandEasing)
                         },
                         label = "expand",
                     ) { target(it) }
                     val fade = transition.animateFloat(
-                        // Linear both ways: the page rides the shrinking frame instead of vanishing
-                        // early. A fast exit curve left a blank card-coloured rectangle shrinking
-                        // over the list, which read as the list failing to draw after the pop.
                         transitionSpec = {
-                            val duration = if (targetState == EnterExitState.PostExit && entry.previewed) {
-                                0
-                            } else {
-                                ExpandDurationMillis
+                            val duration = when {
+                                targetState == EnterExitState.PostExit && (entry.previewed || entry.fastForwarded) -> 0
+                                targetState == EnterExitState.PostExit ->
+                                    (ExpandDurationMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                                else -> ExpandDurationMillis
                             }
                             tween(duration, easing = LinearEasing)
                         },
                         label = "expand-fade",
                     ) { target(it) }
-                    // While a gesture is pulling this page away it drives both curves, so the page
-                    // leaves exactly the way a pop would have taken it. A page the gesture already
-                    // carried away stays away: the pop keeps it composed for the length of its own
-                    // animation, and letting that curve run again would play the exit a second time.
+                    val slideCommit = transition.animateFloat(
+                        transitionSpec = {
+                            val duration = when {
+                                targetState == EnterExitState.PostExit && (entry.previewed || entry.fastForwarded) -> 0
+                                targetState == EnterExitState.PostExit &&
+                                    !entry.shrinksToOrigin() &&
+                                    entry.exitStartProgress < 1f ->
+                                    (RouteSlideMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                                else -> 0
+                            }
+                            tween(duration, easing = ExpandEasing)
+                        },
+                        label = "slide-commit",
+                    ) { state ->
+                        if (state == EnterExitState.PostExit && entry.popped && !entry.shrinksToOrigin() && entry.exitStartProgress < 1f) {
+                            0f
+                        } else {
+                            1f
+                        }
+                    }
                     val previewing = gestureEntry === entry
                     val entryGesture = if (previewing) gesture else SettledGesture
-                    val pageProgress: () -> Float = remember(progress, entryGesture) {
-                        { if (entry.previewed) 0f else minOf(progress.value, entryGesture()) }
+                    val pageProgress: () -> Float = remember(progress, entryGesture, entry) {
+                        {
+                            when {
+                                entry.previewed || (entry.popped && entry.fastForwarded) -> 0f
+                                entry.popped && entry.shrinksToOrigin() ->
+                                    minOf(progress.value * entry.exitStartProgress, entryGesture())
+                                !entry.popped && entry.enterFastForward -> 1f
+                                else -> minOf(progress.value, entryGesture())
+                            }
+                        }
                     }
-                    val pageFade: () -> Float = remember(fade, entryGesture) {
-                        { if (entry.previewed) 0f else minOf(fade.value, entryGesture()) }
+                    val pageFade: () -> Float = remember(fade, entryGesture, entry) {
+                        {
+                            when {
+                                entry.previewed || (entry.popped && entry.fastForwarded) -> 0f
+                                entry.popped && entry.shrinksToOrigin() ->
+                                    minOf(fade.value * entry.exitStartProgress, entryGesture())
+                                !entry.popped && entry.enterFastForward -> 1f
+                                else -> minOf(fade.value, entryGesture())
+                            }
+                        }
                     }
                     val routeTransition = remember(transition, pageProgress, entryGesture) {
                         RouteTransition(
@@ -529,8 +583,6 @@ fun AppNavHost(
                             exiting = { transition.targetState == EnterExitState.PostExit || entryGesture() < 1f },
                         )
                     }
-                    // A screen under a route pushed on top leaves composition, and with it its
-                    // list positions and tab selections; they are kept on the entry meanwhile.
                     val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
                     CompositionLocalProvider(
                         LocalViewModelStoreOwner provides entry,
@@ -542,17 +594,15 @@ fun AppNavHost(
                             Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
-                                    // A page that shrinks back into something draws its own exit; every
-                                    // other one leaves as a whole opaque page, the way the pop
-                                    // transition does. One a gesture already carried away stays fully
-                                    // away for as long as the pop keeps it composed.
                                     val p = when {
-                                        entry.previewed -> 1f
+                                        entry.previewed || (entry.popped && entry.fastForwarded) -> 1f
                                         previewing && !entry.shrinksToOrigin() -> 1f - entryGesture()
+                                        entry.popped && !entry.shrinksToOrigin() && entry.exitStartProgress < 1f ->
+                                            1f - slideCommit.value * entry.exitStartProgress
                                         else -> 0f
                                     }
                                     translationX = p * size.width
-                                    alpha = 1f
+                                    alpha = if (entry.popped && entry.fastForwarded) 0f else 1f
                                     if (slides) {
                                         shape = slideShape
                                         clip = true
@@ -563,11 +613,9 @@ fun AppNavHost(
                                 origin = entry.origin,
                                 progress = pageProgress,
                                 fade = pageFade,
-                                // A gesture pulling the page away is an exit too: the frame has to
-                                // hand back to the card under the finger, not wait for the pop.
                                 exiting = { entry.popped || entryGesture() < 1f },
                             ) {
-                                LeavingPage(entry) {
+                                LeavingPage(entry, leavingEntries) {
                                     // Overlay sheets and dialogs draw in the outermost COUI Scaffold
                                     // above them. Several screens place theirs beside, not inside,
                                     // their own Scaffold, so every route gets a transparent host that
@@ -589,6 +637,7 @@ fun AppNavHost(
                     }
                 }
             }
+            ImageDismissOverlay(imageOrigins, rootHost)
         }
     }
 }
@@ -756,10 +805,22 @@ private fun ComposedRevealedRoute(entry: BackStackEntry) {
  * out of both sight and hit testing, so nothing of it can swallow a touch.
  */
 @Composable
-private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) {
+private fun LeavingPage(
+    entry: BackStackEntry,
+    leavingEntries: MutableList<BackStackEntry>,
+    content: @Composable () -> Unit,
+) {
     val navigator = LocalNavigator.current
     val leaving = !navigator.stack.contains(entry)
     val covered = !leaving && navigator.stack.lastOrNull() !== entry
+    DisposableEffect(entry, leaving) {
+        if (leaving) {
+            leavingEntries.add(entry)
+            onDispose { leavingEntries.remove(entry) }
+        } else {
+            onDispose { }
+        }
+    }
     val picture = rememberGraphicsLayer()
     // The page stays composed while the one above it enters; taking a picture of it for the entry
     // is what lets a back gesture reveal exactly where the user left it.
@@ -787,7 +848,7 @@ private fun LeavingPage(entry: BackStackEntry, content: @Composable () -> Unit) 
     }
     Box(
         Modifier.fillMaxSize().then(
-            if (leaving) {
+            if (leaving && !entry.fastForwarded) {
                 Modifier.drawWithContent { drawLayer(picture) }
             } else {
                 Modifier

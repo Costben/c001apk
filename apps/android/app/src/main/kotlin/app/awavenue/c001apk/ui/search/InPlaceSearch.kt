@@ -304,8 +304,14 @@ internal fun InPlaceSearchPanel(
             Modifier
                 .fillMaxSize()
                 .background(surface)
-                // Swallow taps and drags so nothing reaches the list underneath.
-                .clickable(interactionSource = null, indication = null) {},
+                // Swallow taps and drags while expanded, but let touches pass through immediately once closing.
+                .then(
+                    if (state.expanded) {
+                        Modifier.clickable(interactionSource = null, indication = null) {}
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
             if (!state.historyGone) {
                 SearchHistorySection(
