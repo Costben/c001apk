@@ -9,12 +9,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -23,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,8 +42,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.C001apkApp
@@ -43,9 +56,10 @@ import app.awavenue.c001apk.data.UnreadStore
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.chat.MessageRow
+import app.awavenue.c001apk.ui.common.AppBarTitleSize
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
-import app.awavenue.c001apk.ui.common.appTabRowColors
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
@@ -66,36 +80,52 @@ import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Badge
+import io.github.suqi8.coui.kmp.basic.ChipTabData
+import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
+import io.github.suqi8.coui.kmp.basic.DropdownEntry
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
-import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
+import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
+import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
-import io.github.suqi8.coui.kmp.basic.TabRowWithContour
+import io.github.suqi8.coui.kmp.basic.SearchFilterTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
-import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
-import io.github.suqi8.coui.kmp.blur.LayerBackdrop
+import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.All
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
 import io.github.suqi8.coui.kmp.icon.extended.ContactsCircle
 import io.github.suqi8.coui.kmp.icon.extended.Email
+import io.github.suqi8.coui.kmp.icon.extended.GridView
+import io.github.suqi8.coui.kmp.icon.extended.Reply
+import io.github.suqi8.coui.kmp.overlay.OverlayCascadingListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+private data class NotificationCategory(
+    val type: NotificationType,
+    val label: String,
+    val icon: ImageVector,
+)
 
 private val NotificationCategories = listOf(
-    NotificationType.System to "全部",
-    NotificationType.Comment to "评论",
-    NotificationType.Like to "点赞",
-    NotificationType.At to "@我",
-    NotificationType.Follow to "关注",
-    NotificationType.Message to "私信",
+    NotificationCategory(NotificationType.System, "全部", COUIIcons.All),
+    NotificationCategory(NotificationType.Comment, "评论", COUIIcons.Reply),
+    NotificationCategory(NotificationType.Like, "点赞", AppIcons.ThumbUpOutlined),
+    NotificationCategory(NotificationType.At, "@我", AppIcons.ChatBubbleOutlined),
+    NotificationCategory(NotificationType.Follow, "关注", COUIIcons.ContactsCircle),
+    NotificationCategory(NotificationType.Message, "私信", COUIIcons.Email),
 )
 
 @Composable
@@ -123,7 +153,7 @@ fun NotificationScreen(
     }
 
     val initialIndex = remember(type) {
-        val found = NotificationCategories.indexOfFirst { it.first == type }
+        val found = NotificationCategories.indexOfFirst { it.type == type }
         if (found >= 0) found else 0
     }
     // The tab lives on the entry, not in the saved state: the page under a back gesture is composed
@@ -136,38 +166,136 @@ fun NotificationScreen(
 
     LaunchedEffect(pagerState.currentPage) {
         if (preview) return@LaunchedEffect
-        val currentCategory = NotificationCategories[pagerState.currentPage].first
+        val currentCategory = NotificationCategories[pagerState.currentPage].type
         app.unread.markRead(*currentCategory.unreadFields)
     }
+
+    // The bar never collapses; pinning the range keeps the nested-scroll connection from eating
+    // the list's drags for a height change this page does not draw.
+    SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
 
     Scaffold(
         edgeToEdge = true,
         topBar = {
-            CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                SmallTopAppBar(
-                    title = title ?: "消息通知",
-                    gradientGlass = true,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
+            val density = LocalDensity.current
+            val hapticFeedback = LocalHapticFeedback.current
+            var menuOpen by remember { mutableStateOf(false) }
+            val materialScrollFraction = remember(scrollBehavior, density) {
+                {
+                    AppBarBlurOverlayDefaults.scrollAlpha(
+                        abs(scrollBehavior.state.contentOffset),
+                        density,
+                    )
+                }
+            }
+            val unreadRevision = app.unread.revision
+            val chipTabs = remember(unreadRevision) {
+                NotificationCategories.map { category ->
+                    val count = app.unread.unread(*category.type.unreadFields)
+                    ChipTabData(
+                        label = category.label,
+                        icon = category.icon,
+                        count = count.takeIf { it > 0 },
+                    )
+                }
+            }
+            val horizontalPadding = 16.dp
+            val rowGap = 6.dp
+            val positionProvider = remember(horizontalPadding) {
+                ListPopupDefaults.dropdownPositionProvider(horizontalMargin = horizontalPadding)
+            }
+            val unreadTotal = app.unread.total
+            val menuEntries = remember(pagerState.currentPage, unreadTotal, hapticFeedback) {
+                val confirm = { hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm) }
+                listOf(
+                    DropdownEntry(
+                        items = NotificationCategories.mapIndexed { index, category ->
+                            DropdownItem(
+                                text = category.label,
+                                selected = index == pagerState.currentPage,
+                                onClick = {
+                                    confirm()
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                            )
+                        },
+                    ),
+                    DropdownEntry(
+                        items = listOf(
+                            DropdownItem(
+                                text = "全部已读",
+                                enabled = unreadTotal > 0,
+                                onClick = {
+                                    confirm()
+                                    app.unread.markAllRead()
+                                },
+                            ),
+                        ),
+                    ),
+                )
+            }
+            Box(Modifier.fillMaxWidth()) {
+                // 材质、两行布局与胶囊采样的顺序交给库：材质先录进栏自己的层，两行画在录制之外，
+                // 胶囊采的是「模糊提白之后」的画面，与搜索结果页保持一致。
+                SearchFilterTopAppBar(
+                    filters = chipTabs,
+                    selectedFilter = pagerState.currentPage,
+                    onFilterSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                    modifier = Modifier.fillMaxWidth(),
+                    firstRowHeight = TopAppBarDefaults.CollapsedHeight,
+                    rowGap = rowGap,
+                    leadingIcon = COUIIcons.GridView,
+                    onLeadingIconClick = { menuOpen = true },
+                    containerColor = COUITheme.colorScheme.surface,
+                    backdrop = backdrop,
+                    scrollFraction = materialScrollFraction,
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(TopAppBarDefaults.CollapsedHeight)
+                            .padding(start = 16.dp, end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
                         }
-                    },
-                    bottomContent = {
-                        TabRowWithContour(
-                            tabs = NotificationCategories.map { (cat, label) ->
-                                val count = app.unread.unread(*cat.unreadFields)
-                                if (count > 0) "$label $count" else label
-                            },
-                            selectedTabIndex = pagerState.currentPage,
-                            onTabSelected = { index ->
-                                scope.launch { pagerState.animateScrollToPage(index) }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                            colors = appTabRowColors(),
+                        Text(
+                            text = title ?: "消息通知",
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = TopAppBarDefaults.NavigationIconGap),
+                            color = COUITheme.colorScheme.onSurface,
+                            fontSize = with(density) { AppBarTitleSize.toSp() },
+                            fontWeight = FontWeight(550),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false,
                         )
-                    },
-                )
+                    }
+                }
+                // 锚点对准左侧 32dp 网格胶囊，菜单从胶囊下方展开而不是整栏居中。
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+                        .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
+                        .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                        .padding(
+                            top = TopAppBarDefaults.CollapsedHeight + rowGap,
+                            start = horizontalPadding,
+                        )
+                        .size(ChipTabDefaults.Height),
+                ) {
+                    OverlayCascadingListPopup(
+                        show = menuOpen,
+                        entries = menuEntries,
+                        onDismissRequest = { menuOpen = false },
+                        popupPositionProvider = positionProvider,
+                        alignment = PopupPositionProvider.Align.Start,
+                        collapseOnSelection = true,
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -176,11 +304,10 @@ fun NotificationScreen(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize().glassSource(backdrop),
             ) { page ->
-                val categoryType = NotificationCategories[page].first
+                val categoryType = NotificationCategories[page].type
                 NotificationPage(
                     type = categoryType,
                     scrollBehavior = scrollBehavior,
-                    backdrop = backdrop,
                     contentPadding = PaddingValues(
                         start = 10.dp,
                         end = 10.dp,
@@ -197,7 +324,6 @@ fun NotificationScreen(
 private fun NotificationPage(
     type: NotificationType,
     scrollBehavior: ScrollBehavior,
-    backdrop: LayerBackdrop?,
     contentPadding: PaddingValues,
 ) {
     val app = LocalApp.current
@@ -208,7 +334,6 @@ private fun NotificationPage(
         type = type,
         viewModel = viewModel,
         scrollBehavior = scrollBehavior,
-        backdrop = backdrop,
         contentPadding = contentPadding,
     )
 }
@@ -315,7 +440,6 @@ private fun NotificationList(
     type: NotificationType,
     viewModel: FeedListViewModel,
     scrollBehavior: ScrollBehavior,
-    backdrop: LayerBackdrop?,
     contentPadding: PaddingValues,
     leading: (@Composable () -> Unit)? = null,
 ) {
@@ -362,7 +486,6 @@ private fun NotificationList(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .glassSource(backdrop)
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = contentPadding,
