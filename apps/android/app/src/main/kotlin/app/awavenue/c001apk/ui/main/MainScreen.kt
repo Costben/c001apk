@@ -72,6 +72,7 @@ import io.github.suqi8.coui.kmp.basic.BottomFloatingAccessoryNavigationBar
 import io.github.suqi8.coui.kmp.basic.BottomFloatingNavigationBarItem
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
+import io.github.suqi8.coui.kmp.basic.LocalPlatformBottomBarMaterialEnabled
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -263,6 +264,9 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             CompositionLocalProvider(
                 LocalBackdrop provides backdrop,
                 LocalDensity provides barDensity,
+                // Window-level material drops a frame when the outer root backdrop toggles
+                // recording on popup dismiss; use COUI's Compose glass engine against `backdrop`.
+                LocalPlatformBottomBarMaterialEnabled provides false,
             ) {
                 Box(
                     Modifier
