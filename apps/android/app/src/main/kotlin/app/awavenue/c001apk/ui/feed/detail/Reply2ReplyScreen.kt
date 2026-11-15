@@ -37,11 +37,14 @@ import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.ReplyCard
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
+import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -75,6 +78,7 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
         Reply2ReplyViewModel(id, origin, app.repository, app.blacklist)
     }
     val listState = rememberPageListState("reply2reply")
+    val scrollBehavior = rememberPageScrollBehavior("reply2reply")
     val backdrop = rememberGlassBackdrop()
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
 
@@ -94,11 +98,13 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        edgeToEdge = true,
         topBar = {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
                 SmallTopAppBar(
                     title = "共 ${origin?.replyNum ?: viewModel.replies.size} 回复",
                     gradientGlass = true,
+                    scrollBehavior = scrollBehavior,
                     navigationIcon = {
                         TopBarIconButton(onClick = { navigator.pop() }) {
                             Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
@@ -109,13 +115,19 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
         },
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
-            Box(Modifier.fillMaxSize().glassSource(backdrop).padding(innerPadding)) {
+            Box(Modifier.fillMaxSize().glassSource(backdrop)) {
                 when (val status = viewModel.status) {
-                    ListStatus.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ListStatus.Loading -> Box(
+                        Modifier.fillMaxSize().padding(innerPadding),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         InfiniteProgressIndicator()
                     }
 
-                    ListStatus.Empty -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ListStatus.Empty -> Box(
+                        Modifier.fillMaxSize().padding(innerPadding),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         EmptyState(
                             title = "暂无内容",
                             actionText = "刷新",
@@ -123,7 +135,10 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                         )
                     }
 
-                    is ListStatus.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    is ListStatus.Error -> Box(
+                        Modifier.fillMaxSize().padding(innerPadding),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         EmptyState(
                             title = status.message,
                             actionText = "重试",
@@ -133,8 +148,14 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
 
                     ListStatus.Content -> LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 16.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .overScrollVertical()
+                            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                        ),
                     ) {
                         itemsIndexed(
                             viewModel.replies,
