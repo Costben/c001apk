@@ -51,5 +51,29 @@ class ApiFailureTest {
             readApiObject(200, """{"status":2,"message":"failed"}""", requireData = false)
         }
         assertEquals(ApiFailureKind.Business, error.kind)
+        assertEquals("failed", error.message)
+    }
+
+    @Test
+    fun businessFailureSurfacesSafeServerMessageAndRedactsUnsafeBodies() {
+        val replyRejected = assertThrows(ApiFailure::class.java) {
+            readApiObject(
+                200,
+                """{"status":500,"error":-1,"message":"动态被作者设为仅自己可见，无法回复","messageStatus":"err_on_feed_only_publisher_self"}""",
+                requireData = false,
+            )
+        }
+        assertEquals(ApiFailureKind.Business, replyRejected.kind)
+        assertEquals("动态被作者设为仅自己可见，无法回复", replyRejected.message)
+
+        val htmlMessage = assertThrows(ApiFailure::class.java) {
+            readApiObject(200, """{"status":500,"message":"<html>502 Bad Gateway</html>"}""", requireData = false)
+        }
+        assertEquals("服务器未能完成请求，请稍后重试", htmlMessage.message)
+
+        val urlMessage = assertThrows(ApiFailure::class.java) {
+            readApiObject(200, """{"status":500,"message":"see https://api.coolapk.com/internal"}""", requireData = false)
+        }
+        assertEquals("服务器未能完成请求，请稍后重试", urlMessage.message)
     }
 }

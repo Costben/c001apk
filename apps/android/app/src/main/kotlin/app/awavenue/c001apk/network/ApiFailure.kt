@@ -76,13 +76,24 @@ fun readApiObject(status: Int, body: String, requireData: Boolean = true): JsonO
                 ApiFailure(ApiFailureKind.Authentication, "登录状态已失效或需要登录，请重新登录")
             "rate_limit" in clues || "频繁" in clues || code == 429 ->
                 ApiFailure(ApiFailureKind.RateLimit, "请求过于频繁，请稍后重试")
-            else -> ApiFailure(ApiFailureKind.Business, "服务器未能完成请求，请稍后重试")
+            else -> ApiFailure(ApiFailureKind.Business, safeBusinessMessage(message))
         }
     }
     if (requireData && !obj.containsKey("data")) {
         throw ApiFailure(ApiFailureKind.InvalidResponse, "服务器响应缺少数据字段，请稍后重试")
     }
     return obj
+}
+
+private const val DEFAULT_BUSINESS_FAILURE = "服务器未能完成请求，请稍后重试"
+
+private fun safeBusinessMessage(raw: String): String {
+    val clean = raw.replace(Regex("[\\r\\n\\t]+"), " ").trim()
+    if (clean.isEmpty() || clean.length > 120) return DEFAULT_BUSINESS_FAILURE
+    val lower = clean.lowercase()
+    if ("<" in clean && ">" in clean) return DEFAULT_BUSINESS_FAILURE
+    if ("http://" in lower || "https://" in lower) return DEFAULT_BUSINESS_FAILURE
+    return clean
 }
 
 /** Envelope check straight off a response, for callers that need the raw headers too. */
