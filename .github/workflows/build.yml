@@ -120,7 +120,7 @@ jobs:
           version=$(sed -n 's/.*versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
           apk=app/build/outputs/apk/release/app-release.apk
           report=$("$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$apk")
-          actual=$(printf '%s\n' "$report" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]')
+          actual=$(printf '%s\n' "$report" | sed -n 's/^.*certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]' | sort -u)
           test "$actual" = "$EXPECTED_CERT_SHA256" || { echo 'Unexpected APK certificate'; exit 1; }
           mkdir -p build/distribution
           cp "$apk" "build/distribution/c001apk-coui-$version.apk"
