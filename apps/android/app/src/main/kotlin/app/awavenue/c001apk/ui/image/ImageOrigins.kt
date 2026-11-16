@@ -48,6 +48,9 @@ class ImageOrigins {
     /** 宿主提供的协程作用域，确保 ImageView 出栈销毁后飞行动画仍可继续。 */
     internal var flightScope: CoroutineScope? = null
 
+    /** 当前正在显示的看图页注册的预测性返回/按钮返回平滑缩回接管回调。 */
+    internal var onCommitBack: ((remaining: Float) -> Boolean)? = null
+
     internal fun finishDismissFlight() {
         val flight = dismissFlight ?: return
         dismissFlight = null

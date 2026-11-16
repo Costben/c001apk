@@ -5,6 +5,7 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
+import app.awavenue.c001apk.ui.nav.ExpandDurationMillis
 import app.awavenue.c001apk.ui.nav.ExpandEasing
 import kotlin.math.max
 import kotlinx.coroutines.Job
@@ -33,7 +35,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * 承载图片拖拽/甩出松手后的回缩或飞出视觉状态，挂载在导航宿主最顶层但不拦截任何触控事件。
+ * 承载图片拖拽/甩出或预测性返回松手后的回缩视觉状态，挂载在导航宿主最顶层但不拦截任何触控事件。
  */
 internal class ImageDismissFlight(
     val url: String?,
@@ -49,9 +51,12 @@ internal class ImageDismissFlight(
     val hasThumb: Boolean,
     val initialThumb: ThumbBounds?,
     val aspect: Float?,
+    val predictiveShrink: Boolean = false,
+    val startProgress: Float = 0f,
+    val remainingDurationMillis: Int = ExpandDurationMillis,
 ) {
     val exitBgAlpha: Animatable<Float, AnimationVector1D> = Animatable(startBgAlpha)
-    val exitProgress: Animatable<Float, AnimationVector1D> = Animatable(0f)
+    val exitProgress: Animatable<Float, AnimationVector1D> = Animatable(startProgress)
     val exitTranslation: Animatable<Offset, AnimationVector2D> =
         Animatable(startTranslation, Offset.VectorConverter)
 
@@ -82,36 +87,50 @@ internal fun ImageOrigins.launchDismissFlight(
 
     flight.animJob = scope.launch {
         try {
-            if (flight.hasThumb) {
-                coroutineScope {
-                    launch {
-                        flight.exitBgAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
-                    }
-                    launch {
-                        flight.exitProgress.animateTo(1f, tween(320, easing = ExpandEasing))
-                    }
-                    launch {
-                        flight.exitTranslation.animateTo(
-                            targetValue = initialTargetTranslation,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = 700f,
-                                visibilityThreshold = Offset(0.5f, 0.5f),
-                            ),
-                            initialVelocity = initialVelocity,
-                        )
+            when {
+                flight.predictiveShrink -> {
+                    val duration = flight.remainingDurationMillis.coerceAtLeast(1)
+                    coroutineScope {
+                        launch {
+                            flight.exitBgAlpha.animateTo(0f, tween(duration, easing = LinearEasing))
+                        }
+                        launch {
+                            flight.exitProgress.animateTo(1f, tween(duration, easing = ExpandEasing))
+                        }
                     }
                 }
-            } else {
-                coroutineScope {
-                    launch {
-                        flight.exitBgAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                flight.hasThumb -> {
+                    coroutineScope {
+                        launch {
+                            flight.exitBgAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                        }
+                        launch {
+                            flight.exitProgress.animateTo(1f, tween(320, easing = ExpandEasing))
+                        }
+                        launch {
+                            flight.exitTranslation.animateTo(
+                                targetValue = initialTargetTranslation,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 700f,
+                                    visibilityThreshold = Offset(0.5f, 0.5f),
+                                ),
+                                initialVelocity = initialVelocity,
+                            )
+                        }
                     }
-                    launch {
-                        flight.exitProgress.animateTo(
-                            1f,
-                            tween(240, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
-                        )
+                }
+                else -> {
+                    coroutineScope {
+                        launch {
+                            flight.exitBgAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                        }
+                        launch {
+                            flight.exitProgress.animateTo(
+                                1f,
+                                tween(240, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+                            )
+                        }
                     }
                 }
             }
@@ -164,13 +183,24 @@ private fun GraphicsLayerScope.applyDismissFlight(
 ) {
     val p = flight.exitProgress.value
     if (!flight.hasThumb || size.width <= 0f || size.height <= 0f) {
-        val curScale = lerp(flight.startScale, flight.startScale * 0.78f, p)
-        alpha = (1f - p).coerceIn(0f, 1f)
-        transformOrigin = TransformOrigin.Center
-        scaleX = curScale
-        scaleY = curScale
-        translationX = lerp(flight.startTranslation.x, flight.flyTarget.x, p)
-        translationY = lerp(flight.startTranslation.y, flight.flyTarget.y, p)
+        if (flight.predictiveShrink) {
+            val q = (1f - p).coerceIn(0f, 1f)
+            val curScale = lerp(0.92f, 1f, q)
+            alpha = q
+            transformOrigin = TransformOrigin.Center
+            scaleX = curScale
+            scaleY = curScale
+            translationX = 0f
+            translationY = 0f
+        } else {
+            val curScale = lerp(flight.startScale, flight.startScale * 0.78f, p)
+            alpha = (1f - p).coerceIn(0f, 1f)
+            transformOrigin = TransformOrigin.Center
+            scaleX = curScale
+            scaleY = curScale
+            translationX = lerp(flight.startTranslation.x, flight.flyTarget.x, p)
+            translationY = lerp(flight.startTranslation.y, flight.flyTarget.y, p)
+        }
         shape = RectangleShape
         clip = false
         return
@@ -187,19 +217,28 @@ private fun GraphicsLayerScope.applyDismissFlight(
         restSize(size.width, size.height, it)
     }
     val cover = max(source.width / rest.width, source.height / rest.height)
-    val curScale = lerp(flight.startScale, cover, p)
-    val delta = if (liveThumb != null) liveThumb.rect.center - initialThumb.rect.center else Offset.Zero
-    val trans = flight.exitTranslation.value + delta * p
+    val q = (1f - p).coerceIn(0f, 1f)
+    val curScale = if (flight.predictiveShrink) lerp(cover, 1f, q) else lerp(flight.startScale, cover, p)
+    val trans = if (flight.predictiveShrink) {
+        val boxCenter = Offset(size.width / 2f, size.height / 2f)
+        (source.center - boxCenter) * (1f - q)
+    } else {
+        val delta = if (liveThumb != null) liveThumb.rect.center - initialThumb.rect.center else Offset.Zero
+        flight.exitTranslation.value + delta * p
+    }
     alpha = if (liveThumb != null) 1f else (1f - ((p - 0.55f) / 0.45f)).coerceIn(0f, 1f)
     transformOrigin = TransformOrigin.Center
     scaleX = curScale
     scaleY = curScale
     translationX = trans.x
     translationY = trans.y
+    val startWidth = if (flight.predictiveShrink) size.width else size.width * flight.startScale
+    val startHeight = if (flight.predictiveShrink) size.height else size.height * flight.startScale
+    val startT = if (flight.predictiveShrink) 1f - q else p
     shape = CenteredWindow(
-        width = lerp(size.width * flight.startScale, source.width, p) / curScale,
-        height = lerp(size.height * flight.startScale, source.height, p) / curScale,
-        radius = lerp(0f, thumb.cornerRadius, p) / curScale,
+        width = lerp(startWidth, source.width, startT) / curScale,
+        height = lerp(startHeight, source.height, startT) / curScale,
+        radius = lerp(0f, thumb.cornerRadius, startT) / curScale,
         squircleEnabled = flight.squircleEnabled,
     )
     clip = true

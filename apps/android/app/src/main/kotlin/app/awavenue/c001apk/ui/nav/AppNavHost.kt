@@ -198,8 +198,8 @@ fun AppNavHost(
     val usePredictiveOverlay = predictiveBack && paneEntry == null
 
     suspend fun handlePredictiveBack(progress: Flow<BackEventCompat>) {
-        // 新返回手势到来时立刻快进之前的收尾/退场，绝不吞掉底层页面的连续返回。
-        fastForwardOngoingAnimations(includeEntering = true)
+        // 新返回手势到来时立刻快进之前的收尾/退场，但不提前锁死当前页的进场进度，保留预测性返回缩回。
+        fastForwardOngoingAnimations(includeEntering = false)
 
         if (navigator.stack.size <= 1) {
             gestureEntry = null
@@ -237,8 +237,11 @@ fun AppNavHost(
                     alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
                 }
             }
+            val handedOffImageFlight = remaining > 0.01f &&
+                top.route is Route.ImageView &&
+                imageOrigins.onCommitBack?.invoke(remaining) == true
             top.exitStartProgress = remaining
-            top.previewed = remaining <= 0.01f
+            top.previewed = remaining <= 0.01f || handedOffImageFlight
             gestureEntry = null
             gestureProgress = 1f
             if (navigator.stack.lastOrNull() === top) {
@@ -270,7 +273,10 @@ fun AppNavHost(
     }
 
     fun handleImmediateBack() {
-        if (paneEntry != null || navigator.stack.size > 1) {
+        val top = navigator.stack.lastOrNull()
+        if (top != null && top.route is Route.ImageView && imageOrigins.onCommitBack?.invoke(1f) == true) {
+            navigator.popImmediate()
+        } else if (paneEntry != null || navigator.stack.size > 1) {
             navigator.pop()
         } else if (navigator.onMainBack?.invoke() != true) {
             (context as? Activity)?.moveTaskToBack(true)
@@ -557,23 +563,23 @@ fun AppNavHost(
                     val entryGesture = if (previewing) gesture else SettledGesture
                     val pageProgress: () -> Float = remember(progress, entryGesture, entry) {
                         {
+                            val baseProgress = if (!entry.popped && entry.enterFastForward) 1f else progress.value
                             when {
                                 entry.previewed || (entry.popped && entry.fastForwarded) -> 0f
                                 entry.popped && entry.shrinksToOrigin() ->
                                     minOf(progress.value * entry.exitStartProgress, entryGesture())
-                                !entry.popped && entry.enterFastForward -> 1f
-                                else -> minOf(progress.value, entryGesture())
+                                else -> minOf(baseProgress, entryGesture())
                             }
                         }
                     }
                     val pageFade: () -> Float = remember(fade, entryGesture, entry) {
                         {
+                            val baseFade = if (!entry.popped && entry.enterFastForward) 1f else fade.value
                             when {
                                 entry.previewed || (entry.popped && entry.fastForwarded) -> 0f
                                 entry.popped && entry.shrinksToOrigin() ->
                                     minOf(fade.value * entry.exitStartProgress, entryGesture())
-                                !entry.popped && entry.enterFastForward -> 1f
-                                else -> minOf(fade.value, entryGesture())
+                                else -> minOf(baseFade, entryGesture())
                             }
                         }
                     }

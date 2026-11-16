@@ -112,6 +112,7 @@ import app.awavenue.c001apk.ui.common.SUFFIX_THUMBNAIL
 import app.awavenue.c001apk.ui.common.thumbnail
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.ActionSheetItem
+import app.awavenue.c001apk.ui.nav.ExpandDurationMillis
 import app.awavenue.c001apk.ui.nav.ExpandEasing
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalRouteTransition
@@ -135,6 +136,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Share
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -199,13 +201,33 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     var saving by remember { mutableStateOf(false) }
     var saveHud by remember { mutableStateOf("") }
     val frame = remember { ViewerFrame() }
+    val squircleEnabled = isSquircleEnabled()
     val progress: () -> Float = remember(transition) { transition?.progress ?: { 1f } }
     val currentUrl = images.getOrNull(pagerState.currentPage).orEmpty()
 
+    val commitBackHandler: (Float) -> Boolean = remember(images, pagerState, origins, frame, density, squircleEnabled) {
+        handler@{ remaining ->
+            if (frame.dismiss.active) return@handler false
+            val url = images.getOrNull(pagerState.currentPage)
+            launchBackExitFlight(
+                remaining = remaining,
+                frame = frame,
+                origins = origins,
+                url = url,
+                density = density,
+                squircleEnabled = squircleEnabled,
+            )
+        }
+    }
+
     // 记下正在看的是哪一张：被它盖住的缩略图要等这一页撤走再恢复显示，避免半透明背景透出两张一样的图。
-    SideEffect { origins.viewing = currentUrl.ifEmpty { null } }
+    SideEffect {
+        origins.viewing = currentUrl.ifEmpty { null }
+        origins.onCommitBack = commitBackHandler
+    }
     DisposableEffect(Unit) {
         onDispose {
+            if (origins.onCommitBack === commitBackHandler) origins.onCommitBack = null
             if (origins.dismissFlight == null) origins.viewing = null
         }
     }
@@ -275,7 +297,6 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                 Text("暂无内容", color = Color.White)
             }
         } else {
-            val squircleEnabled = isSquircleEnabled()
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = images.size > 1 && !frame.dismiss.active,
@@ -347,7 +368,11 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                             onClick = {
                                 if (!frame.dismiss.dragging) {
                                     frame.dismiss.cancelActive()
-                                    navigator.pop()
+                                    if (commitBackHandler(1f)) {
+                                        navigator.popImmediate()
+                                    } else {
+                                        navigator.pop()
+                                    }
                                 }
                             },
                         ) {
@@ -1047,6 +1072,93 @@ private class DragDismissState {
     }
 }
 
+private class FlightTargetInfo(
+    val thumb: ThumbBounds?,
+    val aspect: Float?,
+    val hasThumb: Boolean,
+    val layer: GraphicsLayer?,
+    val onRelease: ((GraphicsLayer) -> Unit)?,
+)
+
+private fun resolveFlightTargetInfo(
+    url: String?,
+    frame: ViewerFrame,
+    origins: ImageOrigins,
+    density: Float,
+    boxSize: IntSize,
+): FlightTargetInfo {
+    val host = frame.host
+    val live = if (url != null && host != null && !frame.zoomed) {
+        origins.boundsOf(url, host, density)?.also { frame.thumbs[url] = it }
+    } else {
+        null
+    }
+    val thumb = live ?: url?.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
+    val aspect = url?.let { frame.aspectOf(it) ?: thumb?.let { b -> b.rect.width / b.rect.height } }
+    val w = boxSize.width.toFloat()
+    val h = boxSize.height.toFloat()
+    val effectiveAspect = aspect ?: thumb?.rect?.let { if (it.height > 0f) it.width / it.height else null }
+    val rest = if (w > 0f && h > 0f && effectiveAspect != null) restSize(w, h, effectiveAspect) else null
+    val hasThumb = thumb != null && rest != null && rest.height <= h + 0.5f
+    val layer = url?.let { frame.pageLayers[it] }?.takeUnless { it.isReleased || it.size == IntSize.Zero }
+    return FlightTargetInfo(
+        thumb = thumb,
+        aspect = effectiveAspect,
+        hasThumb = hasThumb,
+        layer = layer,
+        onRelease = frame.onReleaseLayer,
+    )
+}
+
+/**
+ * 在预测性返回或点击返回键提交退出时，将当前画面平滑缩回原缩略图的逻辑移交给顶部非拦截飞行层，
+ * 确保页面可立刻出栈并将触控权实时交还底层界面。
+ */
+private fun launchBackExitFlight(
+    remaining: Float,
+    frame: ViewerFrame,
+    origins: ImageOrigins,
+    url: String?,
+    density: Float,
+    squircleEnabled: Boolean,
+): Boolean {
+    val clamped = remaining.coerceIn(0f, 1f)
+    if (clamped <= 0.01f) {
+        origins.finishDismissFlight()
+        origins.viewing = null
+        return true
+    }
+    val info = resolveFlightTargetInfo(url, frame, origins, density, frame.dismiss.boxSize)
+    val layer = info.layer ?: return false
+    val onRelease = info.onRelease ?: return false
+    origins.finishDismissFlight()
+    frame.handedOffLayers.add(layer)
+    val flight = ImageDismissFlight(
+        url = url,
+        layer = layer,
+        onReleaseLayer = onRelease,
+        boxSize = frame.dismiss.boxSize,
+        density = density,
+        squircleEnabled = squircleEnabled,
+        startScale = 1f,
+        startTranslation = Offset.Zero,
+        startBgAlpha = clamped,
+        flyTarget = Offset.Zero,
+        hasThumb = info.hasThumb,
+        initialThumb = info.thumb,
+        aspect = info.aspect,
+        predictiveShrink = true,
+        startProgress = 1f - clamped,
+        remainingDurationMillis = (ExpandDurationMillis * clamped).roundToInt().coerceAtLeast(1),
+    )
+    origins.launchDismissFlight(
+        flight = flight,
+        initialTargetTranslation = Offset.Zero,
+        initialVelocity = Offset.Zero,
+    )
+    return true
+}
+
 private fun handleDismissRelease(
     velocity: Velocity,
     dismiss: DragDismissState,
@@ -1099,23 +1211,11 @@ private fun handleDismissRelease(
     val startTranslation = dismiss.currentTranslation()
     val startBgAlpha = dismiss.currentBgAlpha()
 
-    val host = frame.host
-    val live = if (url != null && host != null && !frame.zoomed) {
-        origins.boundsOf(url, host, density)?.also { frame.thumbs[url] = it }
-    } else {
-        null
-    }
-    val thumb = live ?: url?.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
-    val aspect = url?.let { frame.aspectOf(it) ?: thumb?.let { b -> b.rect.width / b.rect.height } }
-
-    val w = dismiss.boxSize.width.toFloat()
-    val h = dismiss.boxSize.height.toFloat()
-    val effectiveAspect = aspect ?: thumb?.rect?.let { if (it.height > 0f) it.width / it.height else null }
-    val rest = if (w > 0f && h > 0f && effectiveAspect != null) restSize(w, h, effectiveAspect) else null
-    val hasThumb = thumb != null && rest != null && rest.height <= h + 0.5f
-
-    val layer = url?.let { frame.pageLayers[it] }
-    val onRelease = frame.onReleaseLayer
+    val info = resolveFlightTargetInfo(url, frame, origins, density, dismiss.boxSize)
+    val thumb = info.thumb
+    val hasThumb = info.hasThumb
+    val layer = info.layer
+    val onRelease = info.onRelease
     if (layer == null || onRelease == null) {
         origins.finishDismissFlight()
         origins.viewing = null
@@ -1123,7 +1223,9 @@ private fun handleDismissRelease(
         return
     }
 
-    val targetTranslation = if (hasThumb) {
+    val w = dismiss.boxSize.width.toFloat()
+    val h = dismiss.boxSize.height.toFloat()
+    val targetTranslation = if (hasThumb && thumb != null) {
         val source = thumb.rect
         Offset(source.center.x - w / 2f, source.center.y - h / 2f)
     } else {
@@ -1157,7 +1259,7 @@ private fun handleDismissRelease(
         flyTarget = flyTarget,
         hasThumb = hasThumb,
         initialThumb = thumb,
-        aspect = effectiveAspect,
+        aspect = info.aspect,
     )
     origins.launchDismissFlight(
         flight = flight,
