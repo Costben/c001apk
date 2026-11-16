@@ -109,6 +109,24 @@ object AppIcons {
         )
     }
 
+    val Tag: ImageVector by lazy {
+        icon(
+            "Tag",
+            "M20,10V8h-4V4h-2v4h-4V4H8v4H4v2h4v4H4v2h4v4h2v-4h4v4h2v-4h4v-2h-4v-4H20zM14,14h-4v-4h4V14z",
+        )
+    }
+
+    val AlternateEmail: ImageVector by lazy {
+        icon(
+            "AlternateEmail",
+            "M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10h5v-2h-5c-4.34,0 -8,-3.66 -8,-8s3.66,-8 8,-8 " +
+                "8,3.66 8,8v1.43c0,0.79 -0.71,1.57 -1.5,1.57s-1.5,-0.78 -1.5,-1.57V12c0,-2.76 -2.24,-5 " +
+                "-5,-5s-5,2.24 -5,5 2.24,5 5,5c1.38,0 2.64,-0.56 3.54,-1.47 0.65,0.89 1.77,1.47 2.96,1.47 " +
+                "1.97,0 3.5,-1.6 3.5,-3.57V12c0,-5.52 -4.48,-10 -10,-10zM12,15c-1.66,0 -3,-1.34 -3,-3 " +
+                "s1.34,-3 3,-3 3,1.34 3,3 -1.34,3 -3,3z",
+        )
+    }
+
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -74,11 +75,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.data.Draft
 import app.awavenue.c001apk.data.DraftImage
+import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.MoreMenu
+import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.appDialogButtonColors
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberCapsuleShape
@@ -98,6 +101,7 @@ import io.github.suqi8.coui.kmp.basic.ChipTabGroup
 import io.github.suqi8.coui.kmp.basic.GradientStrokeStyle
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.InnerShadowStyle
 import io.github.suqi8.coui.kmp.basic.MaterialStrokeParams
 import io.github.suqi8.coui.kmp.basic.Text
@@ -117,6 +121,8 @@ import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -159,22 +165,40 @@ fun ReplyComposerSheet(
 
     // A resumed draft carries its own target and content; a fresh sheet starts from the target it
     // was opened for. Everything below reads this one, so publishing stays single-minded.
-    val activeTarget = draft?.let {
-        ReplyTarget(
-            id = it.replyId,
-            type = it.replyType,
-            targetType = it.targetType,
-            targetId = it.targetId,
-            title = it.title,
-            feedType = it.feedType,
+    val initialTarget = remember(target, draft) {
+        draft?.let {
+            ReplyTarget(
+                id = it.replyId,
+                type = it.replyType,
+                targetType = it.targetType,
+                targetId = it.targetId,
+                title = it.title,
+                feedType = it.feedType,
+            )
+        } ?: target
+    }
+    var activeTarget by remember { mutableStateOf(initialTarget) }
+    var appliedTopicTag by remember {
+        mutableStateOf(
+            if (initialTarget.targetType == "tag" && initialTarget.title.isNotEmpty()) {
+                "#${initialTarget.title}#"
+            } else {
+                null
+            },
         )
-    } ?: target
+    }
 
     val initialText = draft?.text
-        ?: if (activeTarget.targetType == "tag") "#${activeTarget.title}# " else ""
+        ?: if (initialTarget.targetType == "tag" && initialTarget.title.isNotEmpty()) {
+            "#${initialTarget.title}# "
+        } else {
+            ""
+        }
     val input = rememberEmojiInputState(initialText)
     var onlySelf by remember { mutableStateOf(draft?.onlySelf == true) }
-    var emojiPanel by remember { mutableStateOf(false) }
+    var activePanel by remember { mutableStateOf<ComposerSubPanel?>(null) }
+    var cachedTopics by remember { mutableStateOf<List<Entity>?>(null) }
+    var cachedMentionUsers by remember { mutableStateOf<List<MentionCandidate>?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     // 谁可以看 is asked in a dialog over the panel, the way the reference client does it.
     var visibilityMenu by remember { mutableStateOf(false) }
@@ -230,7 +254,9 @@ fun ReplyComposerSheet(
 
     /** Unsaved work: text that moved away from what the sheet opened with, or a changed picture set. */
     fun hasUnsavedWork(): Boolean =
-        input.text.trim() != initialText.trim() || images.map { it.path } != initialImages
+        input.text.trim() != initialText.trim() ||
+            images.map { it.path } != initialImages ||
+            activeTarget != initialTarget
 
     /** Slides the panel out; [then] runs once it has left the screen. */
     fun leave(then: () -> Unit) {
@@ -282,6 +308,67 @@ fun ReplyComposerSheet(
     fun pickVisibility(selfOnly: Boolean) {
         onlySelf = selfOnly
         visibilityMenu = false
+        input.focus()
+    }
+
+    fun togglePanel(panel: ComposerSubPanel) {
+        if (activePanel == panel) {
+            activePanel = null
+            input.focus()
+        } else {
+            activePanel = panel
+            input.clearFocus()
+            focusManager.clearFocus()
+        }
+    }
+
+    fun applyTopicSelection(title: String, id: String) {
+        val cleanTitle = title.trim().removeSurrounding("#")
+        if (cleanTitle.isEmpty()) return
+        val newTag = "#$cleanTitle#"
+        val oldTag = appliedTopicTag
+        val current = input.text
+        val updated = when {
+            current.contains(newTag) -> current
+            oldTag != null && current.startsWith("$oldTag ") -> "$newTag " + current.removePrefix("$oldTag ")
+            oldTag != null && current.startsWith(oldTag) -> newTag + current.removePrefix(oldTag)
+            oldTag != null && current.contains(oldTag) -> current.replaceFirst(oldTag, newTag)
+            current.isEmpty() -> "$newTag "
+            else -> "$newTag $current"
+        }
+        if (updated != current) input.replace(updated)
+        appliedTopicTag = newTag
+        activeTarget = activeTarget.copy(
+            targetType = "tag",
+            targetId = id,
+            title = cleanTitle,
+        )
+        activePanel = null
+        input.focus()
+    }
+
+    fun clearTopicSelection() {
+        val oldTag = appliedTopicTag
+        val current = input.text
+        if (oldTag != null) {
+            val updated = when {
+                current.startsWith("$oldTag ") -> current.removePrefix("$oldTag ")
+                current.startsWith(oldTag) -> current.removePrefix(oldTag)
+                else -> current
+            }
+            if (updated != current) input.replace(updated)
+        }
+        appliedTopicTag = null
+        activeTarget = ReplyTarget(feedType = activeTarget.feedType)
+        activePanel = null
+        input.focus()
+    }
+
+    fun insertMention(username: String) {
+        val clean = username.trim().removePrefix("@")
+        if (clean.isEmpty()) return
+        input.insert("@$clean ")
+        activePanel = null
         input.focus()
     }
 
@@ -492,169 +579,222 @@ fun ReplyComposerSheet(
         // The sheet hands the content whatever is left once its toolbar is in, so the field is
         // capped by that leftover instead of by a guess about the window: with the keyboard up the
         // panel rides on it, and a field sized from the full window would push the action off the
-        // bottom. Everything below the field is subtracted here, since it shares the same space.
+        // bottom. Everything below the field shares the same budget.
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val belowField = (if (images.isNotEmpty()) ComposerPanel.ImagesHeight else 0.dp) +
-                (if (emojiPanel) ComposerPanel.EmojiHeight else 0.dp) +
+            val baseBelowField = (if (images.isNotEmpty()) ComposerPanel.ImagesHeight else 0.dp) +
                 ComposerPanel.ToolsGap + ComposerPanel.ToolsHeight +
                 ComposerPanel.ActionGap + ComposerPanel.ActionHeight
-            val editorMax = (maxHeight - belowField).coerceAtLeast(ComposerPanel.MinEditorHeight)
-            // The card itself is capped rather than scrolled: a scroll viewport shorter than the
-            // field would cut the card off square at the bottom, and the field already scrolls its
-            // own text when it runs out of lines.
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = editorMax)
-                    .squircleSurface(
-                        color = COUITheme.colorScheme.surfaceContainer,
-                        cornerRadius = ComposerPanel.EditorRadius,
-                    ),
-            ) {
-                EmojiEditText(
-                    state = input,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false)
-                        .padding(horizontal = 12.dp),
-                    hint = "说点什么…",
-                    maxCount = ComposerPanel.MaxMessage,
-                    minLines = 2,
-                    maxLines = 5,
-                    textStyle = COUITheme.textStyles.body1,
-                    onFocused = { emojiPanel = false },
-                )
-                Text(
-                    text = "${input.text.length}/${ComposerPanel.MaxMessage}",
-                    style = trimmedLineHeight,
-                    fontSize = 12.sp,
-                    lineHeight = 12.sp,
-                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-                )
+            val subPanelHeight = when (activePanel) {
+                null -> 0.dp
+                ComposerSubPanel.Emoji -> ComposerPanel.EmojiHeight
+                ComposerSubPanel.Topic, ComposerSubPanel.Mention ->
+                    ComposerPanel.PickerHeight.coerceAtMost(
+                        (maxHeight - baseBelowField - ComposerPanel.MinEditorHeight).coerceAtLeast(156.dp),
+                    )
             }
-        }
-        if (images.isNotEmpty()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                images.forEach { image ->
-                    Box(Modifier.size(64.dp)) {
-                        AsyncImage(
-                            model = java.io.File(image.path),
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp).clip(rememberSquircleShape(10.dp)),
-                        )
-                        IconButton(
-                            onClick = { images = images - image },
-                            modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
-                        ) {
-                            Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
+            val belowField = baseBelowField + subPanelHeight
+            val editorMax = (maxHeight - belowField).coerceAtLeast(ComposerPanel.MinEditorHeight)
+            Column(Modifier.fillMaxWidth()) {
+                // The card itself is capped rather than scrolled: a scroll viewport shorter than the
+                // field would cut the card off square at the bottom, and the field already scrolls its
+                // own text when it runs out of lines.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = editorMax)
+                        .squircleSurface(
+                            color = COUITheme.colorScheme.surfaceContainer,
+                            cornerRadius = ComposerPanel.EditorRadius,
+                        ),
+                ) {
+                    EmojiEditText(
+                        state = input,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .padding(horizontal = 12.dp),
+                        hint = "说点什么…",
+                        maxCount = ComposerPanel.MaxMessage,
+                        minLines = 2,
+                        maxLines = 5,
+                        textStyle = COUITheme.textStyles.body1,
+                        onFocused = { activePanel = null },
+                    )
+                    Text(
+                        text = "${input.text.length}/${ComposerPanel.MaxMessage}",
+                        style = trimmedLineHeight,
+                        fontSize = 12.sp,
+                        lineHeight = 12.sp,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                    )
+                }
+                if (images.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        images.forEach { image ->
+                            Box(Modifier.size(64.dp)) {
+                                AsyncImage(
+                                    model = java.io.File(image.path),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp).clip(rememberSquircleShape(10.dp)),
+                                )
+                                IconButton(
+                                    onClick = { images = images - image },
+                                    modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
+                                ) {
+                                    Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-        if (emojiPanel) {
-            // 212dp lands exactly on a row boundary: a 32dp chip row, a 6dp gap, four 42dp grid
-            // rows and the closing 6dp, so switching tabs does not resize the sheet and the last
-            // row is never sliced.
-            EmojiPanel(
-                modifier = Modifier.height(212.dp).padding(top = 8.dp),
-                onPick = { emoji -> input.insert(emoji) },
-            )
-        }
+                when (activePanel) {
+                    ComposerSubPanel.Emoji -> {
+                        // 212dp lands exactly on a row boundary: a 32dp chip row, a 6dp gap, four 42dp grid
+                        // rows and the closing 6dp, so switching tabs does not resize the sheet and the last
+                        // row is never sliced.
+                        EmojiPanel(
+                            modifier = Modifier.height(212.dp).padding(top = 8.dp),
+                            onPick = { emoji -> input.insert(emoji) },
+                        )
+                    }
+                    ComposerSubPanel.Topic -> {
+                        TopicInlinePanel(
+                            modifier = Modifier.height(subPanelHeight).padding(top = 8.dp),
+                            currentTopicTitle = if (activeTarget.targetType == "tag") activeTarget.title else "",
+                            cachedRecommended = cachedTopics,
+                            onLoadedRecommended = { cachedTopics = it },
+                            onPick = { title, id -> applyTopicSelection(title, id) },
+                            onClear = { clearTopicSelection() },
+                        )
+                    }
+                    ComposerSubPanel.Mention -> {
+                        MentionInlinePanel(
+                            modifier = Modifier.height(subPanelHeight).padding(top = 8.dp),
+                            cachedRecommended = cachedMentionUsers,
+                            onLoadedRecommended = { cachedMentionUsers = it },
+                            onPick = { username -> insertMention(username) },
+                        )
+                    }
+                    null -> Unit
+                }
 
-        Spacer(Modifier.height(ComposerPanel.ToolsGap))
-        // One row for the field's tools: pictures and emoji on the start side, the visibility
-        // toggle on the end side, where the template puts its non-primary controls.
-        Row(
-            Modifier.fillMaxWidth().height(ComposerPanel.ToolsHeight),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ToolbarIcon(COUIIcons.Photos, selected = false) { pickImages() }
-            Spacer(Modifier.width(8.dp))
-            ToolbarIcon(AppIcons.EmojiEmotions, selected = emojiPanel) {
-                emojiPanel = !emojiPanel
-                if (emojiPanel) {
-                    input.clearFocus()
-                    focusManager.clearFocus()
-                } else {
-                    input.focus()
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            if (activeTarget.id.isEmpty()) {
-                // 谁可以看: the official publish form's visibility, shown as the current scope so the
-                // choice is visible without opening the sheet.
+                Spacer(Modifier.height(ComposerPanel.ToolsGap))
+                // One row for the field's tools: topic, pictures, emoji and @ on the start side,
+                // the visibility toggle on the end side, where the template puts its non-primary controls.
                 Row(
-                    Modifier
-                        .clip(rememberCapsuleShape())
-                        .clickable { openVisibility() }
-                        .padding(start = 8.dp, end = 10.dp),
+                    Modifier.fillMaxWidth().height(ComposerPanel.ToolsHeight),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        if (onlySelf) COUIIcons.Lock else COUIIcons.Community,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (onlySelf) {
-                            COUITheme.colorScheme.onSurface
-                        } else {
-                            COUITheme.colorScheme.onSurfaceVariantSummary
-                        },
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        if (onlySelf) "仅自己可见" else "所有人可见",
-                        style = COUITheme.textStyles.body2,
-                        color = if (onlySelf) {
-                            COUITheme.colorScheme.onSurface
-                        } else {
-                            COUITheme.colorScheme.onSurfaceVariantSummary
-                        },
-                        maxLines = 1,
-                    )
+                    if (activeTarget.id.isEmpty() && activeTarget.targetType != "apk") {
+                        ToolbarIcon(
+                            icon = AppIcons.Tag,
+                            selected = activePanel == ComposerSubPanel.Topic || activeTarget.targetType == "tag",
+                            contentDescription = "选择话题",
+                        ) {
+                            togglePanel(ComposerSubPanel.Topic)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    ToolbarIcon(
+                        icon = COUIIcons.Photos,
+                        selected = false,
+                        contentDescription = "添加图片",
+                    ) { pickImages() }
+                    Spacer(Modifier.width(8.dp))
+                    ToolbarIcon(
+                        icon = AppIcons.EmojiEmotions,
+                        selected = activePanel == ComposerSubPanel.Emoji,
+                        contentDescription = "表情",
+                    ) {
+                        togglePanel(ComposerSubPanel.Emoji)
+                    }
+                    if (activeTarget.id.isEmpty()) {
+                        Spacer(Modifier.width(8.dp))
+                        ToolbarIcon(
+                            icon = AppIcons.AlternateEmail,
+                            selected = activePanel == ComposerSubPanel.Mention,
+                            contentDescription = "提及用户",
+                        ) {
+                            togglePanel(ComposerSubPanel.Mention)
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (activeTarget.id.isEmpty()) {
+                        // 谁可以看: the official publish form's visibility, shown as the current scope so the
+                        // choice is visible without opening the sheet.
+                        Row(
+                            Modifier
+                                .clip(rememberCapsuleShape())
+                                .clickable { openVisibility() }
+                                .padding(start = 8.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                if (onlySelf) COUIIcons.Lock else COUIIcons.Community,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (onlySelf) {
+                                    COUITheme.colorScheme.onSurface
+                                } else {
+                                    COUITheme.colorScheme.onSurfaceVariantSummary
+                                },
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (onlySelf) "仅自己可见" else "所有人可见",
+                                style = COUITheme.textStyles.body2,
+                                color = if (onlySelf) {
+                                    COUITheme.colorScheme.onSurface
+                                } else {
+                                    COUITheme.colorScheme.onSurfaceVariantSummary
+                                },
+                                maxLines = 1,
+                            )
+                        }
+                    } else {
+                        Row(
+                            Modifier
+                                .clip(rememberCapsuleShape())
+                                .clickable { onlySelf = !onlySelf }
+                                .padding(start = 4.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
+                                onClick = null,
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                "回复并转发",
+                                style = COUITheme.textStyles.body2,
+                                color = if (onlySelf) {
+                                    COUITheme.colorScheme.onSurface
+                                } else {
+                                    COUITheme.colorScheme.onSurfaceVariantSummary
+                                },
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
-            } else {
-                Row(
-                    Modifier
-                        .clip(rememberCapsuleShape())
-                        .clickable { onlySelf = !onlySelf }
-                        .padding(start = 4.dp, end = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
-                        state = if (onlySelf) ToggleableState.On else ToggleableState.Off,
-                        onClick = null,
-                    )
-                    Spacer(Modifier.width(2.dp))
-                    Text(
-                        "回复并转发",
-                        style = COUITheme.textStyles.body2,
-                        color = if (onlySelf) {
-                            COUITheme.colorScheme.onSurface
-                        } else {
-                            COUITheme.colorScheme.onSurfaceVariantSummary
-                        },
-                        maxLines = 1,
-                    )
-                }
+                Spacer(Modifier.height(ComposerPanel.ActionGap))
+                ActionCapsule(
+                    text = "发布",
+                    enabled = canPublish,
+                    onClick = { scope.launch { publish() } },
+                )
             }
         }
-        Spacer(Modifier.height(ComposerPanel.ActionGap))
-        ActionCapsule(
-            text = "发布",
-            enabled = canPublish,
-            onClick = { scope.launch { publish() } },
-        )
     }
 
     // The question the close path raises, as the library's centered alert dialog: 继续编辑 is the
@@ -837,6 +977,9 @@ private object ComposerPanel {
 
     /** The emoji grid's 212dp plus its 8dp gap. */
     val EmojiHeight = 220.dp
+
+    /** Height for inline topic and @ mention pickers inside the sheet, including 8dp top gap. */
+    val PickerHeight = 260.dp
 
     val ToolsHeight = 36.dp
     val ToolsGap = 8.dp
@@ -1037,6 +1180,7 @@ private val trimmedLineHeight: TextStyle = TextStyle(
 private fun ToolbarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
+    contentDescription: String? = null,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1071,7 +1215,7 @@ private fun ToolbarIcon(
     ) {
         Icon(
             icon,
-            contentDescription = null,
+            contentDescription = contentDescription,
             modifier = Modifier.size(22.dp),
             tint = if (selected) {
                 COUITheme.colorScheme.onSecondaryContainer
@@ -1296,4 +1440,490 @@ private fun DraftPickerRow(draft: Draft, onClick: () -> Unit) {
             )
         }
     }
+}
+
+private enum class ComposerSubPanel {
+    Emoji,
+    Topic,
+    Mention,
+}
+
+private data class MentionCandidate(
+    val uid: String,
+    val username: String,
+    val avatar: String,
+    val subtitle: String,
+)
+
+private const val TOPIC_CATEGORIES_URL = "/v6/page/dataList?url=V11_VERTICAL_TOPIC&title=话题&page=1"
+private const val FOLLOWED_TOPICS_URL = "#/topic/userFollowTagList"
+
+@Composable
+private fun InlinePickerPanel(
+    modifier: Modifier,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searchLabel: String,
+    loading: Boolean,
+    errorMessage: String?,
+    isEmpty: Boolean,
+    emptyHint: String,
+    headerContent: @Composable () -> Unit = {},
+    itemsContent: @Composable () -> Unit,
+) {
+    Column(modifier.fillMaxWidth()) {
+        TextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = searchLabel,
+            singleLine = true,
+        )
+        Spacer(Modifier.height(6.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            headerContent()
+            when {
+                loading && isEmpty -> {
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        InfiniteProgressIndicator()
+                    }
+                }
+                errorMessage != null && isEmpty -> {
+                    Text(
+                        errorMessage,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        textAlign = TextAlign.Center,
+                        style = COUITheme.textStyles.footnote1,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                isEmpty -> {
+                    Text(
+                        emptyHint,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        textAlign = TextAlign.Center,
+                        style = COUITheme.textStyles.footnote1,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                else -> itemsContent()
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlinePickerActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(rememberSquircleShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text,
+            style = COUITheme.textStyles.body2,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun TopicInlinePanel(
+    modifier: Modifier,
+    currentTopicTitle: String,
+    cachedRecommended: List<Entity>?,
+    onLoadedRecommended: (List<Entity>) -> Unit,
+    onPick: (title: String, id: String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val app = LocalApp.current
+    var query by remember { mutableStateOf("") }
+    var recommended by remember { mutableStateOf(cachedRecommended.orEmpty()) }
+    var recommendedLoading by remember { mutableStateOf(cachedRecommended == null) }
+    var searchResults by remember { mutableStateOf<List<Entity>>(emptyList()) }
+    var searchLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(cachedRecommended == null) {
+        if (cachedRecommended != null) {
+            recommended = cachedRecommended
+            recommendedLoading = false
+            return@LaunchedEffect
+        }
+        recommendedLoading = true
+        errorMessage = null
+        try {
+            val loaded = coroutineScope {
+                val followedJob = async {
+                    if (app.session.isLogin) {
+                        runCatching {
+                            app.repository.dataList(
+                                url = FOLLOWED_TOPICS_URL,
+                                title = "我关注的话题",
+                                page = 1,
+                                firstItem = null,
+                                lastItem = null,
+                            )
+                        }.getOrDefault(emptyList())
+                    } else {
+                        emptyList()
+                    }
+                }
+                val hotJob = async {
+                    runCatching {
+                        val cats = app.repository.listFromUrl(TOPIC_CATEGORIES_URL).firstOrNull()?.entities.orEmpty()
+                        val firstUrl = cats.firstOrNull()?.url.orEmpty()
+                        if (firstUrl.isNotEmpty()) {
+                            app.repository.dataList(
+                                url = firstUrl,
+                                title = cats.firstOrNull()?.title.orEmpty(),
+                                page = 1,
+                                firstItem = null,
+                                lastItem = null,
+                            )
+                        } else {
+                            emptyList()
+                        }
+                    }.getOrDefault(emptyList())
+                }
+                val merged = (followedJob.await() + hotJob.await())
+                    .flatMap { item ->
+                        if (item.entityType == "topic") listOf(item)
+                        else item.entities.filter { it.entityType == "topic" }
+                    }
+                    .filter { it.title.isNotEmpty() }
+                val seen = HashSet<String>()
+                merged.filter { seen.add(it.title) }
+            }
+            recommended = loaded
+            onLoadedRecommended(loaded)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorMessage = ApiFailure.from(e).message
+        } finally {
+            recommendedLoading = false
+        }
+    }
+
+    LaunchedEffect(query) {
+        val trimmed = query.trim().removeSurrounding("#")
+        if (trimmed.isEmpty()) {
+            searchResults = emptyList()
+            searchLoading = false
+            errorMessage = null
+            return@LaunchedEffect
+        }
+        searchLoading = true
+        errorMessage = null
+        delay(260)
+        try {
+            searchResults = app.repository.search(
+                type = "feedTopic",
+                feedType = "all",
+                sort = "none",
+                searchValue = trimmed,
+                isStrict = 0,
+                pageType = null,
+                pageParam = null,
+                page = 1,
+                firstItem = null,
+                lastItem = null,
+            ).filter { it.entityType == "topic" && it.title.isNotEmpty() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorMessage = ApiFailure.from(e).message
+        } finally {
+            searchLoading = false
+        }
+    }
+
+    val trimmedQuery = query.trim().removeSurrounding("#")
+    val isSearching = trimmedQuery.isNotEmpty()
+    val topics = if (isSearching) searchResults else recommended
+    val loading = if (isSearching) searchLoading else recommendedLoading
+
+    InlinePickerPanel(
+        modifier = modifier,
+        query = query,
+        onQueryChange = { query = it },
+        searchLabel = "搜索话题",
+        loading = loading,
+        errorMessage = errorMessage,
+        isEmpty = topics.isEmpty() && !isSearching && currentTopicTitle.isEmpty(),
+        emptyHint = "输入关键词搜索话题",
+        headerContent = {
+            if (currentTopicTitle.isNotEmpty()) {
+                InlinePickerActionRow(
+                    icon = COUIIcons.Close,
+                    text = "清除当前话题 (#$currentTopicTitle#)",
+                    tint = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    onClick = onClear,
+                )
+            }
+            if (isSearching && topics.none { it.title.equals(trimmedQuery, ignoreCase = true) }) {
+                InlinePickerActionRow(
+                    icon = AppIcons.Tag,
+                    text = "直接使用话题 #$trimmedQuery#",
+                    tint = COUITheme.colorScheme.primary,
+                    onClick = { onPick(trimmedQuery, "") },
+                )
+            }
+        },
+    ) {
+        topics.forEach { topic ->
+            val selected = topic.title == currentTopicTitle
+            val topicId = topic.id.ifEmpty { topic.entityId }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(rememberSquircleShape(12.dp))
+                    .clickable { onPick(topic.title, topicId) }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (topic.logo.isNotEmpty()) {
+                    NetworkImage(
+                        topic.logo,
+                        Modifier.size(34.dp).clip(rememberSquircleShape(8.dp)),
+                        contentDescription = topic.title,
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .size(34.dp)
+                            .squircleSurface(
+                                color = COUITheme.colorScheme.secondaryContainer,
+                                cornerRadius = 8.dp,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            AppIcons.Tag,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = COUITheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        topic.title,
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val meta = listOfNotNull(
+                        topic.hotNumTxt.takeIf { it.isNotEmpty() }?.let { "${it}热度" },
+                        topic.commentNumTxt.takeIf { it.isNotEmpty() }?.let { "${it}讨论" },
+                    ).joinToString(" · ")
+                    if (meta.isNotEmpty()) {
+                        Text(
+                            meta,
+                            style = COUITheme.textStyles.footnote1,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (selected) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        COUIIcons.Ok,
+                        contentDescription = "已选择",
+                        modifier = Modifier.size(18.dp),
+                        tint = COUITheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MentionInlinePanel(
+    modifier: Modifier,
+    cachedRecommended: List<MentionCandidate>?,
+    onLoadedRecommended: (List<MentionCandidate>) -> Unit,
+    onPick: (username: String) -> Unit,
+) {
+    val app = LocalApp.current
+    var query by remember { mutableStateOf("") }
+    var recommended by remember { mutableStateOf(cachedRecommended.orEmpty()) }
+    var recommendedLoading by remember { mutableStateOf(cachedRecommended == null) }
+    var searchResults by remember { mutableStateOf<List<MentionCandidate>>(emptyList()) }
+    var searchLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(cachedRecommended == null) {
+        if (cachedRecommended != null) {
+            recommended = cachedRecommended
+            recommendedLoading = false
+            return@LaunchedEffect
+        }
+        recommendedLoading = true
+        errorMessage = null
+        try {
+            val loaded = if (app.session.isLogin) {
+                app.repository.userList("/v6/user/followList", app.session.uid, null, 1, null, null)
+                    .mapNotNull(::toMentionCandidate)
+                    .distinctBy { it.username }
+            } else {
+                emptyList()
+            }
+            recommended = loaded
+            onLoadedRecommended(loaded)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorMessage = ApiFailure.from(e).message
+        } finally {
+            recommendedLoading = false
+        }
+    }
+
+    LaunchedEffect(query) {
+        val trimmed = query.trim().removePrefix("@")
+        if (trimmed.isEmpty()) {
+            searchResults = emptyList()
+            searchLoading = false
+            errorMessage = null
+            return@LaunchedEffect
+        }
+        searchLoading = true
+        errorMessage = null
+        delay(260)
+        try {
+            searchResults = app.repository.search(
+                type = "user",
+                feedType = "all",
+                sort = "none",
+                searchValue = trimmed,
+                isStrict = 0,
+                pageType = null,
+                pageParam = null,
+                page = 1,
+                firstItem = null,
+                lastItem = null,
+            ).mapNotNull(::toMentionCandidate).distinctBy { it.username }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorMessage = ApiFailure.from(e).message
+        } finally {
+            searchLoading = false
+        }
+    }
+
+    val trimmedQuery = query.trim().removePrefix("@")
+    val isSearching = trimmedQuery.isNotEmpty()
+    val users = if (isSearching) searchResults else recommended
+    val loading = if (isSearching) searchLoading else recommendedLoading
+
+    InlinePickerPanel(
+        modifier = modifier,
+        query = query,
+        onQueryChange = { query = it },
+        searchLabel = "搜索用户",
+        loading = loading,
+        errorMessage = errorMessage,
+        isEmpty = users.isEmpty() && !isSearching,
+        emptyHint = if (app.session.isLogin) "暂无关注用户，可输入昵称搜索" else "输入用户昵称搜索",
+        headerContent = {
+            if (isSearching && users.none { it.username.equals(trimmedQuery, ignoreCase = true) }) {
+                InlinePickerActionRow(
+                    icon = AppIcons.AlternateEmail,
+                    text = "直接提及 @$trimmedQuery",
+                    tint = COUITheme.colorScheme.primary,
+                    onClick = { onPick(trimmedQuery) },
+                )
+            }
+        },
+    ) {
+        users.forEach { user ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(rememberSquircleShape(12.dp))
+                    .clickable { onPick(user.username) }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NetworkImage(
+                    user.avatar,
+                    Modifier.size(34.dp).clip(CircleShape),
+                    contentDescription = user.username,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        user.username,
+                        style = COUITheme.textStyles.body2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (user.subtitle.isNotEmpty()) {
+                        Text(
+                            user.subtitle,
+                            style = COUITheme.textStyles.footnote1,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun toMentionCandidate(item: Entity): MentionCandidate? {
+    val nested = item.obj("fUserInfo") ?: item.obj("userInfo")
+    val username = if (nested != null) {
+        nested.string("username").ifEmpty { item.string("fusername") }
+    } else {
+        item.username
+    }
+    if (username.isEmpty()) return null
+    val avatar = if (nested != null) {
+        nested.string("userAvatar").ifEmpty { item.string("fUserAvatar") }
+    } else {
+        item.userAvatar
+    }
+    val uid = if (nested != null) {
+        nested.string("uid").ifEmpty { item.contactUid }
+    } else {
+        item.uid
+    }
+    val fans = nested?.string("fans").orEmpty().ifEmpty { item.string("fans") }
+    val bio = nested?.string("bio").orEmpty().ifEmpty { item.string("bio") }.trim()
+    val subtitle = when {
+        fans.isNotEmpty() -> "${fans}粉丝"
+        bio.isNotEmpty() -> bio
+        else -> ""
+    }
+    return MentionCandidate(uid = uid, username = username, avatar = avatar, subtitle = subtitle)
 }
