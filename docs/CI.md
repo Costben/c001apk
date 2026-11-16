@@ -31,8 +31,8 @@ coui17 以 submodule 参与构建，检出时需递归拉取子模块；Action �
 | `ANDROID_KEYSTORE_BASE64` | 正式 JKS 的 Base64，单行编码 |
 | `REVIA_KS_PASS` | 同时用于 store/key 的密码 |
 
-当前正式身份的 alias 为 `秋风のとおり道`，证书 SHA-256 为
-`EA:38:5A:FC:82:E1:98:24:EE:A8:A8:86:8E:D3:65:DF:03:E9:88:6B:BB:A3:3E:47:E1:E0:4B:43:EC:65:CB:67`。
+当前发布身份的 alias 为 `androiddebugkey`，证书 SHA-256 为
+`0D:90:06:42:12:7E:C2:BE:80:1A:65:2A:74:58:33:13:75:94:FE:28:9C:C6:9A:C1:1F:D4:29:4C:0E:02:3C:82`。
 以上是公开证书元数据；其他 fork 如使用自己的密钥，须同时调整 alias 和期望指纹。
 
 手动 release 任务先检查 Secrets，再将 JKS 恢复到 runner 临时目录，并用

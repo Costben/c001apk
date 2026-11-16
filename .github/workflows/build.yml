@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      KEY_ALIAS: '秋风のとおり道'
-      EXPECTED_CERT_SHA256: 'EA385AFC82E19824EEA8A8868ED365DF03E9886BBBA33E47E1E04B43EC65CB67'
+      KEY_ALIAS: 'androiddebugkey'
+      EXPECTED_CERT_SHA256: '0D900642127EC2BE801A652A745833137594FE289CC69AC11FD4294C0E023C82'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
