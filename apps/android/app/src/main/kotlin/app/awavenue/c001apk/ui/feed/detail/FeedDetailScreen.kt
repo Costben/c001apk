@@ -46,12 +46,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
+import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.CounterButton
+import app.awavenue.c001apk.ui.common.DeleteConfirmationDialog
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.MoreMenu
 import app.awavenue.c001apk.ui.common.NetworkImage
@@ -59,6 +61,7 @@ import app.awavenue.c001apk.ui.common.copyText
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberCapsuleShape
+import app.awavenue.c001apk.ui.common.rememberDeleteConfirmation
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -66,6 +69,7 @@ import app.awavenue.c001apk.ui.common.returnTopOnClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.AccountCollectionsSheet
+import app.awavenue.c001apk.ui.feed.FeedActions
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.feed.ListStatus
@@ -100,6 +104,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Reply
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -131,6 +136,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     var accountDialog by remember { mutableStateOf(false) }
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
     var fabVisible by remember { mutableStateOf(true) }
+    val deleteConfirm = rememberDeleteConfirmation()
 
     LaunchedEffect(viewModel.notice) {
         viewModel.notice?.let {
@@ -237,7 +243,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                     entries = buildList {
                                         add("复制" to { context.copyText(viewModel.shareUrl) })
                                         add("分享" to { context.shareText(viewModel.shareUrl) })
-                                        add((if (viewModel.isFav) "取消收藏" else "收藏") to viewModel::toggleFav)
+                                        add((if (viewModel.isFav) "取消本地收藏" else "本地收藏") to viewModel::toggleFav)
                                         add("收藏到账号收藏夹" to {
                                             if (app.session.isLogin) {
                                                 collectionsOpen = true
@@ -254,6 +260,28 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                                 navigator.push(Route.Web(viewModel.reportUrl))
                                             }
                                         })
+                                        if (viewModel.feedUid.isNotEmpty() && viewModel.feedUid == app.session.uid) {
+                                            add("删除" to {
+                                                deleteConfirm.ask("动态") {
+                                                    scope.launch {
+                                                        try {
+                                                            val result = app.repository.deleteFeed(viewModel.id)
+                                                            if (result.message.isNotEmpty()) {
+                                                                context.toast(result.message)
+                                                            } else {
+                                                                FeedActions.removeFeed(viewModel.id)
+                                                                context.toast(result.count.ifEmpty { "已删除" })
+                                                                navigator.pop()
+                                                            }
+                                                        } catch (e: CancellationException) {
+                                                            throw e
+                                                        } catch (e: Exception) {
+                                                            context.toast(ApiFailure.from(e).message)
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        }
                                     },
                                 )
                             }
@@ -493,6 +521,8 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
             onDismiss = { collectionsOpen = false },
         )
     }
+
+    DeleteConfirmationDialog(deleteConfirm)
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(
