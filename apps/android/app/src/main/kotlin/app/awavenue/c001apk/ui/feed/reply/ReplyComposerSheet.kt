@@ -66,6 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpSize
@@ -427,10 +428,35 @@ fun ReplyComposerSheet(
         panelPaddingBottom = 0.dp,
         onDismissRequest = { requestClose() },
         onDismissFinished = { afterExit?.invoke() },
-        startAction = {
+    ) {
+        // Back is answered inside the panel rather than left to the sheet's own handler: that one
+        // slides the panel away before it asks, and an unsaved composition has to be offered to the
+        // draft box while the work is still in place. With the question up, an exit drops it.
+        // Disable as soon as the sheet starts folding away so another Back immediately hits beneath.
+        BackHandler(enabled = shown && !closing) {
+            if (askSave) discardDraft() else requestClose()
+        }
+
+        // 关闭按钮、标题与更多菜单共用同一行工具栏，保持 ColorOS 17 顶栏 50dp 高度节奏。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ComposerPanel.ToolbarHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             CloseCapsule(onClick = { requestClose() })
-        },
-        endAction = {
+            Text(
+                text = hint,
+                style = COUITheme.textStyles.body1,
+                fontWeight = FontWeight.Bold,
+                color = COUITheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+            )
             Box {
                 OverflowButton(onClick = { menuOpen = true })
                 MoreMenu(
@@ -461,35 +487,8 @@ fun ReplyComposerSheet(
                     ),
                 )
             }
-        },
-    ) {
-        // Back is answered inside the panel rather than left to the sheet's own handler: that one
-        // slides the panel away before it asks, and an unsaved composition has to be offered to the
-        // draft box while the work is still in place. With the question up, an exit drops it.
-        // Disable as soon as the sheet starts folding away so another Back immediately hits beneath.
-        BackHandler(enabled = shown && !closing) {
-            if (askSave) discardDraft() else requestClose()
         }
-
-        Spacer(Modifier.height(ComposerPanel.ToolbarGap))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = hint,
-                style = COUITheme.textStyles.body1,
-                fontWeight = FontWeight.Bold,
-                color = COUITheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Spacer(Modifier.width(8.dp))
-            StatusLine(text = "${input.text.length}/${ComposerPanel.MaxMessage}")
-        }
-        Spacer(Modifier.height(ComposerPanel.StatusToBodyGap))
+        Spacer(Modifier.height(ComposerPanel.ToolbarToBodyGap))
         // The sheet hands the content whatever is left once its toolbar is in, so the field is
         // capped by that leftover instead of by a guess about the window: with the keyboard up the
         // panel rides on it, and a field sized from the full window would push the action off the
@@ -514,13 +513,26 @@ fun ReplyComposerSheet(
             ) {
                 EmojiEditText(
                     state = input,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .padding(horizontal = 12.dp),
                     hint = "说点什么…",
                     maxCount = ComposerPanel.MaxMessage,
                     minLines = 2,
                     maxLines = 5,
                     textStyle = COUITheme.textStyles.body1,
                     onFocused = { emojiPanel = false },
+                )
+                Text(
+                    text = "${input.text.length}/${ComposerPanel.MaxMessage}",
+                    style = trimmedLineHeight,
+                    fontSize = 12.sp,
+                    lineHeight = 12.sp,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
                 )
             }
         }
@@ -805,19 +817,20 @@ private object ComposerPanel {
      */
     val KeyboardGapRange = 80.dp
 
+    /** 顶栏工具行高度，与 OverlayBottomSheet 默认头部一致。 */
+    val ToolbarHeight = 50.dp
+
     /** Height of the close capsule and the overflow circle: 155px. */
     val ToolbarButtonHeight = 40.dp
 
-    /** Distance from the toolbar's foot to the title ink. */
-    val ToolbarGap = 4.dp
-
-    val StatusToBodyGap = 8.dp
+    /** 工具栏与输入框之间的间距。 */
+    val ToolbarToBodyGap = 8.dp
 
     /** The list-row radius the template uses for its squircle cards. */
     val EditorRadius = 20.dp
 
-    /** The field keeps at least two lines plus its own padding before it starts scrolling. */
-    val MinEditorHeight = 56.dp
+    /** 输入框最小保留两行正文加上底部字数统计栏。 */
+    val MinEditorHeight = 76.dp
 
     /** A 64dp thumbnail row plus its 10dp gap. */
     val ImagesHeight = 74.dp
@@ -966,27 +979,6 @@ private fun OverflowDots(ink: Color) {
                 center = Offset(size.width / 2f, radius + pitch * index),
             )
         }
-    }
-}
-
-/** The `● 12sp` line under the title: a 6dp dot, a 5dp gap and the state text. */
-@Composable
-private fun StatusLine(text: String) {
-    val dotColor = COUITheme.colorScheme.onSurfaceVariantActions
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Canvas(modifier = Modifier.size(6.dp)) {
-            drawCircle(color = dotColor)
-        }
-        Spacer(Modifier.width(5.dp))
-        Text(
-            text = text,
-            style = trimmedLineHeight,
-            fontSize = 12.sp,
-            lineHeight = 12.sp,
-            color = COUITheme.colorScheme.onSurfaceVariantSummary,
-        )
     }
 }
 
