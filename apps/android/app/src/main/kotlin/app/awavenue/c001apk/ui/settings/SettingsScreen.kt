@@ -371,6 +371,22 @@ fun SettingsScreen() {
                             startAction = { PreferenceStartIcon(COUIIcons.Back) },
                         )
                         SwitchPreference(
+                            title = "动态卡片返回跟手轨迹",
+                            summary = "卡片详情预测性返回时跟随手指偏移，并顺着甩出方向回缩",
+                            checked = settings.predictiveBackCardFling,
+                            onCheckedChange = settings::updatePredictiveBackCardFling,
+                            startAction = { PreferenceStartIcon(COUIIcons.Notes) },
+                            enabled = settings.predictiveBack,
+                        )
+                        SwitchPreference(
+                            title = "图片返回跟手轨迹",
+                            summary = "看图页预测性返回时跟随手指偏移，并顺着甩出方向缩回原图",
+                            checked = settings.predictiveBackImageFling,
+                            onCheckedChange = settings::updatePredictiveBackImageFling,
+                            startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            enabled = settings.predictiveBack,
+                        )
+                        SwitchPreference(
                             title = "点击触感",
                             summary = "点击卡片、按钮时轻微振动",
                             checked = settings.hapticFeedback,

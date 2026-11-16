@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -44,6 +45,12 @@ class BackStackEntry internal constructor(
      * exit from where the finger let go.
      */
     internal var exitStartProgress = 1f
+
+    /** Remaining finger-follow offset when a predictive back gesture commits on an origin route. */
+    internal var exitStartOffset = Offset.Zero
+
+    /** Fling velocity (px/s) when a predictive back gesture commits on an origin route. */
+    internal var exitStartVelocity = Offset.Zero
 
     /** Fast-forwards an ongoing exit transition when the user acts on the underlying screen. */
     internal var fastForwarded by mutableStateOf(false)

@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.nav
 
 import android.app.Activity
+import android.os.SystemClock
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -8,9 +9,13 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -46,8 +51,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -118,6 +125,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -137,6 +145,8 @@ fun AppNavHost(
     val context = LocalContext.current
     val openInBrowser = LocalApp.current.settings.openInBrowser
     val predictiveBack = LocalApp.current.settings.predictiveBack
+    val predictiveBackCardFling = LocalApp.current.settings.predictiveBackCardFling
+    val predictiveBackImageFling = LocalApp.current.settings.predictiveBackImageFling
     val scope = rememberCoroutineScope()
     val imageOrigins = remember { ImageOrigins() }
     // The current tab's bar line; a card returning into a main-tab list is scrolled clear of it.
@@ -158,6 +168,7 @@ fun AppNavHost(
     // How far the back gesture has pulled the top page: 1 at rest, 0 once it is fully away. It is
     // read in layer blocks, so a running gesture never recomposes the page.
     var gestureProgress by remember { mutableFloatStateOf(1f) }
+    var gestureOffset by remember { mutableStateOf(Offset.Zero) }
     var gestureEntry by remember { mutableStateOf<BackStackEntry?>(null) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     // Bumped by every back callback, so the ease-back started by one callback can tell that a later
@@ -166,13 +177,18 @@ fun AppNavHost(
     var rootHost by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val leavingEntries = remember { mutableStateListOf<BackStackEntry>() }
 
+    fun resetGesture() {
+        gestureEntry = null
+        gestureProgress = 1f
+        gestureOffset = Offset.Zero
+    }
+
     fun fastForwardOngoingAnimations(includeEntering: Boolean) {
         imageOrigins.finishDismissFlight()
         if (settleJob?.isActive == true) {
             settleJob?.cancel()
             settleJob = null
-            gestureEntry = null
-            gestureProgress = 1f
+            resetGesture()
         }
         leavingEntries.forEach { it.fastForwarded = true }
         if (includeEntering) {
@@ -185,9 +201,11 @@ fun AppNavHost(
         navigator.onBeforeNavigate = { fastForwardOngoingAnimations(includeEntering = true) }
     }
     val gesture: () -> Float = remember { { gestureProgress } }
+    val gestureOffsetReader: () -> Offset = remember { { gestureOffset } }
     // The page under the top one is only worth drawing while a gesture actually has the top page
     // pulled away. Derived so a running gesture does not recompose the host on every event.
     val revealing by remember { derivedStateOf { gestureProgress < 1f } }
+    val densityPx = with(density) { 1.dp.toPx() }
     // Wide windows read a feed beside the list instead of over it. Only the reading pages take the
     // pane; settings, search, the image viewer and the like still cover the window as a whole.
     val wide = LocalConfiguration.current.screenWidthDp >= WideLayoutMinWidthDp
@@ -196,14 +214,21 @@ fun AppNavHost(
     val paneOpen = paneEntry != null && !readingSidebar.hidden
     val rootHasWork = navigator.stack.size > 1 || navigator.mainBackAvailable
     val usePredictiveOverlay = predictiveBack && paneEntry == null
+    val currentPaneEntry by rememberUpdatedState(paneEntry)
+    val expandOriginVisibility = remember(navigator, leavingEntries) {
+        ExpandOriginVisibility(
+            stack = navigator.stack,
+            leavingEntries = leavingEntries,
+            paneEntry = { currentPaneEntry },
+        )
+    }
 
     suspend fun handlePredictiveBack(progress: Flow<BackEventCompat>) {
         // 新返回手势到来时立刻快进之前的收尾/退场，但不提前锁死当前页的进场进度，保留预测性返回缩回。
         fastForwardOngoingAnimations(includeEntering = false)
 
         if (navigator.stack.size <= 1) {
-            gestureEntry = null
-            gestureProgress = 1f
+            resetGesture()
             // Nothing to preview: back returns the main screen to its first tab, and that does
             // not happen until the gesture is released. The 主页 tab is not this branch — the
             // handler is off there, so the system owns the gesture.
@@ -222,14 +247,32 @@ fun AppNavHost(
         }
         val run = ++gestureRun
         val top = navigator.stack.last()
+        val trackFinger = when {
+            top.route is Route.ImageView -> predictiveBackImageFling
+            top.shrinksToOrigin() -> predictiveBackCardFling
+            else -> false
+        }
+        val dragTracker = if (trackFinger) PredictiveDragTracker() else null
         gestureEntry = top
+        gestureOffset = Offset.Zero
         var committed = false
         try {
-            progress.collect { event -> gestureProgress = 1f - event.progress }
+            progress.collect { event ->
+                gestureProgress = 1f - event.progress
+                if (dragTracker != null) {
+                    gestureOffset = dragTracker.record(event) * DragFollowFactor
+                }
+            }
             committed = true
             // 松手确认返回后立即出栈：通过 exitStartProgress 从当前手势位置平滑接力退场，同时
             // LeavingPage 立即启用 OutOfReach，底层页面当下即可滚动、点击或再次触发返回。
             val remaining = gestureProgress.coerceIn(0f, 1f)
+            val commitOffset = if (trackFinger) gestureOffset else Offset.Zero
+            val commitVelocity = if (dragTracker != null) {
+                dragTracker.velocityPxPerSec(MaxPredictiveFlingSpeedDp * densityPx) * DragFollowFactor
+            } else {
+                Offset.Zero
+            }
             val below = navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
             if (below?.route == Route.Main && !top.returnScrolled && appBarBounds.bottom > 0f) {
                 top.returnScrolled = true
@@ -237,46 +280,59 @@ fun AppNavHost(
                     alignCardBelowBar(top.origin) { appBarBounds.bottom + appBarFadePx }
                 }
             }
-            val handedOffImageFlight = remaining > 0.01f &&
+            val handedOffImageFlight = (remaining > 0.01f || commitOffset != Offset.Zero) &&
                 top.route is Route.ImageView &&
-                imageOrigins.onCommitBack?.invoke(remaining) == true
-            top.exitStartProgress = remaining
-            top.previewed = remaining <= 0.01f || handedOffImageFlight
-            gestureEntry = null
-            gestureProgress = 1f
-            if (navigator.stack.lastOrNull() === top) {
-                navigator.pop()
+                imageOrigins.onCommitBack?.invoke(remaining, commitOffset, commitVelocity) {
+                    top.exitStartProgress = remaining
+                    top.previewed = true
+                    resetGesture()
+                    if (navigator.stack.lastOrNull() === top) {
+                        navigator.pop()
+                    }
+                } == true
+            if (!handedOffImageFlight) {
+                top.exitStartProgress = remaining
+                top.exitStartOffset = if (trackFinger) commitOffset else Offset.Zero
+                top.exitStartVelocity = if (trackFinger) commitVelocity else Offset.Zero
+                top.previewed = remaining <= 0.01f && commitOffset == Offset.Zero
+                resetGesture()
+                if (navigator.stack.lastOrNull() === top) {
+                    navigator.pop()
+                }
             }
         } catch (e: CancellationException) {
             if (!committed) {
                 // Released early: the page eases back under the finger — unless a later callback
                 // has already taken the gesture over, in which case easing back would fight it.
+                val startProgress = gestureProgress
+                val startOffset = gestureOffset
                 settleJob = scope.launch {
                     withFrameNanos { }
                     if (run != gestureRun) return@launch
-                    animate(gestureProgress, 1f, animationSpec = tween(GestureSettleMillis)) { value, _ ->
-                        gestureProgress = value
+                    animate(0f, 1f, animationSpec = tween(GestureSettleMillis)) { t, _ ->
+                        gestureProgress = lerp(startProgress, 1f, t)
+                        gestureOffset = Offset(lerp(startOffset.x, 0f, t), lerp(startOffset.y, 0f, t))
                     }
                     if (gestureEntry === top) {
-                        gestureEntry = null
-                        gestureProgress = 1f
+                        resetGesture()
                     }
                 }
                 return
             }
         } finally {
             if (gestureEntry === top) {
-                gestureEntry = null
-                gestureProgress = 1f
+                resetGesture()
             }
         }
     }
 
     fun handleImmediateBack() {
         val top = navigator.stack.lastOrNull()
-        if (top != null && top.route is Route.ImageView && imageOrigins.onCommitBack?.invoke(1f) == true) {
-            navigator.popImmediate()
-        } else if (paneEntry != null || navigator.stack.size > 1) {
+        val handled = top != null &&
+            top.route is Route.ImageView &&
+            imageOrigins.onCommitBack?.invoke(1f, Offset.Zero, Offset.Zero) { navigator.popImmediate() } == true
+        if (handled) return
+        if (paneEntry != null || navigator.stack.size > 1) {
             navigator.pop()
         } else if (navigator.onMainBack?.invoke() != true) {
             (context as? Activity)?.moveTaskToBack(true)
@@ -297,6 +353,7 @@ fun AppNavHost(
     CompositionLocalProvider(
         LocalNavigator provides navigator,
         LocalImageOrigins provides imageOrigins,
+        LocalExpandOriginVisibility provides expandOriginVisibility,
         LocalAppBarBounds provides appBarBounds,
         LocalOverlayBackHandler provides overlayBackHandler,
     ) {
@@ -334,8 +391,7 @@ fun AppNavHost(
                         if (settleJob?.isActive == true) {
                             settleJob?.cancel()
                             settleJob = null
-                            gestureEntry = null
-                            gestureProgress = 1f
+                            resetGesture()
                         }
                         var isTap = true
                         val pointer = down.id
@@ -370,7 +426,13 @@ fun AppNavHost(
                             },
                         )
                         .fillMaxHeight(),
-                ) { MainScreen() }
+                ) {
+                    CompositionLocalProvider(
+                        LocalCurrentBackStackEntry provides navigator.stack.firstOrNull(),
+                    ) {
+                        MainScreen()
+                    }
+                }
                 if (paneOpen && paneEntry != null) {
                     Box(Modifier.weight(DetailPaneWeight).fillMaxHeight()) {
                         CompositionLocalProvider(LocalReadingSidebar provides readingSidebar) {
@@ -515,12 +577,19 @@ fun AppNavHost(
                             EnterExitState.Visible -> 1f
                             EnterExitState.PostExit -> if (entry.popped && entry.shrinksToOrigin()) 0f else 1f
                         }
+                    fun exitExpandDuration(): Int {
+                        val base = (ExpandDurationMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                        return if (entry.exitStartOffset != Offset.Zero || entry.exitStartVelocity != Offset.Zero) {
+                            maxOf(base, MinFlingExitDurationMillis)
+                        } else {
+                            base
+                        }
+                    }
                     val progress = transition.animateFloat(
                         transitionSpec = {
                             val duration = when {
                                 targetState == EnterExitState.PostExit && (entry.previewed || entry.fastForwarded) -> 0
-                                targetState == EnterExitState.PostExit ->
-                                    (ExpandDurationMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                                targetState == EnterExitState.PostExit -> exitExpandDuration()
                                 else -> ExpandDurationMillis
                             }
                             tween(duration, easing = ExpandEasing)
@@ -531,8 +600,7 @@ fun AppNavHost(
                         transitionSpec = {
                             val duration = when {
                                 targetState == EnterExitState.PostExit && (entry.previewed || entry.fastForwarded) -> 0
-                                targetState == EnterExitState.PostExit ->
-                                    (ExpandDurationMillis * entry.exitStartProgress).roundToInt().coerceAtLeast(1)
+                                targetState == EnterExitState.PostExit -> exitExpandDuration()
                                 else -> ExpandDurationMillis
                             }
                             tween(duration, easing = LinearEasing)
@@ -561,6 +629,31 @@ fun AppNavHost(
                     }
                     val previewing = gestureEntry === entry
                     val entryGesture = if (previewing) gesture else SettledGesture
+                    val entryGestureOffset = if (previewing) gestureOffsetReader else SettledGestureOffset
+                    val commitOffsetAnim = remember(entry) { Animatable(Offset.Zero, Offset.VectorConverter) }
+                    var commitOffsetSnapped by remember(entry) { mutableStateOf(false) }
+                    val poppedOriginExit = entry.popped && entry.shrinksToOrigin() && entry.route !is Route.ImageView
+                    LaunchedEffect(poppedOriginExit, entry.fastForwarded) {
+                        if (!poppedOriginExit) return@LaunchedEffect
+                        if (entry.previewed || entry.fastForwarded) {
+                            commitOffsetAnim.snapTo(Offset.Zero)
+                            commitOffsetSnapped = true
+                            return@LaunchedEffect
+                        }
+                        commitOffsetAnim.snapTo(entry.exitStartOffset)
+                        commitOffsetSnapped = true
+                        if (entry.exitStartOffset != Offset.Zero || entry.exitStartVelocity != Offset.Zero) {
+                            commitOffsetAnim.animateTo(
+                                targetValue = Offset.Zero,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 700f,
+                                    visibilityThreshold = Offset(0.5f, 0.5f),
+                                ),
+                                initialVelocity = entry.exitStartVelocity,
+                            )
+                        }
+                    }
                     val pageProgress: () -> Float = remember(progress, entryGesture, entry) {
                         {
                             val baseProgress = if (!entry.popped && entry.enterFastForward) 1f else progress.value
@@ -583,10 +676,21 @@ fun AppNavHost(
                             }
                         }
                     }
-                    val routeTransition = remember(transition, pageProgress, entryGesture) {
+                    val pageOffset: () -> Offset = remember(entry, entryGestureOffset, commitOffsetAnim) {
+                        {
+                            when {
+                                entry.previewed || (entry.popped && entry.fastForwarded) -> Offset.Zero
+                                entry.popped && entry.shrinksToOrigin() && entry.route !is Route.ImageView ->
+                                    if (commitOffsetSnapped) commitOffsetAnim.value else entry.exitStartOffset
+                                else -> entryGestureOffset()
+                            }
+                        }
+                    }
+                    val routeTransition = remember(transition, pageProgress, entryGesture, pageOffset) {
                         RouteTransition(
                             progress = pageProgress,
                             exiting = { transition.targetState == EnterExitState.PostExit || entryGesture() < 1f },
+                            offset = pageOffset,
                         )
                     }
                     val saveableState = remember(entry) { SaveableStateRegistry(entry.savedState) { true } }
@@ -595,6 +699,7 @@ fun AppNavHost(
                         LocalSaveableStateRegistry provides saveableState,
                         LocalRouteTransition provides routeTransition,
                         LocalPageMemory provides entry.memory,
+                        LocalCurrentBackStackEntry provides entry,
                     ) {
                         Box(
                             Modifier
@@ -619,6 +724,7 @@ fun AppNavHost(
                                 origin = entry.origin,
                                 progress = pageProgress,
                                 fade = pageFade,
+                                offset = pageOffset,
                                 exiting = { entry.popped || entryGesture() < 1f },
                             ) {
                                 LeavingPage(entry, leavingEntries) {
@@ -662,6 +768,45 @@ internal val LocalOverlayBackHandler = staticCompositionLocalOf<OverlayBackHandl
 
 /** The progress a page reports while no gesture is pulling it away. */
 private val SettledGesture: () -> Float = { 1f }
+
+/** The offset a page reports while no gesture is pulling it away. */
+private val SettledGestureOffset: () -> Offset = { Offset.Zero }
+
+private const val DragFollowFactor = 0.65f
+private const val MaxPredictiveFlingSpeedDp = 1600f
+private const val MinFlingExitDurationMillis = 260
+
+private class PredictiveDragTracker {
+    private data class Sample(val timeMs: Long, val pos: Offset)
+
+    private var startTouch: Offset? = null
+    private val samples = ArrayDeque<Sample>(8)
+
+    fun record(event: BackEventCompat): Offset {
+        val touch = Offset(event.touchX, event.touchY)
+        // 部分设备或无触控回退首帧可能传 (0, 0)，等到首个有效坐标再锁定起点，避免首帧跳变。
+        if (touch == Offset.Zero && startTouch == null) return Offset.Zero
+        val start = startTouch ?: touch.also { startTouch = it }
+        val timeMs = if (event.frameTimeMillis > 0L) event.frameTimeMillis else SystemClock.uptimeMillis()
+        if (samples.size >= 8) samples.removeFirst()
+        samples.addLast(Sample(timeMs, touch))
+        return touch - start
+    }
+
+    fun velocityPxPerSec(maxSpeed: Float): Offset {
+        val newest = samples.lastOrNull() ?: return Offset.Zero
+        val nowMs = SystemClock.uptimeMillis()
+        // 手指停顿超过 90ms 后再松手时不附带甩出惯性；先校验时钟同源再比较差值。
+        if (abs(nowMs - newest.timeMs) < 5_000L && nowMs - newest.timeMs > 90L) return Offset.Zero
+        val windowStart = newest.timeMs - 100L
+        val oldest = samples.firstOrNull { it.timeMs >= windowStart && it !== newest } ?: samples.firstOrNull() ?: return Offset.Zero
+        val dtSec = (newest.timeMs - oldest.timeMs) / 1000f
+        if (dtSec <= 0.004f) return Offset.Zero
+        val vel = (newest.pos - oldest.pos) / dtSec
+        val speed = vel.getDistance()
+        return if (speed > maxSpeed && speed > 0f) vel * (maxSpeed / speed) else vel
+    }
+}
 
 /**
  * Scrolls the list that owns [origin] just enough to put the row's top below the app bar. The
@@ -792,6 +937,7 @@ private fun ComposedRevealedRoute(entry: BackStackEntry) {
         // The page is composed outside the slot it was saved from, so its saved state cannot be
         // found here; the entry's own memory is what puts it back where the user left it.
         LocalPageMemory provides entry.memory,
+        LocalCurrentBackStackEntry provides entry,
     ) {
         Scaffold(
             containerColor = Color.Transparent,

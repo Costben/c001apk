@@ -203,22 +203,27 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
     val frame = remember { ViewerFrame() }
     val squircleEnabled = isSquircleEnabled()
     val progress: () -> Float = remember(transition) { transition?.progress ?: { 1f } }
+    val transitionOffset: () -> Offset = remember(transition) { transition?.offset ?: { Offset.Zero } }
     val currentUrl = images.getOrNull(pagerState.currentPage).orEmpty()
 
-    val commitBackHandler: (Float) -> Boolean = remember(images, pagerState, origins, frame, density, squircleEnabled) {
-        handler@{ remaining ->
-            if (frame.dismiss.active) return@handler false
-            val url = images.getOrNull(pagerState.currentPage)
-            launchBackExitFlight(
-                remaining = remaining,
-                frame = frame,
-                origins = origins,
-                url = url,
-                density = density,
-                squircleEnabled = squircleEnabled,
-            )
+    val commitBackHandler: (Float, Offset, Offset, () -> Unit) -> Boolean =
+        remember(images, pagerState, origins, frame, density, squircleEnabled, progress) {
+            handler@{ remaining, offset, velocity, onPop ->
+                if (frame.dismiss.active) return@handler false
+                val url = images.getOrNull(pagerState.currentPage)
+                launchBackExitFlight(
+                    remaining = minOf(remaining, progress()),
+                    offset = offset,
+                    velocity = velocity,
+                    frame = frame,
+                    origins = origins,
+                    url = url,
+                    density = density,
+                    squircleEnabled = squircleEnabled,
+                    onPop = onPop,
+                )
+            }
         }
-    }
 
     // 记下正在看的是哪一张：被它盖住的缩略图要等这一页撤走再恢复显示，避免半透明背景透出两张一样的图。
     SideEffect {
@@ -315,6 +320,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                         transition?.exiting?.invoke() != true && progress() >= 0.35f
                     },
                     progress = progress,
+                    transitionOffset = transitionOffset,
                     origins = origins,
                     squircleEnabled = squircleEnabled,
                     frame = frame,
@@ -368,9 +374,10 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                             onClick = {
                                 if (!frame.dismiss.dragging) {
                                     frame.dismiss.cancelActive()
-                                    if (commitBackHandler(1f)) {
+                                    val handled = commitBackHandler(1f, Offset.Zero, Offset.Zero) {
                                         navigator.popImmediate()
-                                    } else {
+                                    }
+                                    if (!handled) {
                                         navigator.pop()
                                     }
                                 }
@@ -591,6 +598,7 @@ private fun ZoomablePage(
     isPagerScrolling: () -> Boolean,
     canStartDismiss: () -> Boolean,
     progress: () -> Float,
+    transitionOffset: () -> Offset,
     origins: ImageOrigins,
     squircleEnabled: Boolean,
     frame: ViewerFrame,
@@ -784,18 +792,25 @@ private fun ZoomablePage(
                         d.active -> applyDismissDrag(d)
                         else -> {
                             val p = progress()
-                            if (p >= 1f) {
+                            val off = transitionOffset()
+                            if (p >= 1f && off == Offset.Zero) {
                                 settle()
                             } else {
-                                val host = frame.host
-                                // A zoomed picture no longer sits where its thumbnail would crop it from.
-                                val liveThumb = if (host != null && !frame.zoomed) {
-                                    origins.boundsOf(url, host, density.density)?.also { frame.thumbs[url] = it }
+                                if (p >= 1f) {
+                                    settle()
                                 } else {
-                                    null
+                                    val host = frame.host
+                                    // A zoomed picture no longer sits where its thumbnail would crop it from.
+                                    val liveThumb = if (host != null && !frame.zoomed) {
+                                        origins.boundsOf(url, host, density.density)?.also { frame.thumbs[url] = it }
+                                    } else {
+                                        null
+                                    }
+                                    val thumb = liveThumb ?: url.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
+                                    openFrame(p, thumb, frame.aspectOf(url), squircleEnabled)
                                 }
-                                val thumb = liveThumb ?: url.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
-                                openFrame(p, thumb, frame.aspectOf(url), squircleEnabled)
+                                translationX += off.x
+                                translationY += off.y
                             }
                         }
                     }
@@ -1116,23 +1131,32 @@ private fun resolveFlightTargetInfo(
  */
 private fun launchBackExitFlight(
     remaining: Float,
+    offset: Offset,
+    velocity: Offset,
     frame: ViewerFrame,
     origins: ImageOrigins,
     url: String?,
     density: Float,
     squircleEnabled: Boolean,
+    onPop: () -> Unit,
 ): Boolean {
     val clamped = remaining.coerceIn(0f, 1f)
-    if (clamped <= 0.01f) {
+    if (clamped <= 0.01f && offset == Offset.Zero) {
         origins.finishDismissFlight()
         origins.viewing = null
+        onPop()
         return true
     }
     val info = resolveFlightTargetInfo(url, frame, origins, density, frame.dismiss.boxSize)
     val layer = info.layer ?: return false
     val onRelease = info.onRelease ?: return false
+    // 先清理旧飞行态并保护已移交图层，再执行出栈（会触发 onBeforeNavigate），最后才挂载新飞行动画，
+    // 防止新启动的 dismissFlight 在 pop() 时被 fastForwardOngoingAnimations() 误清。
     origins.finishDismissFlight()
     frame.handedOffLayers.add(layer)
+    onPop()
+    val baseDuration = (ExpandDurationMillis * clamped).roundToInt().coerceAtLeast(1)
+    val duration = if (offset != Offset.Zero || velocity != Offset.Zero) maxOf(baseDuration, 240) else baseDuration
     val flight = ImageDismissFlight(
         url = url,
         layer = layer,
@@ -1141,7 +1165,7 @@ private fun launchBackExitFlight(
         density = density,
         squircleEnabled = squircleEnabled,
         startScale = 1f,
-        startTranslation = Offset.Zero,
+        startTranslation = offset,
         startBgAlpha = clamped,
         flyTarget = Offset.Zero,
         hasThumb = info.hasThumb,
@@ -1149,12 +1173,12 @@ private fun launchBackExitFlight(
         aspect = info.aspect,
         predictiveShrink = true,
         startProgress = 1f - clamped,
-        remainingDurationMillis = (ExpandDurationMillis * clamped).roundToInt().coerceAtLeast(1),
+        remainingDurationMillis = duration,
     )
     origins.launchDismissFlight(
         flight = flight,
         initialTargetTranslation = Offset.Zero,
-        initialVelocity = Offset.Zero,
+        initialVelocity = velocity,
     )
     return true
 }

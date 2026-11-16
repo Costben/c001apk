@@ -2,6 +2,7 @@ package app.awavenue.c001apk.ui.nav
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 
 /**
  * How far the route being shown is into its transition, for pages that draw their own entrance and
@@ -15,6 +16,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * which lets a page pick a different initial state than the real page would.
  */
 @Stable
-class RouteTransition(val progress: () -> Float, val exiting: () -> Boolean, val preview: Boolean = false)
+class RouteTransition(
+    val progress: () -> Float,
+    val exiting: () -> Boolean,
+    val preview: Boolean = false,
+    val offset: () -> Offset = { Offset.Zero },
+)
 
 val LocalRouteTransition = staticCompositionLocalOf<RouteTransition?> { null }

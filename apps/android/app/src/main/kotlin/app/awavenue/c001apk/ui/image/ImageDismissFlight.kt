@@ -97,6 +97,26 @@ internal fun ImageOrigins.launchDismissFlight(
                         launch {
                             flight.exitProgress.animateTo(1f, tween(duration, easing = ExpandEasing))
                         }
+                        if (flight.startTranslation != Offset.Zero || initialVelocity != Offset.Zero) {
+                            launch {
+                                if (flight.hasThumb) {
+                                    flight.exitTranslation.animateTo(
+                                        targetValue = Offset.Zero,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = 700f,
+                                            visibilityThreshold = Offset(0.5f, 0.5f),
+                                        ),
+                                        initialVelocity = initialVelocity,
+                                    )
+                                } else {
+                                    flight.exitTranslation.animateTo(
+                                        targetValue = flight.startTranslation + initialVelocity * 0.14f,
+                                        animationSpec = tween(duration, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 flight.hasThumb -> {
@@ -190,8 +210,8 @@ private fun GraphicsLayerScope.applyDismissFlight(
             transformOrigin = TransformOrigin.Center
             scaleX = curScale
             scaleY = curScale
-            translationX = 0f
-            translationY = 0f
+            translationX = flight.exitTranslation.value.x
+            translationY = flight.exitTranslation.value.y
         } else {
             val curScale = lerp(flight.startScale, flight.startScale * 0.78f, p)
             alpha = (1f - p).coerceIn(0f, 1f)
@@ -221,7 +241,7 @@ private fun GraphicsLayerScope.applyDismissFlight(
     val curScale = if (flight.predictiveShrink) lerp(cover, 1f, q) else lerp(flight.startScale, cover, p)
     val trans = if (flight.predictiveShrink) {
         val boxCenter = Offset(size.width / 2f, size.height / 2f)
-        (source.center - boxCenter) * (1f - q)
+        (source.center - boxCenter) * (1f - q) + flight.exitTranslation.value
     } else {
         val delta = if (liveThumb != null) liveThumb.rect.center - initialThumb.rect.center else Offset.Zero
         flight.exitTranslation.value + delta * p

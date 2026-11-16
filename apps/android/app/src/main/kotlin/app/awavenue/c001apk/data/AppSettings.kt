@@ -74,6 +74,14 @@ class AppSettings(context: Context) {
     var predictiveBack by mutableStateOf(prefs.getBoolean(KEY_PREDICTIVE_BACK, true))
         private set
 
+    /** Whether card-origin predictive back follows finger XY and flings along the release direction. */
+    var predictiveBackCardFling by mutableStateOf(prefs.getBoolean(KEY_PREDICTIVE_BACK_CARD_FLING, false))
+        private set
+
+    /** Whether image-viewer predictive back follows finger XY and flings along the release direction. */
+    var predictiveBackImageFling by mutableStateOf(prefs.getBoolean(KEY_PREDICTIVE_BACK_IMAGE_FLING, false))
+        private set
+
     var recordHistory by mutableStateOf(prefs.getBoolean(KEY_RECORD_HISTORY, true))
         private set
 
@@ -172,6 +180,12 @@ class AppSettings(context: Context) {
 
     fun updatePredictiveBack(value: Boolean) =
         put { putBoolean(KEY_PREDICTIVE_BACK, value) }.also { predictiveBack = value }
+
+    fun updatePredictiveBackCardFling(value: Boolean) =
+        put { putBoolean(KEY_PREDICTIVE_BACK_CARD_FLING, value) }.also { predictiveBackCardFling = value }
+
+    fun updatePredictiveBackImageFling(value: Boolean) =
+        put { putBoolean(KEY_PREDICTIVE_BACK_IMAGE_FLING, value) }.also { predictiveBackImageFling = value }
 
     fun updateRecordHistory(value: Boolean) = put { putBoolean(KEY_RECORD_HISTORY, value) }.also { recordHistory = value }
 
@@ -294,6 +308,8 @@ class AppSettings(context: Context) {
         const val KEY_FOLLOW_SELECTION = "followFeedSelectionV1"
         const val KEY_OPEN_IN_BROWSER = "openInBrowser"
         const val KEY_PREDICTIVE_BACK = "predictiveBack"
+        const val KEY_PREDICTIVE_BACK_CARD_FLING = "predictiveBackCardFling"
+        const val KEY_PREDICTIVE_BACK_IMAGE_FLING = "predictiveBackImageFling"
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_HISTORY_CARD_MODE = "historyCardMode"
         const val KEY_SHOW_EMOJI = "showEmoji"

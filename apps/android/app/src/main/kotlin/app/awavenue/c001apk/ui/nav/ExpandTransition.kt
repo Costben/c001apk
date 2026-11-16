@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -105,13 +106,52 @@ fun rememberExpandOrigin(cornerRadius: Dp, color: Color): ExpandOrigin {
     return origin
 }
 
-/** Marks the element [origin] stands for; apply it outside the element's surface. */
-fun Modifier.expandOrigin(origin: ExpandOrigin): Modifier =
-    onPlaced { origin.coordinates = it }
-        .drawWithContent {
-            origin.layer.record { this@drawWithContent.drawContent() }
-            drawLayer(origin.layer)
+@Stable
+internal class ExpandOriginVisibility(
+    private val stack: List<BackStackEntry>,
+    private val leavingEntries: List<BackStackEntry>,
+    private val paneEntry: () -> BackStackEntry?,
+) {
+    fun isHidden(origin: ExpandOrigin, currentEntry: BackStackEntry?): Boolean {
+        val pane = paneEntry()
+        for (i in stack.lastIndex downTo 1) {
+            val entry = stack[i]
+            if (entry === pane || entry === currentEntry) continue
+            if (matches(entry.origin, origin)) return true
         }
+        for (i in leavingEntries.lastIndex downTo 0) {
+            val entry = leavingEntries[i]
+            if (entry === currentEntry || entry.fastForwarded || entry.previewed) continue
+            if (matches(entry.origin, origin)) return true
+        }
+        return false
+    }
+
+    private fun matches(active: ExpandOrigin?, candidate: ExpandOrigin): Boolean {
+        if (active == null) return false
+        if (active === candidate) return true
+        val key = active.rowKey
+        return key != null && key == candidate.rowKey
+    }
+}
+
+internal val LocalExpandOriginVisibility = staticCompositionLocalOf<ExpandOriginVisibility?> { null }
+internal val LocalCurrentBackStackEntry = staticCompositionLocalOf<BackStackEntry?> { null }
+
+/** Marks the element [origin] stands for; apply it outside the element's surface. */
+@Composable
+fun Modifier.expandOrigin(origin: ExpandOrigin): Modifier {
+    val visibility = LocalExpandOriginVisibility.current
+    val currentEntry = LocalCurrentBackStackEntry.current
+    return onPlaced { origin.coordinates = it }
+        .drawWithContent {
+            // 始终把原卡片内容录制进 origin.layer，确保底层隐藏时不破坏展开/缩回帧自身的画面。
+            origin.layer.record { this@drawWithContent.drawContent() }
+            if (visibility?.isHidden(origin, currentEntry) != true) {
+                drawLayer(origin.layer)
+            }
+        }
+}
 
 /** The display's own corner radius, or zero on a square display or below Android 12. */
 @Composable
@@ -162,6 +202,7 @@ internal fun ExpandFrame(
     origin: ExpandOrigin?,
     progress: () -> Float,
     fade: () -> Float,
+    offset: () -> Offset = { Offset.Zero },
     exiting: () -> Boolean = { false },
     content: @Composable () -> Unit,
 ) {
@@ -226,8 +267,9 @@ internal fun ExpandFrame(
                     return@graphicsLayer
                 }
                 val p = progress()
-                val left = lerp(bounds.left, 0f, p)
-                val top = lerp(bounds.top, 0f, p)
+                val dragOffset = offset()
+                val left = lerp(bounds.left, 0f, p) + dragOffset.x
+                val top = lerp(bounds.top, 0f, p) + dragOffset.y
                 val width = lerp(bounds.width, size.width, p)
                 val height = lerp(bounds.height, size.height, p)
                 // Scaled by width only, so the page keeps its own layout and just reads smaller.
