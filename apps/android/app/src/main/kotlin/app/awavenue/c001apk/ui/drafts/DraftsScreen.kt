@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.drafts
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,12 +51,12 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import coil3.compose.AsyncImage
-import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.NotificationSwipeBox
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.rememberNotificationSwipeState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -65,6 +67,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Notes
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -154,6 +157,7 @@ fun DraftsScreen() {
                     items(drafts, key = { it.id }) { draft ->
                         DraftCard(
                             draft = draft,
+                            modifier = Modifier.animateItem(),
                             onOpen = { editing = draft },
                             onDelete = { app.drafts.remove(draft.id) },
                         )
@@ -189,58 +193,85 @@ fun DraftsScreen() {
     }
 }
 
+@OptIn(ExperimentalCOUIApi::class)
 @Composable
-private fun DraftCard(draft: Draft, onOpen: () -> Unit, onDelete: () -> Unit) {
-    Card(
-        Modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-        onClick = rememberHapticClick(onClick = onOpen),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                draft.label,
-                modifier = Modifier.weight(1f),
-                style = COUITheme.textStyles.footnote1,
-                color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                fromToday(draft.updatedAt / 1000),
-                style = COUITheme.textStyles.footnote2,
-                color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                maxLines = 1,
-            )
-            Spacer(Modifier.width(4.dp))
-            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                Icon(
-                    COUIIcons.Delete,
-                    contentDescription = "删除草稿",
-                    modifier = Modifier.size(16.dp),
-                    tint = COUITheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            draft.preview,
-            style = COUITheme.textStyles.body2,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (draft.images.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                draft.images.forEach { image ->
-                    AsyncImage(
-                        model = File(image.path),
-                        contentDescription = null,
-                        modifier = Modifier.size(52.dp).clip(rememberSquircleShape(8.dp)),
+private fun DraftCard(
+    draft: Draft,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val swipeState = rememberNotificationSwipeState()
+    val scope = rememberCoroutineScope()
+    val hapticOpen = rememberHapticClick(onClick = onOpen)
+
+    // DraftCard lives inside the LazyColumn marked with glassSource(backdrop); clear LocalBackdrop
+    // so NotificationSwipeBox does not sample the layer currently recording it.
+    CompositionLocalProvider(LocalBackdrop provides null) {
+        NotificationSwipeBox(
+            onSettings = null,
+            onDismiss = onDelete,
+            settingsIcon = null,
+            dismissIcon = null,
+            modifier = modifier.fillMaxWidth(),
+            state = swipeState,
+            minHeight = 0.dp,
+            containerColor = COUITheme.colorScheme.surfaceContainer,
+            dismissDescription = "删除草稿",
+            dismissOnFullSwipe = true,
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {
+                            if (swipeState.isRevealed) {
+                                scope.launch { swipeState.close() }
+                            } else {
+                                hapticOpen()
+                            }
+                        },
                     )
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        draft.label,
+                        modifier = Modifier.weight(1f),
+                        style = COUITheme.textStyles.footnote1,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        fromToday(draft.updatedAt / 1000),
+                        style = COUITheme.textStyles.footnote2,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    draft.preview,
+                    style = COUITheme.textStyles.body2,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (draft.images.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        draft.images.forEach { image ->
+                            AsyncImage(
+                                model = File(image.path),
+                                contentDescription = null,
+                                modifier = Modifier.size(52.dp).clip(rememberSquircleShape(8.dp)),
+                            )
+                        }
+                    }
                 }
             }
         }
