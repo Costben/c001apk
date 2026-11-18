@@ -100,10 +100,9 @@ fun openCoolapkLink(
         }
 
         // The search screen is addressable both on the website and through the app's own scheme:
-        // `coolmarket://com.coolapk.market/search?searchValue=...` becomes
-        // `/com.coolapk.market/search?searchValue=...` here. It has to be matched before the generic
-        // http branch below, which would otherwise send it to the web view.
-        path.startsWith("/com.coolapk.market/search") -> {
+        // `coolmarket://com.coolapk.market/search?searchValue=...` or `/search?q=...`.
+        // Matched before the generic http branch, which would otherwise send it to the web view.
+        path.startsWith("/com.coolapk.market/search") || path.startsWith("/search") -> {
             val keyword = queryValue(path, "searchValue", "q", "keyword")
             if (keyword == null) {
                 navigator.push(Route.Search(title = ""))
@@ -113,6 +112,8 @@ fun openCoolapkLink(
             }
             true
         }
+
+        url.startsWith(COOLMARKET_SCHEME, ignoreCase = true) && (path.isEmpty() || path == "/") -> true
 
         url.startsWith("http") -> {
             if (openInBrowser) context.openBrowser(url) else navigator.push(Route.Web(url))
@@ -138,12 +139,36 @@ fun rememberLinkOpener(): (String, String) -> Boolean {
 }
 
 /** The in-app path behind a link, whether it is a bare path, a `coolmarket://` URI or a website URL. */
-private fun coolapkPath(url: String): String {
-    if (url.startsWith(COOLMARKET_SCHEME)) return url.removePrefix("coolmarket://").let { "/$it" }
+internal fun coolapkPath(url: String): String {
+    if (url.startsWith(COOLMARKET_SCHEME, ignoreCase = true)) {
+        val body = url.substring(COOLMARKET_SCHEME.length)
+        val host = body.substringBefore('/').substringBefore('?').substringBefore('#')
+        return if (isCoolapkHost(host)) {
+            val rest = body.substring(host.length)
+            when {
+                rest.isEmpty() -> "/"
+                rest.startsWith('/') -> rest
+                else -> "/$rest"
+            }
+        } else {
+            "/$body"
+        }
+    }
     val uri = runCatching { URI(url) }.getOrNull() ?: return url
-    if (uri.host?.contains("coolapk") != true) return url
+    val host = uri.host ?: return url
+    if (!isCoolapkHost(host)) return url
     val query = uri.rawQuery
-    return if (query.isNullOrEmpty()) uri.path.orEmpty() else "${uri.path}?$query"
+    val path = uri.path.orEmpty()
+    return if (query.isNullOrEmpty()) path else "$path?$query"
+}
+
+private fun isCoolapkHost(host: String): Boolean {
+    val lower = host.lowercase()
+    return lower == "com.coolapk.market" ||
+        lower == "coolapk.com" ||
+        lower.endsWith(".coolapk.com") ||
+        lower == "coolapk1s.com" ||
+        lower.endsWith(".coolapk1s.com")
 }
 
 private fun segment(path: String, prefix: String): String {
