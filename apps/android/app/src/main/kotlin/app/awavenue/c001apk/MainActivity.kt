@@ -54,6 +54,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // ColorOS 17's ViewRootImpl.setView sets PRIVATE_FLAG_APP_PROGRESS_GENERATION_ALLOWED
+        // (0x80) on DecorView without dispatching MotionEvents to WindowOnBackInvokedDispatcher,
+        // which causes SystemUI's BackAnimationController to withhold onBackProgressed updates.
+        // Re-applying PhoneWindow's LayoutParams after attach clears that private bit in WMS.
+        window.decorView.post {
+            if (!isDestroyed && window.decorView.isAttachedToWindow) {
+                windowManager.updateViewLayout(window.decorView, window.attributes)
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
