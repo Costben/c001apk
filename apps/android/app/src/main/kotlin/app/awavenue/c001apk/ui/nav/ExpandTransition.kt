@@ -71,6 +71,13 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
     /** Identifies the row across compositions, so a rebuilt page can find the one that returned. */
     internal var rowKey: Any? = null
 
+    /**
+     * The page the row lives on. A row key is only unique within its own list: the author's profile
+     * lists the very post whose detail page is still stacked above it, and matching on the key alone
+     * hid that card there too, leaving its slot as a blank with the card's height.
+     */
+    internal var page: BackStackEntry? = null
+
     /** False once the element is gone, e.g. its list item was recycled or its screen disposed. */
     internal val isAvailable: Boolean
         get() = coordinates?.isAttached == true && !layer.isReleased
@@ -99,9 +106,11 @@ class ExpandOrigin internal constructor(internal val layer: GraphicsLayer) {
 fun rememberExpandOrigin(cornerRadius: Dp, color: Color): ExpandOrigin {
     val layer = rememberGraphicsLayer()
     val origin = remember(layer) { ExpandOrigin(layer) }
+    val page = LocalCurrentBackStackEntry.current
     SideEffect {
         origin.cornerRadius = cornerRadius
         origin.color = color
+        origin.page = page
     }
     return origin
 }
@@ -131,7 +140,9 @@ internal class ExpandOriginVisibility(
         if (active == null) return false
         if (active === candidate) return true
         val key = active.rowKey
-        return key != null && key == candidate.rowKey
+        // The same post can be listed on another page (the author's profile shows the one whose
+        // detail is stacked above); only the row of the page the origin was taken from may hide.
+        return key != null && key == candidate.rowKey && active.page === candidate.page
     }
 }
 
