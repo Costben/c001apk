@@ -27,6 +27,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -81,23 +82,25 @@ fun CoolPicScreen(title: String) {
                 modifier = Modifier.fillMaxSize().glassSource(backdrop),
                 beyondViewportPageCount = 1,
             ) { page ->
-                val type = CoolPicTabs[page].second
-                val viewModel = viewModel(key = "coolpic-$decodedTitle-$type") {
-                    FeedListViewModel(
-                        PageLoader { p, first, last ->
-                            app.repository.coolPic(decodedTitle, type, p, first, last)
-                        },
-                        app::contentGate,
+                ScrollToTopPage(active = page == pagerState.settledPage) {
+                    val type = CoolPicTabs[page].second
+                    val viewModel = viewModel(key = "coolpic-$decodedTitle-$type") {
+                        FeedListViewModel(
+                            PageLoader { p, first, last ->
+                                app.repository.coolPic(decodedTitle, type, p, first, last)
+                            },
+                            app::contentGate,
+                        )
+                    }
+                    FeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding() + 12.dp,
+                            bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                        ),
                     )
                 }
-                FeedList(
-                    viewModel = viewModel,
-                    scrollBehavior = scrollBehavior,
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding() + 12.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                    ),
-                )
             }
         }
     }

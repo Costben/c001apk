@@ -59,6 +59,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.HtmlText
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Button
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Card
@@ -69,6 +70,7 @@ import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
@@ -181,16 +183,18 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
             modifier = Modifier.fillMaxWidth().weight(1f),
             beyondViewportPageCount = 1,
         ) { page ->
-            val contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
-            if (page == 0) {
-                EventHeaderPage(
-                    event = event,
-                    contentPadding = contentPadding,
-                    scrollBehavior = scrollBehavior,
-                    onOpenUser = onOpenUser,
-                )
-            } else {
-                EventTabPage(tab = tabs[page - 1], contentPadding = contentPadding, scrollBehavior = scrollBehavior)
+            ScrollToTopPage(active = page == pagerState.settledPage) {
+                val contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
+                if (page == 0) {
+                    EventHeaderPage(
+                        event = event,
+                        contentPadding = contentPadding,
+                        scrollBehavior = scrollBehavior,
+                        onOpenUser = onOpenUser,
+                    )
+                } else {
+                    EventTabPage(tab = tabs[page - 1], contentPadding = contentPadding, scrollBehavior = scrollBehavior)
+                }
             }
         }
     }
@@ -214,8 +218,12 @@ private fun EventHeaderPage(
     val sponsors = event.list("sponsorUser")
     val prizes = event.list("sponsorPrize")
 
+    val listState = rememberPageListState("event-header")
+
+    BindScrollToTop(listState)
+
     LazyColumn(
-        state = rememberPageListState("event-header"),
+        state = listState,
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),

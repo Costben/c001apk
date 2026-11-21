@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -45,6 +46,7 @@ import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -149,7 +151,10 @@ fun AppUpdateScreen() {
                     onRefresh = { attempts++ },
                     contentPadding = innerPadding,
                 ) {
+                    val listState = rememberLazyListState()
+                    BindScrollToTop(listState)
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize().overScrollVertical(),
                         contentPadding = PaddingValues(
                             start = 10.dp,

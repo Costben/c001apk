@@ -27,6 +27,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -81,21 +82,23 @@ fun DyhScreen(id: String, title: String) {
                 modifier = Modifier.fillMaxSize().glassSource(backdrop),
                 beyondViewportPageCount = 1,
             ) { page ->
-                val type = DyhTabs[page].second
-                val viewModel = viewModel(key = "dyh-$id-$type") {
-                    FeedListViewModel(
-                        PageLoader { p, first, last -> app.repository.dyhDetail(id, type, p, first, last) },
-                        app::contentGate,
+                ScrollToTopPage(active = page == pagerState.settledPage) {
+                    val type = DyhTabs[page].second
+                    val viewModel = viewModel(key = "dyh-$id-$type") {
+                        FeedListViewModel(
+                            PageLoader { p, first, last -> app.repository.dyhDetail(id, type, p, first, last) },
+                            app::contentGate,
+                        )
+                    }
+                    FeedList(
+                        viewModel = viewModel,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding() + 12.dp,
+                            bottom = innerPadding.calculateBottomPadding() + 12.dp,
+                        ),
                     )
                 }
-                FeedList(
-                    viewModel = viewModel,
-                    scrollBehavior = scrollBehavior,
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding() + 12.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 12.dp,
-                    ),
-                )
             }
         }
     }

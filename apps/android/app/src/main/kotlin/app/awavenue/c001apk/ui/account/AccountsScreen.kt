@@ -31,6 +31,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -88,8 +89,10 @@ fun AccountsScreen() {
             }
         },
     ) { innerPadding ->
+        val listState = rememberPageListState("accounts")
+        BindScrollToTop(listState)
         LazyColumn(
-            state = rememberPageListState("accounts"),
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .glassSource(backdrop)

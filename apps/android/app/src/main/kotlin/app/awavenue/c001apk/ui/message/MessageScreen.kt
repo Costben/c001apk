@@ -73,6 +73,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.expandOrigin
 import app.awavenue.c001apk.ui.nav.rememberExpandOrigin
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.CardDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -83,6 +84,7 @@ import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.VerticalDivider
+import io.github.suqi8.coui.kmp.basic.scrollToTopOnTap
 import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -215,6 +217,7 @@ private fun MessageHeader(
     Column(
         Modifier
             .fillMaxWidth()
+            .scrollToTopOnTap()
             .glassHeader(
                 backdrop = backdrop,
                 containerColor = COUITheme.colorScheme.surface,
@@ -302,6 +305,7 @@ private fun MessageList(
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val listState = rememberLazyListState()
+    BindScrollToTop(listState)
     // Parse and shorten once per history change, not every time the card scrolls back in.
     val history = remember(app.history.historyFeeds) {
         app.history.list(HistoryType.History).map { item ->

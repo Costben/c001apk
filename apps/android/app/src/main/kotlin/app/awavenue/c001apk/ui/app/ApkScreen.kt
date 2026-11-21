@@ -76,6 +76,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
@@ -129,6 +130,7 @@ fun ApkScreen(packageName: String) {
     val backdrop = rememberGlassBackdrop()
     val scrollBehavior = rememberPageScrollBehavior("apk")
     val listState = rememberPageListState("apk")
+    BindScrollToTop(listState)
     val download = rememberApkDownload()
 
     var detail by remember(packageName) { mutableStateOf<Entity?>(null) }

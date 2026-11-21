@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.model.catalogListUrl
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.appTabRowColors
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
@@ -42,6 +43,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -109,6 +111,7 @@ fun CarouselContent(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(vertical = 12.dp),
     scrollBehavior: ScrollBehavior = COUIScrollBehavior(),
+    returnTop: ReturnTopController? = null,
     onPageTitle: (String) -> Unit = {},
     itemPadding: Dp = ItemPadding,
 ) = CarouselBody(
@@ -118,6 +121,7 @@ fun CarouselContent(
     modifier = modifier,
     contentPadding = contentPadding,
     scrollBehavior = scrollBehavior,
+    returnTop = returnTop,
     onPageTitle = onPageTitle,
     itemPadding = itemPadding,
 )
@@ -130,6 +134,7 @@ private fun CarouselBody(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(vertical = 12.dp),
     scrollBehavior: ScrollBehavior = COUIScrollBehavior(),
+    returnTop: ReturnTopController? = null,
     onPageTitle: (String) -> Unit = {},
     itemPadding: Dp = ItemPadding,
 ) {
@@ -203,17 +208,23 @@ private fun CarouselBody(
                 viewModel = viewModel,
                 scrollBehavior = scrollBehavior,
                 contentPadding = contentPadding,
+                returnTop = returnTop,
                 itemPadding = itemPadding,
                 header = catalogHeader,
             )
         } else {
-            NestedTabs(nested, contentPadding, scrollBehavior)
+            NestedTabs(nested, contentPadding, scrollBehavior, returnTop)
         }
     }
 }
 
 @Composable
-private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavior: ScrollBehavior) {
+private fun NestedTabs(
+    card: Entity,
+    contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+    returnTop: ReturnTopController? = null,
+) {
     val entries = card.entities
     val pagerState = rememberPagerState(
         initialPage = pageMemoryPage("carousel", fallback = 0),
@@ -254,14 +265,17 @@ private fun NestedTabs(card: Entity, contentPadding: PaddingValues, scrollBehavi
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
         ) { page ->
-            val entry = entries[page]
-            CarouselBody(
-                url = entry.url,
-                title = entry.title,
-                isInit = false,
-                contentPadding = pagePadding,
-                scrollBehavior = scrollBehavior,
-            )
+            ScrollToTopPage(active = page == pagerState.settledPage) {
+                val entry = entries[page]
+                CarouselBody(
+                    url = entry.url,
+                    title = entry.title,
+                    isInit = false,
+                    contentPadding = pagePadding,
+                    scrollBehavior = scrollBehavior,
+                    returnTop = returnTop?.takeIf { page == pagerState.currentPage },
+                )
+            }
         }
     }
 }

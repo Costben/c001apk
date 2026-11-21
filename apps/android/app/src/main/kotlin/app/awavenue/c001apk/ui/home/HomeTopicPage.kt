@@ -42,6 +42,7 @@ import app.awavenue.c001apk.model.catalogCategories
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.carousel.CarouselContent
+import app.awavenue.c001apk.ui.common.ReturnTopController
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import io.github.suqi8.coui.kmp.basic.EmptyState
@@ -73,7 +74,12 @@ enum class HomeTopicTab { Topic, Product }
  * to fling.
  */
 @Composable
-fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, contentPadding: PaddingValues) {
+fun HomeTopicPage(
+    tabType: HomeTopicTab,
+    scrollBehavior: ScrollBehavior,
+    contentPadding: PaddingValues,
+    returnTop: ReturnTopController? = null,
+) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var entries by remember(tabType) { mutableStateOf<List<Entity>?>(null) }
@@ -174,6 +180,7 @@ fun HomeTopicPage(tabType: HomeTopicTab, scrollBehavior: ScrollBehavior, content
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     contentPadding = carouselPadding,
                     scrollBehavior = scrollBehavior,
+                    returnTop = returnTop,
                     // The rail already supplies the left margin, so the cards take less inset than
                     // a full-width stream does and read wider beside it.
                     itemPadding = 6.dp,

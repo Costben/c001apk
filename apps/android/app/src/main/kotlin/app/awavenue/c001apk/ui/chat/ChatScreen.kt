@@ -65,6 +65,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -107,6 +108,7 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
     val listState = rememberPageListState("chat")
+    BindScrollToTop(listState)
     val scrollBehavior = rememberPageScrollBehavior("chat")
     val backdrop = rememberGlassBackdrop()
 

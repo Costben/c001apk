@@ -51,6 +51,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import coil3.compose.AsyncImage
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.NotificationSwipeBox
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -84,6 +85,7 @@ fun DraftsScreen() {
     val backdrop = rememberGlassBackdrop()
     val appBarBounds = LocalAppBarBounds.current
     val listState = rememberPageListState("drafts")
+    BindScrollToTop(listState)
     var editing by remember { mutableStateOf<Draft?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     val drafts = app.drafts.drafts

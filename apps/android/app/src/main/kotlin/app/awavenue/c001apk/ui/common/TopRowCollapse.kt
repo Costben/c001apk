@@ -1,5 +1,8 @@
 package app.awavenue.c001apk.ui.common
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.remember
@@ -8,8 +11,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.Velocity
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.RegisterScrollToTopHeaderReset
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.TopAppBarState
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Collapses the top row while scrolling up, but brings it back as soon as the content moves down,
@@ -57,5 +63,45 @@ internal fun rememberTopRowScrollBehavior(
                 }
             }
         }
+    }
+}
+
+private const val TOP_ROW_RESET_MILLIS = 220
+
+internal suspend fun resetTopRowScroll(
+    scrollBehavior: ScrollBehavior,
+    scrolledPx: MutableFloatState,
+) = coroutineScope {
+    scrollBehavior.state.contentOffset = 0f
+    if (scrollBehavior.state.heightOffset < 0f) {
+        launch {
+            Animatable(scrollBehavior.state.heightOffset).animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = TOP_ROW_RESET_MILLIS, easing = FastOutSlowInEasing),
+            ) {
+                scrollBehavior.state.heightOffset = value
+            }
+        }
+    }
+    if (scrolledPx.floatValue > 0f) {
+        launch {
+            Animatable(scrolledPx.floatValue).animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = TOP_ROW_RESET_MILLIS, easing = FastOutSlowInEasing),
+            ) {
+                scrolledPx.floatValue = value
+            }
+        }
+    }
+}
+
+@Composable
+internal fun BindTopRowScrollReset(
+    scrollBehavior: ScrollBehavior,
+    scrolledPx: MutableFloatState,
+    enabled: Boolean = true,
+) {
+    RegisterScrollToTopHeaderReset(enabled = enabled) {
+        resetTopRowScroll(scrollBehavior, scrolledPx)
     }
 }

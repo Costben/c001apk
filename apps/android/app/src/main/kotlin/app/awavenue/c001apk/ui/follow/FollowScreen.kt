@@ -60,6 +60,7 @@ import app.awavenue.c001apk.ui.search.SearchResultTabs
 import app.awavenue.c001apk.ui.search.rememberInPlaceSearchState
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
+import io.github.suqi8.coui.kmp.basic.BindTopAppBarScrollReset
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.DropdownItem
@@ -70,6 +71,7 @@ import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.basic.scrollToTopOnTap
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
@@ -154,6 +156,7 @@ fun FollowScreen(
     }
     val searchActive = search.expanded && !navigator.hasOverlay && onScreen
     LaunchedEffect(onScreen) { if (!onScreen) search.close() }
+    BindTopAppBarScrollReset(scrollBehavior, enabled = !search.expanded)
     // Back from the history closes the search. The results and a pushed page are handled after the
     // bar's own handler, which the bar registers later.
     BackHandler(enabled = searchActive) { search.close() }
@@ -164,6 +167,7 @@ fun FollowScreen(
             AppBarBlurOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .scrollToTopOnTap(enabled = !search.expanded)
                     .onGloballyPositioned {
                         appBarBounds.report(barSlot, it.positionInRoot().y + it.size.height.toFloat())
                     },

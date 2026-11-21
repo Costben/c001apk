@@ -48,6 +48,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.LocalOverlayBackHandler
 import app.awavenue.c001apk.ui.nav.LocalRouteTransition
 import app.awavenue.c001apk.ui.theme.ChromeDensity
+import io.github.suqi8.coui.kmp.basic.BindTopAppBarScrollReset
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.LocalEdgeToEdge
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
@@ -294,6 +295,7 @@ internal fun InPlaceSearchPanel(
 ) {
     val surface = COUITheme.colorScheme.surface
     val resultsBackdrop = rememberLayerBackdrop()
+    BindTopAppBarScrollReset(state.scrollBehavior, enabled = state.expanded && state.resultsShown)
     AnimatedVisibility(
         visible = state.expanded,
         modifier = modifier,

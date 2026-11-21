@@ -56,6 +56,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -95,6 +96,7 @@ fun HistoryScreen(type: HistoryType) {
     var cloud by rememberSaveable(type) { mutableStateOf(false) }
     val cloudMode = type == HistoryType.History && cloud
     val listState = rememberPageListState(if (cloudMode) "history-cloud" else "history-local")
+    BindScrollToTop(listState)
     var confirmClear by remember(type) { mutableStateOf(false) }
     val entries = app.history.list(type)
 

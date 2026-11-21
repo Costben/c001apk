@@ -65,7 +65,6 @@ import app.awavenue.c001apk.ui.common.rememberDeleteConfirmation
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
-import app.awavenue.c001apk.ui.common.returnTopOnClick
 import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.AccountCollectionsSheet
@@ -84,6 +83,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -128,6 +128,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     val backdrop = rememberGlassBackdrop()
     val scrollBehavior = rememberPageScrollBehavior("feed-detail")
     val listState = rememberPageListState("feed-detail")
+    BindScrollToTop(listState)
     val scope = rememberCoroutineScope()
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -196,9 +197,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                         viewModel.feed == null -> preview?.string("feedTypeName").orEmpty()
                         else -> viewModel.feedTypeName.orEmpty()
                     },
-                    // Tapping anywhere on the bar returns to the top, the ColorOS way: the bar is
-                    // the only chrome left once the list is deep in the replies.
-                    modifier = Modifier.returnTopOnClick(listState),
                     gradientGlass = true,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {

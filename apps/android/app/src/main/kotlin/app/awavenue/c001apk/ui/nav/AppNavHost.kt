@@ -412,6 +412,7 @@ fun AppNavHost(
                     }
                 },
         ) {
+            val overlay = if (paneEntry != null) null else navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
             Row(Modifier.fillMaxSize()) {
                 // The list keeps its composition even when the reader hides it, so its scroll
                 // position and tabs are still there when it comes back; at zero width it also
@@ -430,7 +431,7 @@ fun AppNavHost(
                     CompositionLocalProvider(
                         LocalCurrentBackStackEntry provides navigator.stack.firstOrNull(),
                     ) {
-                        MainScreen()
+                        MainScreen(coveredByOverlay = overlay != null)
                     }
                 }
                 if (paneOpen && paneEntry != null) {
@@ -454,7 +455,6 @@ fun AppNavHost(
             // while an image viewer sits on top so drag-to-dismiss reveals the real page and keeps
             // its thumbnail coordinates live; when the main screen is underneath it is already
             // composed above.
-            val overlay = if (paneEntry != null) null else navigator.stack.lastOrNull()?.takeIf { navigator.hasOverlay }
             val below = when {
                 gestureEntry != null && revealing -> navigator.stack.getOrNull(navigator.stack.lastIndex - 1)
                 overlay?.route is Route.ImageView -> navigator.stack.getOrNull(navigator.stack.lastIndex - 1)

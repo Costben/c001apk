@@ -64,6 +64,7 @@ import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.app.AppListPage
+import app.awavenue.c001apk.ui.common.BindTopRowScrollReset
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.NotificationBell
 import app.awavenue.c001apk.ui.common.ReturnTopController
@@ -71,6 +72,7 @@ import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberTopRowScrollBehavior
+import app.awavenue.c001apk.ui.common.resetTopRowScroll
 import app.awavenue.c001apk.ui.feed.FeedList
 import app.awavenue.c001apk.ui.feed.FeedListViewModel
 import app.awavenue.c001apk.ui.feed.PageLoader
@@ -82,11 +84,13 @@ import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.LocalToolbarBackdropBlurFraction
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBar
 import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.basic.scrollToTopOnTap
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.blur.isBlurEnabled
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
@@ -242,6 +246,12 @@ fun HomeScreen(
         // The saved state keeps the limit it was created with, so a density change has to reapply it.
         scrollBehavior.state.heightOffsetLimit = -topRowHeightPx
     }
+    BindTopRowScrollReset(scrollBehavior, scrolledPx, enabled = !searchExpanded)
+    LaunchedEffect(returnTop, scrollBehavior, scrolledPx) {
+        returnTop.events.collect {
+            resetTopRowScroll(scrollBehavior, scrolledPx)
+        }
+    }
     // Collapse state is read from [collapseFraction] inside layout, draw and the material, never
     // during composition: a scroll frame must move the row without recomposing the pager.
     val collapseFraction: () -> Float = remember(scrollBehavior, topRowHeightPx) {
@@ -332,6 +342,7 @@ fun HomeScreen(
             Layout(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .scrollToTopOnTap()
                     .onGloballyPositioned {
                         appBarBounds.report(barSlot, it.positionInRoot().y + it.size.height)
                     },
@@ -578,26 +589,38 @@ fun HomeScreen(
                 // last visible tab until the settle effect bounces them back.
                 val tab = tabs.getOrNull(page) ?: tabs.last()
                 val returnTopHere = returnTop.takeIf { page == pagerState.currentPage }
-                when (tab) {
-                    HomeTab.App -> AppListPage(
-                        returnTop = returnTopHere,
-                        contentPadding = pageContentPadding,
-                        scrollBehavior = scrollBehavior,
-                    )
-                    HomeTab.Topic -> HomeTopicPage(HomeTopicTab.Topic, scrollBehavior, pageContentPadding)
-                    HomeTab.Product -> HomeTopicPage(HomeTopicTab.Product, scrollBehavior, pageContentPadding)
-                    else -> {
-                        // Every stream is personalised, so its cached page is only valid for one account.
-                        val key = "home-${tab.name}-${app.session.uid}"
-                        val loader = tab.loader(app.repository)
-                        val viewModel = viewModel(key = key) { FeedListViewModel(loader!!, app::contentGate) }
-                        FeedList(
-                            viewModel = viewModel,
-                            scrollBehavior = scrollBehavior,
+                ScrollToTopPage(active = page == pagerState.settledPage) {
+                    when (tab) {
+                        HomeTab.App -> AppListPage(
                             returnTop = returnTopHere,
                             contentPadding = pageContentPadding,
-                            itemFilter = if (tab == HomeTab.Feed) homeHeaderFilter else null,
+                            scrollBehavior = scrollBehavior,
                         )
+                        HomeTab.Topic -> HomeTopicPage(
+                            HomeTopicTab.Topic,
+                            scrollBehavior,
+                            pageContentPadding,
+                            returnTop = returnTopHere,
+                        )
+                        HomeTab.Product -> HomeTopicPage(
+                            HomeTopicTab.Product,
+                            scrollBehavior,
+                            pageContentPadding,
+                            returnTop = returnTopHere,
+                        )
+                        else -> {
+                            // Every stream is personalised, so its cached page is only valid for one account.
+                            val key = "home-${tab.name}-${app.session.uid}"
+                            val loader = tab.loader(app.repository)
+                            val viewModel = viewModel(key = key) { FeedListViewModel(loader!!, app::contentGate) }
+                            FeedList(
+                                viewModel = viewModel,
+                                scrollBehavior = scrollBehavior,
+                                returnTop = returnTopHere,
+                                contentPadding = pageContentPadding,
+                                itemFilter = if (tab == HomeTab.Feed) homeHeaderFilter else null,
+                            )
+                        }
                     }
                 }
             }

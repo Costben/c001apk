@@ -57,6 +57,7 @@ import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
+import io.github.suqi8.coui.kmp.basic.BindTopAppBarScrollReset
 import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.ChipTabGroup
@@ -67,6 +68,7 @@ import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.SearchFilterTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
@@ -186,6 +188,7 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
     // The bar never collapses; pinning the range keeps the nested-scroll connection from eating
     // the list's drags for a height change this page does not draw.
     SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
+    BindTopAppBarScrollReset(scrollBehavior)
 
     Scaffold(
         edgeToEdge = true,
@@ -399,37 +402,39 @@ internal fun SearchResultPager(
         modifier = modifier,
         beyondViewportPageCount = 1,
     ) { page ->
-        val contentType = tabs[page]
-        val feedType = searchType.feedType
-        val sort = sortType.sort
-        val isStrict = sortType.isStrict
-        val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
-            FeedListViewModel(
-                PageLoader { p, first, last ->
-                    app.repository.search(
-                        type = contentType.type,
-                        feedType = feedType,
-                        sort = sort,
-                        searchValue = query,
-                        isStrict = isStrict,
-                        pageType = pageType,
-                        pageParam = pageParam,
-                        page = p,
-                        firstItem = first,
-                        lastItem = last,
-                    )
-                },
-                app::contentGate,
-            )
-        }
-        // A new view model means a new search: start the list from the top instead of keeping the
-        // previous filter's scroll position.
-        key(viewModel) {
-            FeedList(
-                viewModel = viewModel,
-                scrollBehavior = scrollBehavior,
-                contentPadding = contentPadding,
-            )
+        ScrollToTopPage(active = page == pagerState.settledPage) {
+            val contentType = tabs[page]
+            val feedType = searchType.feedType
+            val sort = sortType.sort
+            val isStrict = sortType.isStrict
+            val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
+                FeedListViewModel(
+                    PageLoader { p, first, last ->
+                        app.repository.search(
+                            type = contentType.type,
+                            feedType = feedType,
+                            sort = sort,
+                            searchValue = query,
+                            isStrict = isStrict,
+                            pageType = pageType,
+                            pageParam = pageParam,
+                            page = p,
+                            firstItem = first,
+                            lastItem = last,
+                        )
+                    },
+                    app::contentGate,
+                )
+            }
+            // A new view model means a new search: start the list from the top instead of keeping
+            // the previous filter's scroll position.
+            key(viewModel) {
+                FeedList(
+                    viewModel = viewModel,
+                    scrollBehavior = scrollBehavior,
+                    contentPadding = contentPadding,
+                )
+            }
         }
     }
 }

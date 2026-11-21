@@ -2,7 +2,6 @@ package app.awavenue.c001apk.ui.feed
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +36,7 @@ import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.rememberPageListState
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
@@ -45,7 +45,6 @@ import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -68,6 +67,7 @@ fun FeedList(
     val scope = rememberCoroutineScope()
     val openLink = rememberLinkOpener()
     val listState = rememberPageListState(viewModel)
+    BindScrollToTop(listState)
     // Hidden cards stay in the fetched page, so a switch flipped in 设置 takes effect on the list
     // already on screen and needs no refresh to come back. The content gate is rebuilt when the
     // rules change for the same reason: a new rule drops the rows it matches without a reload.
@@ -123,15 +123,10 @@ fun FeedList(
     if (returnTop != null) {
         LaunchedEffect(listState, returnTop) {
             returnTop.events.collect {
-                coroutineScope {
-                    // Bring a collapsed app bar back along with the list.
-                    launch {
-                        animate(scrollBehavior.state.heightOffset, 0f) { value, _ ->
-                            scrollBehavior.state.heightOffset = value
-                        }
-                    }
-                    listState.animateScrollToItem(0)
+                if (listState.firstVisibleItemIndex > 20) {
+                    listState.scrollToItem(20)
                 }
+                listState.animateScrollToItem(0)
             }
         }
     }

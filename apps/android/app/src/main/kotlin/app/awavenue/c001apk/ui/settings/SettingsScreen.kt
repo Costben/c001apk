@@ -49,6 +49,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import coil3.SingletonImageLoader
 import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
@@ -204,8 +205,10 @@ fun SettingsScreen() {
         },
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            val listState = rememberPageListState("settings")
+            BindScrollToTop(listState)
             LazyColumn(
-                state = rememberPageListState("settings"),
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .glassSource(backdrop)

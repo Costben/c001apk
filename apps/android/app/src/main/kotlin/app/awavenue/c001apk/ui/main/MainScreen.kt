@@ -74,6 +74,8 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.LocalPlatformBottomBarMaterialEnabled
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.ScrollToTopBlocker
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
@@ -114,7 +116,7 @@ private enum class MainTab(
  * again for the new one.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(coveredByOverlay: Boolean = false) {
     val navigator = LocalNavigator.current
     val session = LocalApp.current.session
     var shown by remember { mutableIntStateOf(session.generation) }
@@ -140,13 +142,21 @@ fun MainScreen() {
         }
         DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
-            MainContent(initialTab = tab, onTabChange = { tab = it })
+            MainContent(
+                initialTab = tab,
+                onTabChange = { tab = it },
+                coveredByOverlay = coveredByOverlay,
+            )
         }
     }
 }
 
 @Composable
-private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
+private fun MainContent(
+    initialTab: Int,
+    onTabChange: (Int) -> Unit,
+    coveredByOverlay: Boolean,
+) {
     // A pager without swipe keeps every tab composed, so lists hold their position and data.
     val pagerState = rememberPagerState(initialPage = initialTab) { MainTab.entries.size }
     LaunchedEffect(pagerState.currentPage) { onTabChange(pagerState.currentPage) }
@@ -367,6 +377,7 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
             }
         },
     ) { padding ->
+        ScrollToTopBlocker(active = coveredByOverlay)
         CompositionLocalProvider(LocalAppFilter provides appFilter, LocalMainPager provides pagerState) {
             HorizontalPager(
                 state = pagerState,
@@ -378,21 +389,23 @@ private fun MainContent(initialTab: Int, onTabChange: (Int) -> Unit) {
                 userScrollEnabled = false,
                 beyondViewportPageCount = MainTab.entries.size,
             ) { page ->
-                when (MainTab.entries[page]) {
-                    MainTab.Home -> HomeScreen(
-                        outerPadding = padding,
-                        pagerState = homePagerState,
-                        returnTop = returnTop,
-                        barSlot = page,
-                        onSearchExpandedChange = { homeSearchOpen = it },
-                    )
-                    MainTab.Follow -> FollowScreen(
-                        outerPadding = padding,
-                        returnTop = followReturnTop,
-                        barSlot = page,
-                        onSearchExpandedChange = { followSearchOpen = it },
-                    )
-                    MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
+                ScrollToTopPage(active = page == pagerState.settledPage) {
+                    when (MainTab.entries[page]) {
+                        MainTab.Home -> HomeScreen(
+                            outerPadding = padding,
+                            pagerState = homePagerState,
+                            returnTop = returnTop,
+                            barSlot = page,
+                            onSearchExpandedChange = { homeSearchOpen = it },
+                        )
+                        MainTab.Follow -> FollowScreen(
+                            outerPadding = padding,
+                            returnTop = followReturnTop,
+                            barSlot = page,
+                            onSearchExpandedChange = { followSearchOpen = it },
+                        )
+                        MainTab.Mine -> MessageScreen(outerPadding = padding, barSlot = page)
+                    }
                 }
             }
 

@@ -55,6 +55,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -120,6 +121,7 @@ fun UserScreen(uid: String) {
     val scrollBehavior = rememberPageScrollBehavior("user")
     val backdrop = rememberGlassBackdrop()
     val listState = rememberPageListState("user")
+    BindScrollToTop(listState)
     val appBarBounds = LocalAppBarBounds.current
 
     // Kept in the entry's ViewModel store, so a post stacked on top does not reset the header.

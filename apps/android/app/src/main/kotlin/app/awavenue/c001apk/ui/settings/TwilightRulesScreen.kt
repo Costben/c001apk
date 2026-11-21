@@ -18,6 +18,7 @@ import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -61,8 +62,10 @@ fun TwilightRulesScreen() {
             }
         },
     ) { innerPadding ->
+        val listState = rememberPageListState("twilight-rules")
+        BindScrollToTop(listState)
         LazyColumn(
-            state = rememberPageListState("twilight-rules"),
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .glassSource(backdrop)

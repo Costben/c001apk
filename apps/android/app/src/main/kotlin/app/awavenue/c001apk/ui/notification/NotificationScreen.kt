@@ -82,6 +82,8 @@ import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.Badge
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
+import io.github.suqi8.coui.kmp.basic.BindTopAppBarScrollReset
 import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.ChipTabDefaults
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
@@ -93,6 +95,7 @@ import io.github.suqi8.coui.kmp.basic.ListPopupDefaults
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.SearchFilterTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
@@ -173,6 +176,7 @@ fun NotificationScreen(
     // The bar never collapses; pinning the range keeps the nested-scroll connection from eating
     // the list's drags for a height change this page does not draw.
     SideEffect { scrollBehavior.state.heightOffsetLimit = 0f }
+    BindTopAppBarScrollReset(scrollBehavior)
 
     Scaffold(
         edgeToEdge = true,
@@ -304,17 +308,19 @@ fun NotificationScreen(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize().glassSource(backdrop),
             ) { page ->
-                val categoryType = NotificationCategories[page].type
-                NotificationPage(
-                    type = categoryType,
-                    scrollBehavior = scrollBehavior,
-                    contentPadding = PaddingValues(
-                        start = 10.dp,
-                        end = 10.dp,
-                        top = innerPadding.calculateTopPadding() + 10.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 10.dp,
-                    ),
-                )
+                ScrollToTopPage(active = page == pagerState.settledPage) {
+                    val categoryType = NotificationCategories[page].type
+                    NotificationPage(
+                        type = categoryType,
+                        scrollBehavior = scrollBehavior,
+                        contentPadding = PaddingValues(
+                            start = 10.dp,
+                            end = 10.dp,
+                            top = innerPadding.calculateTopPadding() + 10.dp,
+                            bottom = innerPadding.calculateBottomPadding() + 10.dp,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -446,6 +452,7 @@ private fun NotificationList(
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     val listState = rememberPageListState("notification-${type.name}")
+    BindScrollToTop(listState)
     // Reading a conversation drops its unread badge, the way the Flutter list clears it on tap.
     var clearedMessages by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(viewModel.refreshError) {

@@ -45,6 +45,7 @@ import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -78,6 +79,7 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
         Reply2ReplyViewModel(id, origin, app.repository, app.blacklist)
     }
     val listState = rememberPageListState("reply2reply")
+    BindScrollToTop(listState)
     val scrollBehavior = rememberPageScrollBehavior("reply2reply")
     val backdrop = rememberGlassBackdrop()
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }

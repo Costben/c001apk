@@ -76,6 +76,7 @@ import app.awavenue.c001apk.ui.common.AppBarTitleSize
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
+import app.awavenue.c001apk.ui.common.BindTopRowScrollReset
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.copyText
@@ -110,6 +111,7 @@ import app.awavenue.c001apk.ui.search.SearchResultTabs
 import app.awavenue.c001apk.ui.search.rememberInPlaceSearchState
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Button
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.ButtonSize
@@ -124,6 +126,7 @@ import io.github.suqi8.coui.kmp.basic.LocalToolbarBackdropBlurFraction
 import io.github.suqi8.coui.kmp.basic.PopupPositionProvider
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowDefaults
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.Text
@@ -132,6 +135,7 @@ import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.TopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.TwoRowTopAppBarDefaults
 import io.github.suqi8.coui.kmp.basic.rememberTopAppBarState
+import io.github.suqi8.coui.kmp.basic.scrollToTopOnTap
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.blur.isBlurEnabled
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
@@ -312,6 +316,7 @@ private fun TopicPage(tag: String?, id: String?) {
         pageParam = if (isTopic) title else topic.string("id"),
         placeholder = "在 $title 中搜索",
     )
+    BindTopRowScrollReset(scrollBehavior, scrolledPx, enabled = !search.expanded)
     val searchFade = search.searchFade
     val resultsFade = search.resultsFade
     val resultScrollState = search.scrollState
@@ -599,6 +604,7 @@ private fun TopicPage(tag: String?, id: String?) {
                 Layout(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .scrollToTopOnTap()
                         .onGloballyPositioned {
                             appBarBounds.reportPage(
                                 if (isTopic) Route.Topic(tag.orEmpty()) else Route.Product(id.orEmpty()),
@@ -970,26 +976,28 @@ private fun TopicPage(tag: String?, id: String?) {
                         top = innerPadding.calculateTopPadding() + 12.dp,
                         bottom = innerPadding.calculateBottomPadding() + 12.dp,
                     )
-                    if (page == headerPage) {
-                        TopicFeedList(
-                            viewModel = stream.viewModel,
-                            scrollBehavior = scrollBehavior,
-                            contentPadding = padding,
-                        ) {
-                            TopicHeader(
-                                topic = topic,
-                                isFollow = isFollow,
-                                onFollow = { onFollowClick() },
+                    ScrollToTopPage(active = page == pagerState.settledPage) {
+                        if (page == headerPage) {
+                            TopicFeedList(
+                                viewModel = stream.viewModel,
+                                scrollBehavior = scrollBehavior,
+                                contentPadding = padding,
+                            ) {
+                                TopicHeader(
+                                    topic = topic,
+                                    isFollow = isFollow,
+                                    onFollow = { onFollowClick() },
+                                )
+                            }
+                        } else {
+                            // This tab's order is offered from the bar's 排序规则 menu, not as a card.
+                            FeedList(
+                                viewModel = stream.viewModel,
+                                scrollBehavior = scrollBehavior,
+                                contentPadding = padding,
+                                showSortCard = false,
                             )
                         }
-                    } else {
-                        // This tab's order is offered from the bar's 排序规则 menu, not as a card.
-                        FeedList(
-                            viewModel = stream.viewModel,
-                            scrollBehavior = scrollBehavior,
-                            contentPadding = padding,
-                            showSortCard = false,
-                        )
                     }
                 }
                 // The history drops in under the expanded field and covers the streams, the way the
@@ -1320,6 +1328,7 @@ private fun TopicFeedList(
 ) {
     val context = LocalContext.current
     val listState = rememberPageListState(viewModel)
+    BindScrollToTop(listState)
 
     LaunchedEffect(viewModel.refreshError) {
         viewModel.refreshError?.let {

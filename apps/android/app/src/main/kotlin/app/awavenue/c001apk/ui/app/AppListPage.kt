@@ -1,6 +1,5 @@
 package app.awavenue.c001apk.ui.app
 
-import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -36,6 +35,7 @@ import app.awavenue.c001apk.ui.common.toImageBitmap
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -48,9 +48,7 @@ import io.github.suqi8.coui.kmp.squircle.squircleClip
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private class AppRow(val app: InstalledApp, val icon: ImageBitmap?)
@@ -108,6 +106,7 @@ fun AppListPage(
     val context = LocalContext.current
     val filter = LocalAppFilter.current
     val listState = rememberLazyListState()
+    BindScrollToTop(listState)
 
     var rows by remember { mutableStateOf<List<AppRow>?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -135,15 +134,10 @@ fun AppListPage(
     if (returnTop != null) {
         LaunchedEffect(listState, returnTop) {
             returnTop.events.collect {
-                coroutineScope {
-                    // Bring a collapsed app bar back along with the list.
-                    launch {
-                        animate(scrollBehavior?.state?.heightOffset ?: 0f, 0f) { value, _ ->
-                            scrollBehavior?.state?.heightOffset = value
-                        }
-                    }
-                    listState.animateScrollToItem(0)
+                if (listState.firstVisibleItemIndex > 20) {
+                    listState.scrollToItem(20)
                 }
+                listState.animateScrollToItem(0)
                 attempts++
             }
         }

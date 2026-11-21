@@ -43,6 +43,7 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
@@ -97,6 +98,7 @@ fun LocalFollowFeed(returnTop: ReturnTopController, scrollBehavior: ScrollBehavi
     }
     val viewModel = viewModel(key = "local-follow") { FeedListViewModel(holder.loader, app::contentGate) }
     val listState = rememberLazyListState()
+    BindScrollToTop(listState)
 
     // The list is read from the device, so editing it or blocking someone re-reads from the top.
     LaunchedEffect(viewModel) {
@@ -120,6 +122,7 @@ fun LocalFollowFeed(returnTop: ReturnTopController, scrollBehavior: ScrollBehavi
     }
     LaunchedEffect(listState, returnTop) {
         returnTop.events.collect {
+            scrollBehavior.state.contentOffset = 0f
             coroutineScope {
                 launch {
                     animate(scrollBehavior.state.heightOffset, 0f) { value, _ -> scrollBehavior.state.heightOffset = value }

@@ -33,6 +33,7 @@ import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.ScrollToTopPage
 import io.github.suqi8.coui.kmp.basic.TabRowWithContour
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
@@ -142,43 +143,45 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
                     state = pagerState,
                     modifier = Modifier.fillMaxSize().glassSource(backdrop),
                 ) { page ->
-                    if (type == FFFListType.Follow) {
-                        when (page) {
-                            0 -> FFFContent(
-                                type = FFFListType.Follow,
-                                uid = listUid,
-                                id = id,
-                                scrollBehavior = scrollBehavior,
-                                contentPadding = contentPadding,
-                            )
-                            1 -> CarouselContent(
-                                url = "#/topic/userFollowTagList",
-                                title = "我关注的话题",
-                                contentPadding = contentPadding,
-                                scrollBehavior = scrollBehavior,
-                            )
-                            2 -> CarouselContent(
-                                url = "#/product/followProductList",
-                                title = "我关注的数码吧",
-                                contentPadding = contentPadding,
-                                scrollBehavior = scrollBehavior,
-                            )
-                            else -> FFFContent(
-                                type = FFFListType.Apk,
+                    ScrollToTopPage(active = page == pagerState.settledPage) {
+                        if (type == FFFListType.Follow) {
+                            when (page) {
+                                0 -> FFFContent(
+                                    type = FFFListType.Follow,
+                                    uid = listUid,
+                                    id = id,
+                                    scrollBehavior = scrollBehavior,
+                                    contentPadding = contentPadding,
+                                )
+                                1 -> CarouselContent(
+                                    url = "#/topic/userFollowTagList",
+                                    title = "我关注的话题",
+                                    contentPadding = contentPadding,
+                                    scrollBehavior = scrollBehavior,
+                                )
+                                2 -> CarouselContent(
+                                    url = "#/product/followProductList",
+                                    title = "我关注的数码吧",
+                                    contentPadding = contentPadding,
+                                    scrollBehavior = scrollBehavior,
+                                )
+                                else -> FFFContent(
+                                    type = FFFListType.Apk,
+                                    uid = listUid,
+                                    id = id,
+                                    scrollBehavior = scrollBehavior,
+                                    contentPadding = contentPadding,
+                                )
+                            }
+                        } else {
+                            FFFContent(
+                                type = if (page == 0) FFFListType.Reply else FFFListType.ReplyMe,
                                 uid = listUid,
                                 id = id,
                                 scrollBehavior = scrollBehavior,
                                 contentPadding = contentPadding,
                             )
                         }
-                    } else {
-                        FFFContent(
-                            type = if (page == 0) FFFListType.Reply else FFFListType.ReplyMe,
-                            uid = listUid,
-                            id = id,
-                            scrollBehavior = scrollBehavior,
-                            contentPadding = contentPadding,
-                        )
                     }
                 }
             }
