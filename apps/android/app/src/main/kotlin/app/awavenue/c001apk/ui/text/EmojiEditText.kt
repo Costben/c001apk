@@ -164,6 +164,12 @@ fun EmojiEditText(
             // The theme can change while the view is alive; the factory only runs once.
             view.setTextColor(textColor)
             view.setHintTextColor(hintColor)
+            if (view.minimumHeight != 0) view.minimumHeight = 0
+            if (view.minLines != minLines) view.minLines = minLines
+            if (view.maxLines != maxLines) {
+                view.maxLines = maxLines
+                view.post { view.bringPointIntoView(view.selectionStart.coerceAtLeast(0)) }
+            }
             state.editText = view
         },
     )

@@ -1,6 +1,7 @@
 package app.awavenue.c001apk.ui.feed.reply
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
@@ -56,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -95,6 +99,7 @@ import app.awavenue.c001apk.ui.text.EmojiEditText
 import app.awavenue.c001apk.ui.text.EmojiSections
 import app.awavenue.c001apk.ui.text.rememberEmojiInputState
 import coil3.compose.AsyncImage
+import io.github.suqi8.coui.kmp.anim.folmeSpring
 import io.github.suqi8.coui.kmp.basic.Checkbox
 import io.github.suqi8.coui.kmp.basic.ChipTabData
 import io.github.suqi8.coui.kmp.basic.ChipTabGroup
@@ -127,6 +132,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import kotlin.math.roundToInt
 
 /**
  * What the composer is answering. [id] empty means a new feed rather than a reply; [title] carries
@@ -196,6 +202,7 @@ fun ReplyComposerSheet(
         }
     val input = rememberEmojiInputState(initialText)
     var onlySelf by remember { mutableStateOf(draft?.onlySelf == true) }
+    var expanded by remember { mutableStateOf(false) }
     var activePanel by remember { mutableStateOf<ComposerSubPanel?>(null) }
     var cachedTopics by remember { mutableStateOf<List<Entity>?>(null) }
     var cachedMentionUsers by remember { mutableStateOf<List<MentionCandidate>?>(null) }
@@ -507,12 +514,19 @@ fun ReplyComposerSheet(
     val keyboardGapProgress = (keyboard / ComposerPanel.KeyboardGapRange).coerceIn(0f, 1f)
     val bottomGap = ComposerPanel.BottomInset +
         (ComposerPanel.KeyboardBottomInset - ComposerPanel.BottomInset) * keyboardGapProgress
+    val expandProgress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = folmeSpring(damping = 1f, response = 0.35f),
+        label = "composerExpand",
+    )
 
     OverlayBottomSheet(
         show = shown,
         showDragHandle = false,
         insideMargin = DpSize(ComposerPanel.SideInset, bottomGap),
         panelPaddingBottom = 0.dp,
+        allowDismiss = !expanded,
+        enableNestedScroll = !expanded,
         onDismissRequest = { requestClose() },
         onDismissFinished = { afterExit?.invoke() },
     ) {
@@ -521,116 +535,175 @@ fun ReplyComposerSheet(
         // draft box while the work is still in place. With the question up, an exit drops it.
         // Disable as soon as the sheet starts folding away so another Back immediately hits beneath.
         BackHandler(enabled = shown && !closing) {
-            if (askSave) discardDraft() else requestClose()
+            when {
+                askSave -> discardDraft()
+                expanded -> expanded = false
+                else -> requestClose()
+            }
         }
 
-        // 关闭按钮、标题与更多菜单共用同一行工具栏，保持 ColorOS 17 顶栏 50dp 高度节奏。
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ComposerPanel.ToolbarHeight),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CloseCapsule(onClick = { requestClose() })
-            Text(
-                text = hint,
-                style = COUITheme.textStyles.body1,
-                fontWeight = FontWeight.Bold,
-                color = COUITheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+        Column(Modifier.fillMaxWidth()) {
+            // 关闭按钮、标题与更多菜单共用同一行工具栏，保持 ColorOS 17 顶栏 50dp 高度节奏。
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-            )
-            Box {
-                OverflowButton(onClick = { menuOpen = true })
-                MoreMenu(
-                    show = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    entries = listOf(
-                        // 导入草稿箱内容: any page can pull a composition written elsewhere onto
-                        // itself. Only the words and the pictures travel — the target stays this
-                        // sheet's, which is the whole reason the entry exists.
-                        "导入草稿箱内容" to {
-                            if (app.drafts.drafts.isEmpty()) {
-                                context.toast("草稿箱是空的")
-                            } else {
-                                input.clearFocus()
-                                focusManager.clearFocus()
-                                pickingDraft = true
-                            }
-                        },
-                        // An untouched sheet has nothing worth filing; the box would just collect
-                        // blanks, so the entry says so instead.
-                        "保存到草稿箱" to {
-                            if (input.text.isNotBlank() || images.isNotEmpty()) {
-                                saveToDrafts()
-                            } else {
-                                context.toast("还没有写内容")
-                            }
-                        },
-                    ),
+                    .fillMaxWidth()
+                    .heightIn(min = ComposerPanel.ToolbarHeight),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CloseCapsule(onClick = { requestClose() })
+                Text(
+                    text = hint,
+                    style = COUITheme.textStyles.body1,
+                    fontWeight = FontWeight.Bold,
+                    color = COUITheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
                 )
-            }
-        }
-        Spacer(Modifier.height(ComposerPanel.ToolbarToBodyGap))
-        // The sheet hands the content whatever is left once its toolbar is in, so the field is
-        // capped by that leftover instead of by a guess about the window: with the keyboard up the
-        // panel rides on it, and a field sized from the full window would push the action off the
-        // bottom. Everything below the field shares the same budget.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val baseBelowField = (if (images.isNotEmpty()) ComposerPanel.ImagesHeight else 0.dp) +
-                ComposerPanel.ToolsGap + ComposerPanel.ToolsHeight +
-                ComposerPanel.ActionGap + ComposerPanel.ActionHeight
-            val subPanelHeight = when (activePanel) {
-                null -> 0.dp
-                ComposerSubPanel.Emoji -> ComposerPanel.EmojiHeight
-                ComposerSubPanel.Topic, ComposerSubPanel.Mention ->
-                    ComposerPanel.PickerHeight.coerceAtMost(
-                        (maxHeight - baseBelowField - ComposerPanel.MinEditorHeight).coerceAtLeast(156.dp),
-                    )
-            }
-            val belowField = baseBelowField + subPanelHeight
-            val editorMax = (maxHeight - belowField).coerceAtLeast(ComposerPanel.MinEditorHeight)
-            Column(Modifier.fillMaxWidth()) {
-                // The card itself is capped rather than scrolled: a scroll viewport shorter than the
-                // field would cut the card off square at the bottom, and the field already scrolls its
-                // own text when it runs out of lines.
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = editorMax)
-                        .squircleSurface(
-                            color = COUITheme.colorScheme.surfaceContainer,
-                            cornerRadius = ComposerPanel.EditorRadius,
+                Box {
+                    OverflowButton(onClick = { menuOpen = true })
+                    MoreMenu(
+                        show = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        entries = listOf(
+                            // 导入草稿箱内容: any page can pull a composition written elsewhere onto
+                            // itself. Only the words and the pictures travel — the target stays this
+                            // sheet's, which is the whole reason the entry exists.
+                            "导入草稿箱内容" to {
+                                if (app.drafts.drafts.isEmpty()) {
+                                    context.toast("草稿箱是空的")
+                                } else {
+                                    input.clearFocus()
+                                    focusManager.clearFocus()
+                                    pickingDraft = true
+                                }
+                            },
+                            // An untouched sheet has nothing worth filing; the box would just collect
+                            // blanks, so the entry says so instead.
+                            "保存到草稿箱" to {
+                                if (input.text.isNotBlank() || images.isNotEmpty()) {
+                                    saveToDrafts()
+                                } else {
+                                    context.toast("还没有写内容")
+                                }
+                            },
                         ),
-                ) {
-                    EmojiEditText(
-                        state = input,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f, fill = false)
-                            .padding(horizontal = 12.dp),
-                        hint = "说点什么…",
-                        maxCount = ComposerPanel.MaxMessage,
-                        minLines = 2,
-                        maxLines = 5,
-                        textStyle = COUITheme.textStyles.body1,
-                        onFocused = { activePanel = null },
-                    )
-                    Text(
-                        text = "${input.text.length}/${ComposerPanel.MaxMessage}",
-                        style = trimmedLineHeight,
-                        fontSize = 12.sp,
-                        lineHeight = 12.sp,
-                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
                     )
                 }
+            }
+            Spacer(Modifier.height(ComposerPanel.ToolbarToBodyGap))
+            // The sheet hands the content whatever is left once its toolbar is in, so the field is
+            // capped by that leftover instead of by a guess about the window: with the keyboard up the
+            // panel rides on it, and a field sized from the full window would push the action off the
+            // bottom. Everything below the field shares the same budget.
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+            ) {
+                val baseBelowField = (if (images.isNotEmpty()) ComposerPanel.ImagesHeight else 0.dp) +
+                    ComposerPanel.ToolsGap + ComposerPanel.ToolsHeight +
+                    ComposerPanel.ActionGap + ComposerPanel.ActionHeight
+                val subPanelHeight = when (activePanel) {
+                    null -> 0.dp
+                    ComposerSubPanel.Emoji -> ComposerPanel.EmojiHeight
+                    ComposerSubPanel.Topic, ComposerSubPanel.Mention ->
+                        ComposerPanel.PickerHeight.coerceAtMost(
+                            (maxHeight - baseBelowField - ComposerPanel.MinEditorHeight).coerceAtLeast(156.dp),
+                        )
+                }
+                val belowField = baseBelowField + subPanelHeight
+                val editorMax = (maxHeight - belowField).coerceAtLeast(ComposerPanel.MinEditorHeight)
+                val editorMaxPx = with(density) { editorMax.roundToPx() }
+                val compactHeightPx = remember { IntArray(1) }
+                Column(Modifier.fillMaxWidth()) {
+                    // The card interpolates smoothly between its compact wrapped height and full
+                    // available height using `expandProgress`, while its inner editor stays bounded
+                    // below the counter so text lines reveal/collapse without jumping or clipping.
+                    Layout(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .squircleSurface(
+                                color = COUITheme.colorScheme.surfaceContainer,
+                                cornerRadius = ComposerPanel.EditorRadius,
+                            )
+                            .clipToBounds()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { input.focus() },
+                        content = {
+                            Box(Modifier.fillMaxWidth()) {
+                                EmojiEditText(
+                                    state = input,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp, end = 40.dp),
+                                    hint = "说点什么…",
+                                    maxCount = ComposerPanel.MaxMessage,
+                                    minLines = 2,
+                                    maxLines = if (expanded) Int.MAX_VALUE else 5,
+                                    textStyle = COUITheme.textStyles.body1,
+                                    onFocused = { activePanel = null },
+                                )
+                                ToolbarIcon(
+                                    icon = if (expanded) AppIcons.CloseFullscreen else AppIcons.OpenInFull,
+                                    selected = false,
+                                    contentDescription = if (expanded) "收起全屏编辑" else "全屏编辑",
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 6.dp, end = 6.dp),
+                                    buttonSize = 32.dp,
+                                    iconSize = 18.dp,
+                                ) {
+                                    expanded = !expanded
+                                }
+                            }
+                            Text(
+                                text = "${input.text.length}/${ComposerPanel.MaxMessage}",
+                                style = trimmedLineHeight,
+                                fontSize = 12.sp,
+                                lineHeight = 12.sp,
+                                color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                            )
+                        },
+                    ) { measurables, constraints ->
+                        val maxW = constraints.maxWidth
+                        val maxH = editorMaxPx.coerceAtMost(constraints.maxHeight)
+                        val counterPlaceable = measurables[1].measure(
+                            constraints.copy(minWidth = 0, maxWidth = maxW, minHeight = 0, maxHeight = maxH),
+                        )
+                        val counterH = counterPlaceable.height
+                        if (expanded) {
+                            val startH = if (compactHeightPx[0] > 0) compactHeightPx[0].coerceAtMost(maxH) else maxH
+                            val cardH = (startH + ((maxH - startH) * expandProgress)).roundToInt().coerceIn(0, maxH)
+                            val editorAreaMaxH = (cardH - counterH).coerceAtLeast(0)
+                            val editorPlaceable = measurables[0].measure(
+                                constraints.copy(minWidth = maxW, maxWidth = maxW, minHeight = 0, maxHeight = editorAreaMaxH),
+                            )
+                            val finalH = cardH.coerceAtLeast(editorPlaceable.height + counterH).coerceAtMost(maxH)
+                            layout(maxW, finalH) {
+                                editorPlaceable.placeRelative(0, 0)
+                                counterPlaceable.placeRelative(maxW - counterPlaceable.width, finalH - counterH)
+                            }
+                        } else {
+                            val editorAreaMaxH = (maxH - counterH).coerceAtLeast(0)
+                            val editorPlaceable = measurables[0].measure(
+                                constraints.copy(minWidth = maxW, maxWidth = maxW, minHeight = 0, maxHeight = editorAreaMaxH),
+                            )
+                            val naturalH = (editorPlaceable.height + counterH).coerceAtMost(maxH)
+                            compactHeightPx[0] = naturalH
+                            val cardH = (naturalH + ((maxH - naturalH) * expandProgress)).roundToInt().coerceIn(naturalH, maxH)
+                            layout(maxW, cardH) {
+                                editorPlaceable.placeRelative(0, 0)
+                                counterPlaceable.placeRelative(maxW - counterPlaceable.width, cardH - counterH)
+                            }
+                        }
+                    }
                 if (images.isNotEmpty()) {
                     Row(
                         Modifier
@@ -793,6 +866,7 @@ fun ReplyComposerSheet(
                     enabled = canPublish,
                     onClick = { scope.launch { publish() } },
                 )
+                }
             }
         }
     }
@@ -1181,6 +1255,9 @@ private fun ToolbarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
     contentDescription: String? = null,
+    modifier: Modifier = Modifier,
+    buttonSize: Dp = 36.dp,
+    iconSize: Dp = 22.dp,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1196,8 +1273,8 @@ private fun ToolbarIcon(
         label = "toolbarIconPressScale",
     )
     Box(
-        modifier = Modifier
-            .size(36.dp)
+        modifier = modifier
+            .size(buttonSize)
             .graphicsLayer {
                 scaleX = pressScale
                 scaleY = pressScale
@@ -1213,16 +1290,22 @@ private fun ToolbarIcon(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(22.dp),
-            tint = if (selected) {
-                COUITheme.colorScheme.onSecondaryContainer
-            } else {
-                COUITheme.colorScheme.onSurfaceVariantSummary
-            },
-        )
+        Crossfade(
+            targetState = icon,
+            animationSpec = tween(180),
+            label = "toolbarIconSwap",
+        ) { currentIcon ->
+            Icon(
+                currentIcon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize),
+                tint = if (selected) {
+                    COUITheme.colorScheme.onSecondaryContainer
+                } else {
+                    COUITheme.colorScheme.onSurfaceVariantSummary
+                },
+            )
+        }
     }
 }
 

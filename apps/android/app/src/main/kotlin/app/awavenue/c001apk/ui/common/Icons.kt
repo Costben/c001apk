@@ -127,6 +127,21 @@ object AppIcons {
         )
     }
 
+    val OpenInFull: ImageVector by lazy {
+        icon(
+            "OpenInFull",
+            "M21,11V3h-8l3.29,3.29l-10,10L3,13v8h8l-3.29,-3.29l10,-10L21,11z",
+        )
+    }
+
+    val CloseFullscreen: ImageVector by lazy {
+        icon(
+            "CloseFullscreen",
+            "M22,3.41L17.71,7.71L20,10h-6V4l2.29,2.29L20.59,2L22,3.41z" +
+                "M2,20.59L6.29,16.29L4,14h6v6l-2.29,-2.29L3.41,22L2,20.59z",
+        )
+    }
+
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
