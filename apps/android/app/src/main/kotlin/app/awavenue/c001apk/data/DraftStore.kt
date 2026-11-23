@@ -26,21 +26,39 @@ data class DraftImage(
     val name: String,
     val resolution: String,
     val md5: String,
+    val liveVideoPath: String = "",
+    val liveVideoName: String = "",
+    val liveVideoMd5: String = "",
+    val livePhotoEnabled: Boolean = false,
 ) {
     fun toJson() = buildJsonObject {
         put("path", JsonPrimitive(path))
         put("name", JsonPrimitive(name))
         put("resolution", JsonPrimitive(resolution))
         put("md5", JsonPrimitive(md5))
+        if (liveVideoPath.isNotEmpty()) {
+            put("liveVideoPath", JsonPrimitive(liveVideoPath))
+            put("liveVideoName", JsonPrimitive(liveVideoName))
+            put("liveVideoMd5", JsonPrimitive(liveVideoMd5))
+            put("livePhotoEnabled", JsonPrimitive(livePhotoEnabled))
+        }
     }
 
     companion object {
-        fun fromJson(obj: JsonObject) = DraftImage(
-            path = obj.text("path"),
-            name = obj.text("name"),
-            resolution = obj.text("resolution"),
-            md5 = obj.text("md5"),
-        )
+        fun fromJson(obj: JsonObject): DraftImage {
+            val liveVideoPath = obj.text("liveVideoPath")
+            return DraftImage(
+                path = obj.text("path"),
+                name = obj.text("name"),
+                resolution = obj.text("resolution"),
+                md5 = obj.text("md5"),
+                liveVideoPath = liveVideoPath,
+                liveVideoName = obj.text("liveVideoName"),
+                liveVideoMd5 = obj.text("liveVideoMd5"),
+                livePhotoEnabled = (obj["livePhotoEnabled"] as? JsonPrimitive)?.booleanOrNull
+                    ?: liveVideoPath.isNotEmpty(),
+            )
+        }
     }
 }
 
@@ -188,20 +206,39 @@ class DraftStore(context: Context) {
 
     private fun copyImages(id: String, images: List<DraftImage>): List<DraftImage> {
         val dir = File(root, id).apply { mkdirs() }
+        val keep = HashSet<String>()
         val kept = images.mapNotNull { image ->
-            val source = File(image.path)
-            if (!source.isFile) return@mapNotNull null
-            // A picture that already lives in this draft's folder is kept where it is.
-            if (source.parentFile?.absolutePath == dir.absolutePath) return@mapNotNull image
-            val extension = source.extension.ifEmpty { "jpg" }
-            val destination = File(dir, "${UUID.randomUUID()}.$extension")
-            runCatching { source.copyTo(destination, overwrite = true) }
-                .getOrNull()
-                ?.let { image.copy(path = it.absolutePath) }
+            val copiedImage = copyIntoDraftDir(dir, image.path, "jpg") ?: return@mapNotNull null
+            keep += copiedImage.absolutePath
+            val copiedVideo = if (image.liveVideoPath.isNotEmpty()) {
+                copyIntoDraftDir(dir, image.liveVideoPath, "mp4")?.also { keep += it.absolutePath }
+            } else {
+                null
+            }
+            if (copiedVideo != null) {
+                image.copy(path = copiedImage.absolutePath, liveVideoPath = copiedVideo.absolutePath)
+            } else {
+                image.copy(
+                    path = copiedImage.absolutePath,
+                    liveVideoPath = "",
+                    liveVideoName = "",
+                    liveVideoMd5 = "",
+                    livePhotoEnabled = false,
+                )
+            }
         }
-        val keep = kept.mapTo(HashSet()) { it.path }
         dir.listFiles()?.forEach { file -> if (file.absolutePath !in keep) file.delete() }
         return kept
+    }
+
+    private fun copyIntoDraftDir(dir: File, sourcePath: String, defaultExtension: String): File? {
+        val source = File(sourcePath)
+        if (!source.isFile) return null
+        // A file that already lives in this draft's folder is kept where it is.
+        if (source.parentFile?.absolutePath == dir.absolutePath) return source
+        val extension = source.extension.ifEmpty { defaultExtension }
+        val destination = File(dir, "${UUID.randomUUID()}.$extension")
+        return runCatching { source.copyTo(destination, overwrite = true) }.getOrNull()
     }
 
     private fun write() {

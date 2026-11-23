@@ -27,7 +27,11 @@ internal object MotionPhotoParser {
     private const val MAX_XMP_SCAN_BYTES = 512 * 1024
 
     private val itemTagRegex = Regex("""<[^>]+Item:Mime=\"video/mp4\"[^>]*>""")
+    private val itemElementRegex =
+        Regex("""<[^/>\s]*:Item\b[^>]*>.*?</[^/>\s]*:Item\s*>""", RegexOption.DOT_MATCHES_ALL)
     private val lengthRegex = Regex("""Item:Length=\"(\d+)\"""")
+    private val elementLengthRegex =
+        Regex("""<[^/>\s]*:Length\s*>\s*(\d+)\s*</[^/>\s]*:Length\s*>""")
     private val microVideoOffsetRegex = Regex("""GCamera:MicroVideoOffset=\"(\d+)\"""")
     private val onePlusVideoLengthRegex = Regex("""OpCamera:VideoLength=\"(\d+)\"""")
     private val presentationTimestampRegex =
@@ -55,7 +59,13 @@ internal object MotionPhotoParser {
                 (declaresMotionPhoto || expectMotionPhoto) &&
                     it in 12 until file.length() && hasFtypAtTail(file, it)
             }
-            ?: if (declaresMotionPhoto || expectMotionPhoto) findMp4LengthFromTail(file) else null
+            ?: if (declaresMotionPhoto || expectMotionPhoto) {
+                findMp4LengthFromTail(file)
+            } else if (file.hasJpegHeader()) {
+                findMp4LengthFromTail(file, requireFollowingBox = true)
+            } else {
+                null
+            }
         val presentationTimestampUs = presentationTimestampRegex.find(xmp)
             ?.groupValues
             ?.get(1)
@@ -63,7 +73,7 @@ internal object MotionPhotoParser {
 
         return EmbeddedMediaInfo(
             hasUltraHdr = hasUltraHdr,
-            declaresMotionPhoto = declaresMotionPhoto,
+            declaresMotionPhoto = declaresMotionPhoto || embeddedVideoLength != null,
             embeddedVideoLength = embeddedVideoLength,
             declaredVideoLength = declaredVideoLength,
             presentationTimestampUs = presentationTimestampUs,
@@ -80,8 +90,15 @@ internal object MotionPhotoParser {
     }
 
     private fun findContainerVideoLength(xmp: String): Long? {
-        val tag = itemTagRegex.find(xmp)?.value ?: return null
-        return lengthRegex.find(tag)?.groupValues?.get(1)?.toLongOrNull()
+        itemTagRegex.find(xmp)?.value?.let { tag ->
+            lengthRegex.find(tag)?.groupValues?.get(1)?.toLongOrNull()?.let { return it }
+        }
+        return itemElementRegex.findAll(xmp)
+            .firstOrNull { it.value.contains("video/mp4") }
+            ?.let { match ->
+                lengthRegex.find(match.value)?.groupValues?.get(1)?.toLongOrNull()
+                    ?: elementLengthRegex.find(match.value)?.groupValues?.get(1)?.toLongOrNull()
+            }
     }
 
     private fun hasFtypAtTail(file: File, videoLength: Long): Boolean {
@@ -96,7 +113,10 @@ internal object MotionPhotoParser {
         }.getOrDefault(false)
     }
 
-    private fun findMp4LengthFromTail(file: File): Long? = runCatching {
+    private fun findMp4LengthFromTail(
+        file: File,
+        requireFollowingBox: Boolean = false,
+    ): Long? = runCatching {
         val scanLength = minOf(file.length(), 64L * 1024 * 1024).toInt()
         val scanOffset = file.length() - scanLength
         val bytes = ByteArray(scanLength)
@@ -114,12 +134,21 @@ internal object MotionPhotoParser {
                     ((bytes[index - 3].toInt() and 0xff) shl 16) or
                     ((bytes[index - 2].toInt() and 0xff) shl 8) or
                     (bytes[index - 1].toInt() and 0xff)
-                if (boxSize in 8..4096) {
-                    val mp4Offset = scanOffset + index - 4L
+                if (boxSize in 12..4096) {
+                    val ftypStart = index - 4
+                    if (requireFollowingBox) {
+                        val nextBoxOffset = ftypStart + boxSize
+                        if (nextBoxOffset + 8 > bytes.size) continue
+                        val nextType = String(bytes, nextBoxOffset + 4, 4, StandardCharsets.US_ASCII)
+                        if (nextType !in MP4_TOP_LEVEL_BOXES) continue
+                    }
+                    val mp4Offset = scanOffset + ftypStart.toLong()
                     return@runCatching file.length() - mp4Offset
                 }
             }
         }
         null
     }.getOrNull()
+
+    private val MP4_TOP_LEVEL_BOXES = setOf("moov", "mdat", "free", "wide", "skip", "uuid", "meta")
 }

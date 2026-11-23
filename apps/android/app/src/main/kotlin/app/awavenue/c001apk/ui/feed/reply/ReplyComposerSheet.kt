@@ -91,6 +91,7 @@ import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.rememberCapsuleShape
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.feed.detail.LivePhotoVideo
 import app.awavenue.c001apk.ui.feed.detail.OssUpload
 import app.awavenue.c001apk.ui.feed.detail.OssUploadModel
 import app.awavenue.c001apk.ui.feed.detail.SelectedImage
@@ -210,16 +211,14 @@ fun ReplyComposerSheet(
     // 谁可以看 is asked in a dialog over the panel, the way the reference client does it.
     var visibilityMenu by remember { mutableStateOf(false) }
     var images by remember {
-        mutableStateOf(
-            draft?.images.orEmpty().map { image ->
-                SelectedImage(image.path, OssUploadModel(image.name, image.resolution, image.md5))
-            },
-        )
+        mutableStateOf(draft?.images.orEmpty().map { it.toSelectedImage() })
     }
     // The id the draft box files this composition under: a resumed draft keeps its own, so
     // saving twice replaces rather than duplicates.
     val draftId = remember { draft?.id ?: UUID.randomUUID().toString() }
-    val initialImages = remember { draft?.images.orEmpty().map { it.path } }
+    val initialImages = remember {
+        draft?.images.orEmpty().map { it.path to (it.liveVideoPath.isNotEmpty() && it.livePhotoEnabled) }
+    }
     var askSave by remember { mutableStateOf(false) }
     var savingDraft by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<String?>(null) }
@@ -262,7 +261,7 @@ fun ReplyComposerSheet(
     /** Unsaved work: text that moved away from what the sheet opened with, or a changed picture set. */
     fun hasUnsavedWork(): Boolean =
         input.text.trim() != initialText.trim() ||
-            images.map { it.path } != initialImages ||
+            images.map { it.path to (it.liveVideo != null && it.livePhotoEnabled) } != initialImages ||
             activeTarget != initialTarget
 
     /** Slides the panel out; [then] runs once it has left the screen. */
@@ -382,21 +381,26 @@ fun ReplyComposerSheet(
     suspend fun publish() {
         if (publishing) return
         publishing = true
+        var stage = "准备发布"
         try {
             var pic = ""
+            val resolvedFeedType =
+                if (activeTarget.targetType == "apk") "comment" else activeTarget.feedType.ifEmpty { "feed" }
             if (images.isNotEmpty()) {
+                stage = "上传图片"
                 progress = "准备上传图片"
                 pic = OssUpload.upload(
                     repository = app.repository,
                     images = images,
+                    feedType = resolvedFeedType,
                     onProgress = { index, total -> progress = "正在上传图片 $index/$total" },
                 ).joinToString(",")
             }
             progress = "正在发布"
             val fields = mutableListOf("message" to input.text)
             if (activeTarget.id.isEmpty()) {
-                val type = if (activeTarget.targetType == "apk") "comment" else activeTarget.feedType.ifEmpty { "feed" }
-                val feedFields = mutableListOf("type" to type)
+                stage = "发布动态"
+                val feedFields = mutableListOf("type" to resolvedFeedType)
                 if (activeTarget.targetType.isNotEmpty()) feedFields += "targetType" to activeTarget.targetType
                 if (activeTarget.targetId.isNotEmpty()) feedFields += "targetId" to activeTarget.targetId
                 feedFields += "message" to input.text
@@ -412,6 +416,7 @@ fun ReplyComposerSheet(
                     leave(onPosted)
                 }
             } else {
+                stage = "发表回复"
                 fields += "replyAndForward" to if (onlySelf) "1" else "0"
                 fields += "pic" to pic
                 val result = app.repository.postReply(activeTarget.id, activeTarget.type, fields, emptyList())
@@ -428,6 +433,10 @@ fun ReplyComposerSheet(
             throw e
         } catch (e: Exception) {
             val failure = ApiFailure.from(e)
+            android.util.Log.w(
+                "ReplyComposer",
+                "publish failed stage=$stage kind=${failure.kind} http=${failure.httpStatus} msg=${failure.message}",
+            )
             progress = null
             if (failure.kind == ApiFailureKind.Captcha) {
                 loadCaptchaImage(app, context) { captchaImage = it }
@@ -454,7 +463,7 @@ fun ReplyComposerSheet(
         val text = draft.text.take(ComposerBudget.Message)
         val pictures = draft.images.take(ComposerBudget.Images)
         input.replace(text)
-        images = pictures.map { SelectedImage(it.path, OssUploadModel(it.name, it.resolution, it.md5)) }
+        images = pictures.map { it.toSelectedImage() }
         val cut = buildList {
             if (draft.text.length > text.length) {
                 add("正文超过 ${ComposerBudget.Message} 字，已截到 ${text.length} 字")
@@ -475,9 +484,7 @@ fun ReplyComposerSheet(
                 app.drafts.save(
                     id = draftId,
                     text = input.text,
-                    images = images.map {
-                        DraftImage(it.path, it.model.name, it.model.resolution, it.model.md5)
-                    },
+                    images = images.map { it.toDraftImage() },
                     replyId = activeTarget.id,
                     replyType = activeTarget.type,
                     targetType = activeTarget.targetType,
@@ -713,15 +720,47 @@ fun ReplyComposerSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        images.forEach { image ->
+                        images.forEachIndexed { imageIndex, image ->
                             Box(Modifier.size(64.dp)) {
                                 AsyncImage(
-                                    model = java.io.File(image.path),
+                                    model = File(image.path),
                                     contentDescription = null,
                                     modifier = Modifier.size(64.dp).clip(rememberSquircleShape(10.dp)),
                                 )
+                                if (image.liveVideo != null) {
+                                    Text(
+                                        if (image.livePhotoEnabled) "实况" else "静态",
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(4.dp)
+                                            .clip(rememberSquircleShape(4.dp))
+                                            .background(
+                                                if (image.livePhotoEnabled) {
+                                                    COUITheme.colorScheme.primaryContainer
+                                                } else {
+                                                    Color.Black.copy(alpha = 0.55f)
+                                                },
+                                            )
+                                            .clickable {
+                                                images = images.mapIndexed { idx, item ->
+                                                    if (idx == imageIndex) {
+                                                        item.copy(livePhotoEnabled = !item.livePhotoEnabled)
+                                                    } else {
+                                                        item
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                                        style = COUITheme.textStyles.footnote2,
+                                        color = if (image.livePhotoEnabled) {
+                                            COUITheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            Color.White
+                                        },
+                                    )
+                                }
                                 IconButton(
-                                    onClick = { images = images - image },
+                                    onClick = { images = images.filterIndexed { idx, _ -> idx != imageIndex } },
                                     modifier = Modifier.align(Alignment.TopEnd).size(20.dp),
                                 ) {
                                     Icon(COUIIcons.Close, contentDescription = "移除", modifier = Modifier.size(14.dp))
@@ -2010,3 +2049,38 @@ private fun toMentionCandidate(item: Entity): MentionCandidate? {
     }
     return MentionCandidate(uid = uid, username = username, avatar = avatar, subtitle = subtitle)
 }
+
+private fun DraftImage.toSelectedImage(): SelectedImage {
+    val liveVideo = if (
+        liveVideoPath.isNotEmpty() &&
+        liveVideoName.isNotEmpty() &&
+        liveVideoMd5.isNotEmpty() &&
+        File(liveVideoPath).isFile
+    ) {
+        LivePhotoVideo(liveVideoPath, liveVideoName, liveVideoMd5)
+    } else {
+        null
+    }
+    return SelectedImage(
+        path = path,
+        model = OssUploadModel(
+            name = name,
+            resolution = resolution,
+            md5 = md5,
+            livePhotoVideo = if (liveVideo != null && livePhotoEnabled) liveVideo.name else "",
+        ),
+        liveVideo = liveVideo,
+        livePhotoEnabled = liveVideo != null && livePhotoEnabled,
+    )
+}
+
+private fun SelectedImage.toDraftImage(): DraftImage = DraftImage(
+    path = path,
+    name = model.name,
+    resolution = model.resolution,
+    md5 = model.md5,
+    liveVideoPath = liveVideo?.path.orEmpty(),
+    liveVideoName = liveVideo?.name.orEmpty(),
+    liveVideoMd5 = liveVideo?.md5.orEmpty(),
+    livePhotoEnabled = livePhotoEnabled,
+)

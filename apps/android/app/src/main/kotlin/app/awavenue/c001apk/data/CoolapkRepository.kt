@@ -536,7 +536,7 @@ class CoolapkRepository(
     }
 
     suspend fun ossUploadPrepare(fields: List<Pair<String, String>>): JsonObject =
-        api.postJson(Api.OSS_UPLOAD_PREPARE, body = Body.Multipart(fields, emptyList()))
+        api.postJson(Api.OSS_UPLOAD_PREPARE, body = Body.Form(fields))
 
     // ---- login -------------------------------------------------------------------------------
 

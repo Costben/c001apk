@@ -159,6 +159,7 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
                     toUid = uid,
                     uploadBucket = "message",
                     uploadDir = "message",
+                    enableLivePhoto = false,
                     onProgress = { index, total -> progress = "正在上传图片 $index/$total" },
                 ).firstOrNull()
                 if (uploaded == null) {

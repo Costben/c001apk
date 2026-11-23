@@ -138,6 +138,57 @@ class MotionPhotoTest {
         output.delete()
     }
 
+    @Test
+    fun splitMotionPhotoSeparatesStillAndTrimsNonMp4VendorTrailer() {
+        val jpegWithXmp = Base64.getDecoder().decode(ONE_PIXEL_JPEG)
+        val cleanMp4 = mp4Bytes() + mp4Box("moov", ByteArray(12) { 0x11 })
+        val vendorTrailer = byteArrayOf(0x9a.toByte(), 0x99.toByte(), 0x99.toByte(), 0x3f, 0x01, 0x02)
+        val totalTail = cleanMp4 + vendorTrailer
+        val xmp = """
+            <rdf:Description OpCamera:OLivePhotoVersion="2" OpCamera:VideoLength="${cleanMp4.size}" />
+            <Container:Item Item:Mime="video/mp4" Item:Semantic="MotionPhoto" Item:Length="${totalTail.size}" />
+        """.trimIndent()
+        val stillExpected = jpegWithXmp.withXmp(xmp)
+        val source = temporaryFile(stillExpected + totalTail, ".jpg")
+        val stillOut = File.createTempFile("motion-photo-still-", ".jpg")
+        val videoOut = File.createTempFile("motion-photo-vid-", ".mp4")
+
+        val splitOk = splitMotionPhoto(source, stillOut, videoOut)
+
+        assertTrue(splitOk)
+        assertTrue(stillExpected.contentEquals(stillOut.readBytes()))
+        assertTrue(cleanMp4.contentEquals(videoOut.readBytes()))
+        assertEquals(cleanMp4.size.toLong(), measureValidMp4Length(source, stillExpected.size.toLong(), totalTail.size.toLong()))
+
+        source.delete()
+        stillOut.delete()
+        videoOut.delete()
+    }
+
+    @Test
+    fun childElementXmpAndXmpLessTailMp4AreDetected() {
+        val cleanMp4 = mp4Bytes() + mp4Box("moov", ByteArray(8) { 0x22 })
+        val xmpChild = """
+            <rdf:Description GCamera:MotionPhoto="1" />
+            <Container:Item>
+                <Item:Mime>video/mp4</Item:Mime>
+                <Item:Length>${cleanMp4.size}</Item:Length>
+            </Container:Item>
+        """.trimIndent().toByteArray(StandardCharsets.ISO_8859_1)
+        val childFile = temporaryFile(xmpChild + cleanMp4, ".jpg")
+        val childParsed = MotionPhotoParser.parse(childFile)
+        assertEquals(cleanMp4.size.toLong(), childParsed.declaredVideoLength)
+        assertEquals(cleanMp4.size.toLong(), childParsed.embeddedVideoLength)
+
+        val xmpLessFile = temporaryFile(Base64.getDecoder().decode(ONE_PIXEL_JPEG) + cleanMp4, ".jpg")
+        val xmpLessParsed = MotionPhotoParser.parse(xmpLessFile)
+        assertTrue(xmpLessParsed.hasMotionPhoto)
+        assertEquals(cleanMp4.size.toLong(), xmpLessParsed.embeddedVideoLength)
+
+        childFile.delete()
+        xmpLessFile.delete()
+    }
+
     private fun temporaryFile(bytes: ByteArray, suffix: String = ".jpg"): File =
         File.createTempFile("motion-photo-test-", suffix).apply { writeBytes(bytes) }
 
@@ -147,6 +198,20 @@ class MotionPhotoTest {
         'm'.code.toByte(), 'p'.code.toByte(), '4'.code.toByte(), '2'.code.toByte(),
         0, 0, 0, 0,
     )
+
+    private fun mp4Box(type: String, payload: ByteArray): ByteArray {
+        val size = 8 + payload.size
+        return byteArrayOf(
+            (size ushr 24).toByte(),
+            (size ushr 16).toByte(),
+            (size ushr 8).toByte(),
+            size.toByte(),
+            type[0].code.toByte(),
+            type[1].code.toByte(),
+            type[2].code.toByte(),
+            type[3].code.toByte(),
+        ) + payload
+    }
 
     private fun ByteArray.withXmp(xmp: String): ByteArray {
         val scanStart = indices.first { index ->

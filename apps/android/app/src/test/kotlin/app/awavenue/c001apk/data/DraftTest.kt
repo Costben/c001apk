@@ -73,4 +73,31 @@ class DraftTest {
         assertEquals("（2张图片）", draft(images = List(2) { DraftImage("/a/$it.jpg", "a", "", "") }).preview)
         assertEquals("（空白草稿）", draft().preview)
     }
+
+    @Test
+    fun livePhotoMetadataSurvivesDraftRoundTrip() {
+        val original = draft(
+            text = "实况测试",
+            images = listOf(
+                DraftImage(
+                    path = "/data/drafts/draft-1/a.jpg",
+                    name = "a.jpg",
+                    resolution = "1080x1440",
+                    md5 = "md5-img",
+                    liveVideoPath = "/data/drafts/draft-1/a.mp4",
+                    liveVideoName = "a.mp4",
+                    liveVideoMd5 = "md5-vid",
+                    livePhotoEnabled = false,
+                ),
+            ),
+        )
+
+        val restored = Draft.fromJson(original.id, Json.parseToJsonElement(original.toJson().toString()).jsonObject)
+
+        assertEquals(original, restored)
+        assertEquals("/data/drafts/draft-1/a.mp4", restored.images.single().liveVideoPath)
+        assertEquals("a.mp4", restored.images.single().liveVideoName)
+        assertEquals("md5-vid", restored.images.single().liveVideoMd5)
+        assertEquals(false, restored.images.single().livePhotoEnabled)
+    }
 }
