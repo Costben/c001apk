@@ -58,6 +58,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -319,6 +320,7 @@ fun ImageViewScreen(images: List<String>, initialPage: Int) {
                     canStartDismiss = {
                         transition?.exiting?.invoke() != true && progress() >= 0.35f
                     },
+                    isOpening = { transition?.exiting?.invoke() != true },
                     progress = progress,
                     transitionOffset = transitionOffset,
                     origins = origins,
@@ -528,11 +530,13 @@ private fun GraphicsLayerScope.openFrame(
     thumb: ThumbBounds?,
     aspect: Float?,
     squircleEnabled: Boolean,
+    opening: Boolean = false,
 ) {
     val source = thumb?.rect
     val rest = (aspect ?: source?.let { it.width / it.height })
         ?.let { restSize(size.width, size.height, it) }
-    if (source == null || rest == null || rest.height > size.height + 0.5f) {
+    val isLongImage = rest != null && rest.height > size.height + 0.5f
+    if (source == null || rest == null || (opening && isLongImage)) {
         settle()
         alpha = progress
         scaleX = lerp(0.92f, 1f, progress)
@@ -541,7 +545,9 @@ private fun GraphicsLayerScope.openFrame(
     }
     val width = size.width
     val height = size.height
-    val cover = max(source.width / rest.width, source.height / rest.height)
+    // 长图预测性返回跟手期间，直接把当前可见视口当成满屏画面向原缩略图中心裁切缩回。
+    val targetRest = if (isLongImage) Size(width, height) else rest
+    val cover = max(source.width / targetRest.width, source.height / targetRest.height)
     val scale = lerp(cover, 1f, progress)
     alpha = 1f
     transformOrigin = TransformOrigin.Center
@@ -597,6 +603,7 @@ private fun ZoomablePage(
     canPage: Boolean,
     isPagerScrolling: () -> Boolean,
     canStartDismiss: () -> Boolean,
+    isOpening: () -> Boolean,
     progress: () -> Float,
     transitionOffset: () -> Offset,
     origins: ImageOrigins,
@@ -807,7 +814,7 @@ private fun ZoomablePage(
                                         null
                                     }
                                     val thumb = liveThumb ?: url.takeIf { !frame.zoomed }?.let { frame.thumbs[it] }
-                                    openFrame(p, thumb, frame.aspectOf(url), squircleEnabled)
+                                    openFrame(p, thumb, frame.aspectOf(url), squircleEnabled, opening = isOpening())
                                 }
                                 translationX += off.x
                                 translationY += off.y
@@ -821,7 +828,10 @@ private fun ZoomablePage(
                 Modifier
                     .fillMaxSize()
                     .onSizeChanged { box = it }
+                    .clipToBounds()
                     .drawWithContent {
+                        // 裁剪到屏幕视口尺寸，确保长图或放大后只截取当前屏幕可见部分用于退场动画。
+                        pageLayer.clip = true
                         pageLayer.record { this@drawWithContent.drawContent() }
                         drawLayer(pageLayer)
                     }
@@ -1091,6 +1101,7 @@ private class FlightTargetInfo(
     val thumb: ThumbBounds?,
     val aspect: Float?,
     val hasThumb: Boolean,
+    val isLongImage: Boolean,
     val layer: GraphicsLayer?,
     val onRelease: ((GraphicsLayer) -> Unit)?,
 )
@@ -1114,12 +1125,15 @@ private fun resolveFlightTargetInfo(
     val h = boxSize.height.toFloat()
     val effectiveAspect = aspect ?: thumb?.rect?.let { if (it.height > 0f) it.width / it.height else null }
     val rest = if (w > 0f && h > 0f && effectiveAspect != null) restSize(w, h, effectiveAspect) else null
-    val hasThumb = thumb != null && rest != null && rest.height <= h + 0.5f
+    val isLongImage = rest != null && rest.height > h + 0.5f
+    // 长图铺满屏宽后高度超出视口，退场时截取当前屏幕上可见的视口图层缩回原缩略图。
+    val hasThumb = thumb != null && rest != null
     val layer = url?.let { frame.pageLayers[it] }?.takeUnless { it.isReleased || it.size == IntSize.Zero }
     return FlightTargetInfo(
         thumb = thumb,
         aspect = effectiveAspect,
         hasThumb = hasThumb,
+        isLongImage = isLongImage,
         layer = layer,
         onRelease = frame.onReleaseLayer,
     )
@@ -1169,6 +1183,7 @@ private fun launchBackExitFlight(
         startBgAlpha = clamped,
         flyTarget = Offset.Zero,
         hasThumb = info.hasThumb,
+        isLongImage = info.isLongImage,
         initialThumb = info.thumb,
         aspect = info.aspect,
         predictiveShrink = true,
@@ -1282,6 +1297,7 @@ private fun handleDismissRelease(
         startBgAlpha = startBgAlpha,
         flyTarget = flyTarget,
         hasThumb = hasThumb,
+        isLongImage = info.isLongImage,
         initialThumb = thumb,
         aspect = info.aspect,
     )

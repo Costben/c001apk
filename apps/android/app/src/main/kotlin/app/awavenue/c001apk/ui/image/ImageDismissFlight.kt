@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as ComposeSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.RectangleShape
@@ -32,6 +34,7 @@ import app.awavenue.c001apk.ui.nav.ExpandEasing
 import kotlin.math.max
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -49,6 +52,7 @@ internal class ImageDismissFlight(
     val startBgAlpha: Float,
     val flyTarget: Offset,
     val hasThumb: Boolean,
+    val isLongImage: Boolean = false,
     val initialThumb: ThumbBounds?,
     val aspect: Float?,
     val predictiveShrink: Boolean = false,
@@ -91,6 +95,12 @@ internal fun ImageOrigins.launchDismissFlight(
                 flight.predictiveShrink -> {
                     val duration = flight.remainingDurationMillis.coerceAtLeast(1)
                     coroutineScope {
+                        if (flight.hasThumb && flight.isLongImage) {
+                            launch {
+                                snapshotFlow { flight.exitProgress.value >= 0.68f }.first { it }
+                                if (dismissFlight === flight) viewing = null
+                            }
+                        }
                         launch {
                             flight.exitBgAlpha.animateTo(0f, tween(duration, easing = LinearEasing))
                         }
@@ -121,6 +131,12 @@ internal fun ImageOrigins.launchDismissFlight(
                 }
                 flight.hasThumb -> {
                     coroutineScope {
+                        if (flight.isLongImage) {
+                            launch {
+                                snapshotFlow { flight.exitProgress.value >= 0.68f }.first { it }
+                                if (dismissFlight === flight) viewing = null
+                            }
+                        }
                         launch {
                             flight.exitBgAlpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
                         }
@@ -233,8 +249,12 @@ private fun GraphicsLayerScope.applyDismissFlight(
     }
     val thumb = liveThumb ?: initialThumb
     val source = thumb.rect
-    val rest = (flight.aspect ?: (source.width / source.height)).let {
-        restSize(size.width, size.height, it)
+    val rest = if (flight.isLongImage) {
+        ComposeSize(size.width, size.height)
+    } else {
+        (flight.aspect ?: (source.width / source.height)).let {
+            restSize(size.width, size.height, it)
+        }
     }
     val cover = max(source.width / rest.width, source.height / rest.height)
     val q = (1f - p).coerceIn(0f, 1f)
@@ -246,15 +266,22 @@ private fun GraphicsLayerScope.applyDismissFlight(
         val delta = if (liveThumb != null) liveThumb.rect.center - initialThumb.rect.center else Offset.Zero
         flight.exitTranslation.value + delta * p
     }
-    alpha = if (liveThumb != null) 1f else (1f - ((p - 0.55f) / 0.45f)).coerceIn(0f, 1f)
+    val startWidth = if (flight.predictiveShrink) size.width else size.width * flight.startScale
+    val startHeight = if (flight.predictiveShrink) size.height else size.height * flight.startScale
+    val startT = if (flight.predictiveShrink) 1f - q else p
+    alpha = when {
+        flight.isLongImage -> {
+            val end = if (liveThumb != null) 1f else 0.9f
+            (1f - ((startT - 0.68f) / (end - 0.68f))).coerceIn(0f, 1f)
+        }
+        liveThumb != null -> 1f
+        else -> (1f - ((p - 0.55f) / 0.45f)).coerceIn(0f, 1f)
+    }
     transformOrigin = TransformOrigin.Center
     scaleX = curScale
     scaleY = curScale
     translationX = trans.x
     translationY = trans.y
-    val startWidth = if (flight.predictiveShrink) size.width else size.width * flight.startScale
-    val startHeight = if (flight.predictiveShrink) size.height else size.height * flight.startScale
-    val startT = if (flight.predictiveShrink) 1f - q else p
     shape = CenteredWindow(
         width = lerp(startWidth, source.width, startT) / curScale,
         height = lerp(startHeight, source.height, startT) / curScale,
