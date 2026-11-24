@@ -5,12 +5,10 @@ on:
     branches: [main]
     paths:
       - 'apps/android/**'
-      - 'third_party/coui17/**'
       - '.github/workflows/**'
   pull_request:
     paths:
       - 'apps/android/**'
-      - 'third_party/coui17/**'
       - '.github/workflows/**'
   workflow_dispatch:
     inputs:
@@ -39,7 +37,6 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-          submodules: recursive
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
@@ -82,7 +79,6 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-          submodules: recursive
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin

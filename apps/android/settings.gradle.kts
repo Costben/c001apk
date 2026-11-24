@@ -27,21 +27,31 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        // COUI 17：本机存在 ../../../coui/build/repository/local 且未强制走远端时优先用本地最新快照；
+        // 外部环境或 CI 自动回退到 Costben/coui17 的 maven-repo 孤儿分支。
+        val localCouiRepo = rootDir.resolve("../../../coui/build/repository/local")
+        val forceRemoteCoui = providers.gradleProperty("coui.useRemote").orNull.equals("true", ignoreCase = true)
+        exclusiveContent {
+            forRepository {
+                maven {
+                    if (localCouiRepo.isDirectory && !forceRemoteCoui) {
+                        name = "localCouiRepo"
+                        url = uri(localCouiRepo)
+                    } else {
+                        name = "coui17MavenRepo"
+                        url = uri("https://raw.githubusercontent.com/Costben/coui17/maven-repo/coui-repo")
+                    }
+                }
+            }
+            filter {
+                includeGroup("io.github.suqi8.coui.kmp")
+            }
+        }
     }
 }
 
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
-
-// coui17 is consumed from source: its io.github.suqi8.coui.kmp modules replace the
-// published coordinates. A `coui` checkout next to this repository (the fork being worked on locally)
-// wins over the submodule, so local builds follow its latest state while CI stays on the submodule's
-// pinned commit.
-val siblingCoui = rootDir.resolve("../../../coui")
-includeBuild(
-    if (siblingCoui.resolve("settings.gradle.kts").isFile) siblingCoui
-    else rootDir.resolve("../../third_party/coui17"),
-)
 
 include(":app")

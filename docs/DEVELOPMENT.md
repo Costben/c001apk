@@ -25,8 +25,6 @@ c001apk/
 │   ├── media/                   # README 横幅与界面截图
 │   ├── THIRD_PARTY_NOTICES.md
 │   └── licenses/                # 第三方许可原文
-├── third_party/
-│   └── coui17/                  # coui17 组件库（git submodule，源码参与构建）
 ├── LICENSE
 └── README.md
 ```
@@ -34,18 +32,16 @@ c001apk/
 ## 工具链
 
 界面组件来自 [coui17](https://github.com/Costben/coui17)（ColorOS 风格的 Compose Multiplatform
-组件库），以 git submodule 放在 `third_party/coui17/`，通过 Gradle 复合构建直接参与编译，
-替换 `io.github.suqi8.coui.kmp` 的发布坐标，因此始终使用子模块里的 ColorOS 17 改动。
+组件库），通过 Maven 坐标 `io.github.suqi8.coui.kmp:*:1.2.0-SNAPSHOT` 引入：本机存在同级
+`../coui/build/repository/local` 时优先读取本地最新快照，外部环境或 CI 自动从
+[Costben/coui17 `maven-repo`](https://github.com/Costben/coui17/tree/maven-repo) 分支拉取。
 
-工具链要求与 coui17 一致：JDK 21、Android SDK compileSdk 37 / build-tools 37.0.0，
-Gradle 9.8.2 由 wrapper 提供。AGP（9.3.1）与 Kotlin（2.4.10）版本必须与
-`third_party/coui17/gradle/libs.versions.toml` 保持一致，升级子模块时一并核对。
+工具链要求：JDK 21、Android SDK compileSdk 37 / build-tools 37.0.0，Gradle 9.8.2 由 wrapper 提供。
 
 ## 本地开发
 
 ```bash
-git clone --recurse-submodules https://github.com/Costben/c001apk.git
-# 已有仓库：git submodule update --init
+git clone https://github.com/Costben/c001apk.git
 
 cd c001apk/apps/android
 ./gradlew :app:testDebugUnitTest   # 单元测试：请求签名、错误分类、Markdown、更新解析等
@@ -53,8 +49,9 @@ cd c001apk/apps/android
 ./gradlew :app:assembleRelease     # 正式包，需要签名配置，见下文
 ```
 
-所有 Gradle 命令都在 `apps/android/` 下执行。若本机存在与仓库同级的 `coui` 检出，
-`settings.gradle.kts` 会优先使用该目录而不是子模块，方便同时调试组件库。
+所有 Gradle 命令都在 `apps/android/` 下执行。若本机存在与仓库同级的 `coui/build/repository/local`
+快照目录，`settings.gradle.kts` 会优先读取本地产物，方便同时调试组件库；传 `-Pcoui.useRemote=true`
+可强制使用远端 `maven-repo`。
 
 真机验证请安装 release 包：debug 包在高刷设备上信息流滚动明显掉帧，与用户实际体验不一致。
 保持设备上既有安装的签名一致即可覆盖安装，不要为了换签名而卸载应用。

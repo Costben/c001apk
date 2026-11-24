@@ -1,9 +1,7 @@
 [versions]
-# AGP and Kotlin must match third_party/coui17/gradle/libs.versions.toml: the
-# composite build loads both into one Gradle invocation.
 agp = "9.3.1"
 kotlin = "2.4.10"
-coui = "1.2.0"
+coui = "1.2.0-SNAPSHOT"
 androidx-activity = "1.13.0"
 androidx-lifecycle = "2.11.0"
 coil = "3.6.3"
