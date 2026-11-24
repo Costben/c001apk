@@ -17,15 +17,38 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil3.memory.MemoryCache
 import kotlinx.coroutines.CoroutineScope
 
-/** A thumbnail as the viewer sees it: its bounds in the viewer's own coordinates and corner radius in px. */
-internal class ThumbBounds(val rect: Rect, val cornerRadius: Float)
+/**
+ * A thumbnail as the viewer sees it: where it sits in the viewer's own coordinates, how round its
+ * corners are, the picture's true aspect ratio when the feed knows it, and the address the feed
+ * itself drew — so the viewer can put that same already-decoded image on screen for the first
+ * frame instead of an empty frame.
+ */
+internal class ThumbBounds(
+    val rect: Rect,
+    val cornerRadius: Float,
+    val aspect: Float? = null,
+    val model: String? = null,
+)
 
 internal class ThumbSlot {
     var coordinates: LayoutCoordinates? = null
     var cornerRadius: Dp = 0.dp
+    var aspect: Float? = null
+    var model: String? = null
+    var cacheKey: MemoryCache.Key? = null
 }
+
+/** 缩略图左下角实况标记的直径（与 Cobo COUI 一致）。 */
+internal val LiveBadgeSize = 17.dp
+
+/** 宽高比低于此值时视为竖向长图（缩略图与看图页均以顶部对齐裁切）。 */
+internal const val LongImageAspect = 9f / 22f
+
+internal fun isLongImageAspect(aspect: Float?): Boolean =
+    aspect != null && aspect > 0f && aspect < LongImageAspect
 
 /**
  * Where the thumbnails on screen sit, by image URL, so the viewer can grow out of the one that was
@@ -35,11 +58,13 @@ internal class ThumbSlot {
 @Stable
 class ImageOrigins {
     private val slots = HashMap<String, MutableList<ThumbSlot>>()
+    private val cacheKeys = HashMap<String, MemoryCache.Key>()
+    private var viewingOwner: Any? = null
 
     /**
      * 看图页此刻正在显示的那张图，没有打开看图页时为空。
      *
-     * 看图页正在展示或拖拽这张图时隐藏底层原图，避免半透明背景透出两张一样的图。
+     * 看图页正在展示或拖拽这张图时隐藏底层原图与角标，避免半透明背景透出两张一样的图。
      */
     var viewing by mutableStateOf<String?>(null)
 
@@ -52,6 +77,20 @@ class ImageOrigins {
     /** 当前正在显示的看图页注册的预测性返回/按钮返回平滑缩回接管回调。 */
     internal var onCommitBack: ((remaining: Float, offset: Offset, velocity: Offset, onPop: () -> Unit) -> Boolean)? = null
 
+    fun beginViewing(owner: Any, url: String?) {
+        viewingOwner = owner
+        viewing = url
+    }
+
+    fun endViewing(owner: Any) {
+        if (viewingOwner === owner) {
+            viewingOwner = null
+            if (dismissFlight == null) {
+                viewing = null
+            }
+        }
+    }
+
     internal fun finishDismissFlight() {
         val flight = dismissFlight ?: return
         dismissFlight = null
@@ -59,9 +98,25 @@ class ImageOrigins {
         viewing = null
     }
 
+    private fun activeSlotOf(url: String): ThumbSlot? {
+        val list = slots[url] ?: return null
+        return list.lastOrNull { it.coordinates?.isAttached == true } ?: list.lastOrNull()
+    }
+
     internal fun put(url: String, slot: ThumbSlot) {
         val list = slots.getOrPut(url) { ArrayList(2) }
-        if (!list.contains(slot)) list.add(slot)
+        if (list.lastOrNull() !== slot) {
+            list.remove(slot)
+            list.add(slot)
+        }
+        cacheKeys[url]?.let { if (slot.cacheKey == null) slot.cacheKey = it }
+    }
+
+    internal fun putCacheKey(url: String, key: MemoryCache.Key?) {
+        if (key != null) {
+            cacheKeys[url] = key
+            slots[url]?.forEach { slot -> slot.cacheKey = key }
+        }
     }
 
     internal fun remove(url: String, slot: ThumbSlot) {
@@ -69,6 +124,15 @@ class ImageOrigins {
         list.remove(slot)
         if (list.isEmpty()) slots.remove(url)
     }
+
+    /** The address the feed drew for [url], so the viewer can reuse that decoded image. */
+    internal fun modelOf(url: String): String? = activeSlotOf(url)?.model
+
+    /** 卡片登记的真实宽高比，未携带尺寸字段时可先于大图解码对齐容器大小。 */
+    internal fun aspectOf(url: String): Float? = activeSlotOf(url)?.aspect
+
+    /** Memory cache key of the decoded thumbnail for [url], for synchronous first-frame painting. */
+    internal fun cacheKeyOf(url: String): MemoryCache.Key? = activeSlotOf(url)?.cacheKey ?: cacheKeys[url]
 
     /** Read live, so a closing viewer shrinks into where the thumbnail is now. */
     internal fun boundsOf(url: String, host: LayoutCoordinates, density: Float): ThumbBounds? {
@@ -81,7 +145,7 @@ class ImageOrigins {
             if (rect.width <= 0f || rect.height <= 0f) continue
             // A circle asks for more radius than fits; the shorter side's half is as round as it gets.
             val radius = (slot.cornerRadius.value * density).coerceAtMost(minOf(rect.width, rect.height) / 2f)
-            return ThumbBounds(rect, radius)
+            return ThumbBounds(rect, radius, slot.aspect, slot.model)
         }
         return null
     }
@@ -94,10 +158,19 @@ val LocalImageOrigins = staticCompositionLocalOf { ImageOrigins() }
  * Apply it after the element's size and before its clip, so the bounds are the element's own.
  */
 @Composable
-fun Modifier.imageOrigin(url: String, cornerRadius: Dp): Modifier {
+fun Modifier.imageOrigin(
+    url: String,
+    cornerRadius: Dp,
+    aspect: Float? = null,
+    model: String? = null,
+): Modifier {
     val origins = LocalImageOrigins.current
     val slot = remember(url) { ThumbSlot() }
-    SideEffect { slot.cornerRadius = cornerRadius }
+    SideEffect {
+        slot.cornerRadius = cornerRadius
+        slot.aspect = aspect
+        slot.model = model
+    }
     DisposableEffect(origins, url, slot) { onDispose { origins.remove(url, slot) } }
     return this
         .onPlaced {

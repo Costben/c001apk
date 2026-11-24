@@ -33,6 +33,7 @@ import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.HapticStrength
 import app.awavenue.c001apk.data.HistoryCardMode
+import app.awavenue.c001apk.data.ImageBrowseQuality
 import app.awavenue.c001apk.data.SeedColors
 import app.awavenue.c001apk.data.UpdateResult
 import app.awavenue.c001apk.model.ContentFilterPreferences
@@ -327,6 +328,29 @@ fun SettingsScreen() {
                             checked = settings.showEmoji,
                             onCheckedChange = settings::updateShowEmoji,
                             startAction = { PreferenceStartIcon(AppIcons.EmojiEmotions) },
+                        )
+                        OverlayDropdownPreference(
+                            title = "浏览图片",
+                            items = ImageBrowseQuality.entries.map { it.label },
+                            selectedIndex = ImageBrowseQuality.entries.indexOf(settings.imageBrowseQuality),
+                            onSelectedIndexChange = {
+                                settings.updateImageBrowseQuality(ImageBrowseQuality.entries[it])
+                            },
+                            startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                        )
+                        SwitchPreference(
+                            title = "实况图自动播放",
+                            summary = "进入或滑动到实况图时自动播放一次，结束后仅支持长按重播",
+                            checked = settings.livePhotoAutoPlay,
+                            onCheckedChange = settings::updateLivePhotoAutoPlay,
+                            startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                        )
+                        SwitchPreference(
+                            title = "实况图播放声音",
+                            summary = "播放实况图时同步播放附带的视频声音",
+                            checked = settings.livePhotoSound,
+                            onCheckedChange = settings::updateLivePhotoSound,
+                            startAction = { PreferenceStartIcon(AppIcons.VolumeOn) },
                         )
                         SwitchPreference(
                             title = "检查已安装应用更新",

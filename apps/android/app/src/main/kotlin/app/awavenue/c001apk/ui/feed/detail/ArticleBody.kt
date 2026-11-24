@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.awavenue.c001apk.media.isLivePhotoUrl
 import app.awavenue.c001apk.ui.common.NetworkImage
 import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.ui.common.isGifUrl
@@ -30,7 +35,12 @@ import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.thumbnail
+import app.awavenue.c001apk.ui.feed.LiveBadge
+import app.awavenue.c001apk.ui.feed.MediaCornerBadge
+import app.awavenue.c001apk.ui.feed.SingleLiveBadgeInset
+import app.awavenue.c001apk.ui.image.LocalImageOrigins
 import app.awavenue.c001apk.ui.image.imageOrigin
+import app.awavenue.c001apk.ui.image.isLongImageAspect
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.FeedText
@@ -136,23 +146,30 @@ fun ArticleBody(
 @Composable
 private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: Modifier) {
     val navigator = LocalNavigator.current
+    val origins = LocalImageOrigins.current
     val url = article.url
     BoxWithConstraints(modifier) {
         val (width, height) = imageSize(url)
+        val declaredAspect = if (width == 1f && height == 1f) null else width / height
+        var measuredAspect by remember(url) { mutableStateOf<Float?>(null) }
+        val aspect = declaredAspect ?: measuredAspect
         val ratioHW = if (width <= 0f) 1f else height / width
         val imageWidth = maxWidth
         val imageHeight = imageWidth * minOf(ratioHW, LONG_IMAGE_RATIO)
+        val isLive = url.isLivePhotoUrl()
         val isGif = isGifUrl(url)
+        val isLong = isLongImageAspect(aspect)
+        val model = if (isLive || isGif) url else thumbnail(url)
         val badge = when {
             isGif -> "GIF"
-            ratioHW >= LONG_IMAGE_RATIO -> "长图"
+            isLong -> "长图"
             else -> null
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier
                     .size(imageWidth, imageHeight)
-                    .imageOrigin(url, ImageCornerRadius)
+                    .imageOrigin(url, ImageCornerRadius, aspect = aspect, model = model)
                     .clip(rememberSquircleShape(ImageCornerRadius))
                     .clickable(
                         onClick = rememberHapticClick {
@@ -160,18 +177,34 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                         },
                     ),
             ) {
-                NetworkImage(if (isGif) url else thumbnail(url), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                NetworkImage(
+                    url = model,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (isLong) ContentScale.Crop else ContentScale.FillBounds,
+                    alignment = if (isLong) Alignment.TopCenter else Alignment.Center,
+                    onSuccess = { state ->
+                        origins.putCacheKey(url, state.result.memoryCacheKey)
+                        if (declaredAspect == null) {
+                            val s = state.painter.intrinsicSize
+                            if (s.width > 0f && s.height > 0f) measuredAspect = s.width / s.height
+                        }
+                    },
+                )
+                if (isLive) {
+                    LiveBadge(
+                        url = url,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(SingleLiveBadgeInset),
+                    )
+                }
                 if (badge != null) {
-                    Text(
-                        badge,
+                    MediaCornerBadge(
+                        url = url,
+                        text = badge,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(5.dp)
-                            .clip(rememberSquircleShape(4.dp))
-                            .background(COUITheme.colorScheme.primaryContainer)
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = COUITheme.textStyles.footnote2,
-                        color = COUITheme.colorScheme.onPrimaryContainer,
+                            .padding(SingleLiveBadgeInset),
                     )
                 }
             }

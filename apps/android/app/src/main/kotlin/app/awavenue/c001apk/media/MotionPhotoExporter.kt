@@ -2,6 +2,7 @@ package app.awavenue.c001apk.media
 
 import org.w3c.dom.Document
 import org.w3c.dom.Element
+import org.xml.sax.InputSource
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -16,11 +17,11 @@ import javax.xml.transform.OutputKeys
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
-import org.xml.sax.InputSource
 
 /**
- * Writes a JPEG that phones recognise as a motion photo: the still image plus the video appended
- * at the tail, with XMP describing the split.
+ * 将静图 JPEG 与标准 MP4 合成 Android 通用 Motion Photo（Google Motion Photo v1），
+ * 兼容 ColorOS / Google Photos / HyperOS / OriginOS / OneUI 等系统相册识别播放（直接取自 Cobo COUI）。
+ * 若原 JPEG 已带有 Ultra HDR GainMap 等 Container:Directory 项，则完整保留它们并在末尾追加 MotionPhoto 项。
  */
 internal object MotionPhotoExporter {
 
@@ -28,9 +29,11 @@ internal object MotionPhotoExporter {
         sourceImage: File,
         video: File?,
         destination: File,
-        presentationTimestampUs: Long?,
+        presentationTimestampUs: Long? = null,
     ): File {
-        require(sourceImage.isFile) { "Motion photo source image is unavailable" }
+        require(sourceImage.isFile && MotionPhotoParser.hasJpegHeader(sourceImage)) {
+            "Motion photo source image is not a readable JPEG"
+        }
         destination.parentFile?.mkdirs()
         val staging = File(destination.parentFile, "${destination.name}.part")
         if (staging.exists()) staging.delete()
@@ -39,13 +42,16 @@ internal object MotionPhotoExporter {
             val sourceInfo = MotionPhotoParser.parse(sourceImage, expectMotionPhoto = true)
             sourceImage.copyTo(staging, overwrite = true)
             if (sourceInfo.embeddedVideoLength == null) {
-                val motionVideo = requireNotNull(video?.takeIf { it.isFile && isMp4(it) }) {
-                    "Motion photo video is unavailable"
+                val motionVideo = requireNotNull(video?.takeIf { it.isFile && MotionPhotoParser.isIsoBmff(it) }) {
+                    "Motion photo video is unavailable or not an MP4/ISO-BMFF stream"
                 }
+                val timestampUs = presentationTimestampUs
+                    ?: sourceInfo.presentationTimestampUs
+                    ?: 0L
                 updateMotionPhotoXmp(
                     image = staging,
                     videoLength = motionVideo.length(),
-                    presentationTimestampUs = presentationTimestampUs ?: 0L,
+                    presentationTimestampUs = timestampUs,
                 )
                 FileOutputStream(staging, true).use { output ->
                     motionVideo.inputStream().use { input -> input.copyTo(output) }
@@ -86,6 +92,9 @@ internal object MotionPhotoExporter {
         description.declareNamespace("GCamera", GCAMERA_NAMESPACE)
         description.declareNamespace("Container", CONTAINER_NAMESPACE)
         description.declareNamespace("Item", ITEM_NAMESPACE)
+        if (!description.hasAttributeNS(RDF_NAMESPACE, "about")) {
+            description.setAttributeNS(RDF_NAMESPACE, "rdf:about", "")
+        }
         description.setAttributeNS(GCAMERA_NAMESPACE, "GCamera:MotionPhoto", "1")
         description.setAttributeNS(GCAMERA_NAMESPACE, "GCamera:MotionPhotoVersion", "1")
         description.setAttributeNS(
@@ -93,20 +102,48 @@ internal object MotionPhotoExporter {
             "GCamera:MotionPhotoPresentationTimestampUs",
             presentationTimestampUs.toString(),
         )
-        description.setAttributeNS(GCAMERA_NAMESPACE, "GCamera:MicroVideo", "1")
-        description.setAttributeNS(GCAMERA_NAMESPACE, "GCamera:MicroVideoVersion", "1")
-        description.setAttributeNS(
-            GCAMERA_NAMESPACE,
-            "GCamera:MicroVideoOffset",
-            videoLength.toString(),
-        )
+        // Google Motion Photo v1 与旧版 MicroVideo 互斥；ColorOS 相册扫描器看到同时存在
+        // GCamera:MicroVideo 会拒绝识别为实况照片，因此需移除残留的 MicroVideo 属性。
+        description.removeAttributeNS(GCAMERA_NAMESPACE, "MicroVideo")
+        description.removeAttributeNS(GCAMERA_NAMESPACE, "MicroVideoVersion")
+        description.removeAttributeNS(GCAMERA_NAMESPACE, "MicroVideoOffset")
+        description.removeAttribute("GCamera:MicroVideo")
+        description.removeAttribute("GCamera:MicroVideoVersion")
+        description.removeAttribute("GCamera:MicroVideoOffset")
 
+        val preservedItems = extractPreservedContainerItems(document)
         val oldDirectories = document.getElementsByTagNameNS(CONTAINER_NAMESPACE, "Directory")
         for (index in oldDirectories.length - 1 downTo 0) {
-            oldDirectories.item(index).let { it.parentNode.removeChild(it) }
+            oldDirectories.item(index).let { it.parentNode?.removeChild(it) }
         }
-        description.appendChild(document.createMotionPhotoDirectory(videoLength))
+        description.appendChild(document.createMotionPhotoDirectory(preservedItems, videoLength))
         writeStandardXmp(image, serialize(document))
+    }
+
+    /**
+     * 保留原图已有容器条目（例如 Ultra HDR 的 Primary + GainMap），仅剥离旧的 MotionPhoto 项。
+     */
+    private fun extractPreservedContainerItems(document: Document): List<Element> {
+        val result = mutableListOf<Element>()
+        val directories = document.getElementsByTagNameNS(CONTAINER_NAMESPACE, "Directory")
+        if (directories.length == 0) return result
+        val firstDir = directories.item(0) as? Element ?: return result
+        val listItems = firstDir.getElementsByTagNameNS(RDF_NAMESPACE, "li")
+        for (i in 0 until listItems.length) {
+            val li = listItems.item(i) as? Element ?: continue
+            val item = li.getElementsByTagNameNS(CONTAINER_NAMESPACE, "Item").item(0) as? Element
+            val semantic = item?.let(::readItemSemantic)
+            if (semantic.equals("MotionPhoto", ignoreCase = true)) continue
+            result.add(li.cloneNode(true) as Element)
+        }
+        return result
+    }
+
+    private fun readItemSemantic(item: Element): String? {
+        val attr = item.getAttributeNS(ITEM_NAMESPACE, "Semantic")
+        if (attr.isNotBlank()) return attr
+        val child = item.getElementsByTagNameNS(ITEM_NAMESPACE, "Semantic").item(0)
+        return child?.textContent?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private fun readStandardXmp(image: File): String? =
@@ -140,11 +177,14 @@ internal object MotionPhotoExporter {
                 DataOutputStream(BufferedOutputStream(rewritten.outputStream())).use { output ->
                     require(input.readUnsignedShort() == JPEG_SOI) { "Source is not a JPEG image" }
                     output.writeShort(JPEG_SOI)
-                    var replaced = false
+                    var written = false
                     while (true) {
                         val marker = readMarker(input)
                         if (marker == JPEG_SOS) {
-                            if (!replaced) writeXmpSegment(output, xmpData)
+                            if (!written) {
+                                writeXmpSegment(output, xmpData)
+                                written = true
+                            }
                             output.writeByte(JPEG_MARKER_PREFIX)
                             output.writeByte(marker)
                             val scanHeader = readSegment(input)
@@ -154,25 +194,39 @@ internal object MotionPhotoExporter {
                             break
                         }
                         if (marker == JPEG_EOI) {
-                            if (!replaced) writeXmpSegment(output, xmpData)
+                            if (!written) {
+                                writeXmpSegment(output, xmpData)
+                                written = true
+                            }
                             output.writeByte(JPEG_MARKER_PREFIX)
                             output.writeByte(marker)
                             input.copyTo(output)
                             break
                         }
 
+                        if (marker.isStandaloneJpegMarker()) {
+                            output.writeByte(JPEG_MARKER_PREFIX)
+                            output.writeByte(marker)
+                            continue
+                        }
+                        val data = readSegment(input)
+                        if (marker == JPEG_APP1 && data.startsWith(XMP_HEADER)) {
+                            if (!written) {
+                                writeXmpSegment(output, xmpData)
+                                written = true
+                            }
+                            continue
+                        }
+                        // 新建 XMP 段放在头部 APP0/EXIF 之后、第一个非 APP 段（如 DQT/SOF）之前，
+                        // 避免只扫头部 APP 段的相册扫描器错过 XMP。
+                        if (!written && marker !in 0xe0..0xef) {
+                            writeXmpSegment(output, xmpData)
+                            written = true
+                        }
                         output.writeByte(JPEG_MARKER_PREFIX)
                         output.writeByte(marker)
-                        if (marker.isStandaloneJpegMarker()) continue
-                        val data = readSegment(input)
-                        if (marker == JPEG_APP1 && data.startsWith(XMP_HEADER) && !replaced) {
-                            output.writeShort(xmpData.size + 2)
-                            output.write(xmpData)
-                            replaced = true
-                        } else {
-                            output.writeShort(data.size + 2)
-                            output.write(data)
-                        }
+                        output.writeShort(data.size + 2)
+                        output.write(data)
                     }
                 }
             }
@@ -269,11 +323,21 @@ internal object MotionPhotoExporter {
         return descriptions.item(0) as? Element
     }
 
-    private fun Document.createMotionPhotoDirectory(videoLength: Long): Element {
+    private fun Document.createMotionPhotoDirectory(
+        preservedItems: List<Element>,
+        videoLength: Long,
+    ): Element {
         val directory = createElementNS(CONTAINER_NAMESPACE, "Container:Directory")
         val sequence = createElementNS(RDF_NAMESPACE, "rdf:Seq")
         directory.appendChild(sequence)
-        sequence.appendChild(createMotionPhotoItem("image/jpeg", "Primary", 0L))
+        val hasPrimary = preservedItems.any { li ->
+            val item = li.getElementsByTagNameNS(CONTAINER_NAMESPACE, "Item").item(0) as? Element
+            item?.let(::readItemSemantic).equals("Primary", ignoreCase = true)
+        }
+        if (!hasPrimary) {
+            sequence.appendChild(createMotionPhotoItem("image/jpeg", "Primary", 0L))
+        }
+        preservedItems.forEach { sequence.appendChild(it) }
         sequence.appendChild(createMotionPhotoItem("video/mp4", "MotionPhoto", videoLength))
         return directory
     }
@@ -293,7 +357,9 @@ internal object MotionPhotoExporter {
     }
 
     private fun Element.declareNamespace(prefix: String, namespace: String) {
-        setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:$prefix", namespace)
+        if (!hasAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, prefix)) {
+            setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:$prefix", namespace)
+        }
     }
 
     private fun serialize(document: Document): String {
@@ -305,14 +371,6 @@ internal object MotionPhotoExporter {
         }.transform(DOMSource(document), StreamResult(writer))
         return writer.toString()
     }
-
-    private fun isMp4(file: File): Boolean = runCatching {
-        file.inputStream().use { input ->
-            val header = ByteArray(8)
-            input.read(header) == header.size &&
-                header.copyOfRange(4, 8).contentEquals("ftyp".toByteArray(Charsets.US_ASCII))
-        }
-    }.getOrDefault(false)
 
     private const val XMP_META_NAMESPACE = "adobe:ns:meta/"
     private const val RDF_NAMESPACE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"

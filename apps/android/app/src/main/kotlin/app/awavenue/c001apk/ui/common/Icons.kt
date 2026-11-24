@@ -2,9 +2,13 @@ package app.awavenue.c001apk.ui.common
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.vector.group
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /** Icons the COUI set does not ship. Path data from Material Icons and Material Symbols (Apache-2.0). */
@@ -141,6 +145,57 @@ object AppIcons {
                 "M2,20.59L6.29,16.29L4,14h6v6l-2.29,-2.29L3.41,22L2,20.59z",
         )
     }
+
+    /** 实况图声音开启：线性扬声器与双声波（来自 Cobo COUI）。 */
+    val VolumeOn: ImageVector by lazy {
+        outline("VolumeOn") {
+            moveTo(11.0f, 5.5f)
+            lineTo(6.8f, 9.0f)
+            horizontalLineTo(3.8f)
+            verticalLineTo(15.0f)
+            horizontalLineTo(6.8f)
+            lineTo(11.0f, 18.5f)
+            close()
+            moveTo(14.8f, 8.8f)
+            curveTo(16.2f, 10.2f, 16.2f, 13.8f, 14.8f, 15.2f)
+            moveTo(17.6f, 6.2f)
+            curveTo(20.1f, 9.1f, 20.1f, 14.9f, 17.6f, 17.8f)
+        }
+    }
+
+    /** 实况图静音：线性扬声器与叉号（来自 Cobo COUI）。 */
+    val VolumeOff: ImageVector by lazy {
+        outline("VolumeOff") {
+            moveTo(11.0f, 5.5f)
+            lineTo(6.8f, 9.0f)
+            horizontalLineTo(3.8f)
+            verticalLineTo(15.0f)
+            horizontalLineTo(6.8f)
+            lineTo(11.0f, 18.5f)
+            close()
+            moveTo(15.2f, 9.6f)
+            lineTo(19.8f, 14.4f)
+            moveTo(19.8f, 9.6f)
+            lineTo(15.2f, 14.4f)
+        }
+    }
+
+    private fun outline(name: String, shape: PathBuilder.() -> Unit): ImageVector =
+        ImageVector.Builder(
+            name = name,
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+                pathBuilder = shape,
+            )
+        }.build()
 
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,

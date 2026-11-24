@@ -16,26 +16,53 @@ internal data class EmbeddedMediaInfo(
 }
 
 /**
- * Reads the XMP of a motion photo and locates the MP4 some cameras append to the JPEG.
- *
- * The declared length is only trusted when the bytes at that offset really start an MP4 box,
- * because Coolapk also serves live photos whose video lives behind a separate endpoint; those
- * images declare a length but carry no video.
+ * 解析 JPEG 中的 XMP 与尾部内嵌视频，校验生成的实况图是否符合 Android Motion Photo 结构
+ * （融合 Cobo COUI 的 ISO-BMFF / ftyp 品牌识别与 Coolapk 外部实况图解析）。
  */
 internal object MotionPhotoParser {
 
     private const val MAX_XMP_SCAN_BYTES = 512 * 1024
 
-    private val itemTagRegex = Regex("""<[^>]+Item:Mime=\"video/mp4\"[^>]*>""")
+    private val itemTagRegex = Regex("""<[^>]+Item:Mime="video/mp4"[^>]*>""")
     private val itemElementRegex =
         Regex("""<[^/>\s]*:Item\b[^>]*>.*?</[^/>\s]*:Item\s*>""", RegexOption.DOT_MATCHES_ALL)
-    private val lengthRegex = Regex("""Item:Length=\"(\d+)\"""")
+    private val lengthRegex = Regex("""Item:Length="(\d+)"""")
     private val elementLengthRegex =
         Regex("""<[^/>\s]*:Length\s*>\s*(\d+)\s*</[^/>\s]*:Length\s*>""")
-    private val microVideoOffsetRegex = Regex("""GCamera:MicroVideoOffset=\"(\d+)\"""")
-    private val onePlusVideoLengthRegex = Regex("""OpCamera:VideoLength=\"(\d+)\"""")
+    private val microVideoOffsetRegex = Regex("""GCamera:MicroVideoOffset="(\d+)"""")
+    private val onePlusVideoLengthRegex = Regex("""OpCamera:VideoLength="(\d+)"""")
     private val presentationTimestampRegex =
-        Regex("""(?:GCamera:)?MotionPhotoPresentationTimestampUs=\"(\d+)\"""")
+        Regex("""(?:GCamera:)?MotionPhotoPresentationTimestampUs="(-?\d+)"""")
+
+    private val MP4_TOP_LEVEL_BOXES = setOf("moov", "mdat", "free", "wide", "skip", "uuid", "meta")
+
+    fun hasJpegHeader(file: File): Boolean = runCatching {
+        if (!file.isFile || file.length() < 4L) return false
+        file.inputStream().use { input ->
+            input.read() == 0xff && input.read() == 0xd8
+        }
+    }.getOrDefault(false)
+
+    fun isIsoBmff(file: File): Boolean = runCatching {
+        if (!file.isFile || file.length() < 12L) return false
+        file.inputStream().use { input ->
+            val header = ByteArray(8)
+            input.read(header) == header.size &&
+                header.copyOfRange(4, 8).contentEquals("ftyp".toByteArray(Charsets.US_ASCII))
+        }
+    }.getOrDefault(false)
+
+    fun ftypMajorBrand(file: File): String? = runCatching {
+        if (!file.isFile || file.length() < 12L) return null
+        file.inputStream().use { input ->
+            val header = ByteArray(12)
+            if (input.read(header) != header.size) return null
+            if (!header.copyOfRange(4, 8).contentEquals("ftyp".toByteArray(Charsets.US_ASCII))) {
+                return null
+            }
+            String(header, 8, 4, StandardCharsets.US_ASCII)
+        }
+    }.getOrNull()
 
     fun parse(
         file: File,
@@ -61,7 +88,7 @@ internal object MotionPhotoParser {
             }
             ?: if (declaresMotionPhoto || expectMotionPhoto) {
                 findMp4LengthFromTail(file)
-            } else if (file.hasJpegHeader()) {
+            } else if (hasJpegHeader(file)) {
                 findMp4LengthFromTail(file, requireFollowingBox = true)
             } else {
                 null
@@ -149,6 +176,4 @@ internal object MotionPhotoParser {
         }
         null
     }.getOrNull()
-
-    private val MP4_TOP_LEVEL_BOXES = setOf("moov", "mdat", "free", "wide", "skip", "uuid", "meta")
 }

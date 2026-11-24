@@ -14,6 +14,18 @@ enum class DarkMode(val label: String) { System("跟随系统"), Off("始终关�
 /** How many rows the 浏览历史 card on 我的 shows: a short preview, or the whole list. */
 enum class HistoryCardMode(val label: String) { Compact("缩略展开"), Full("完整展开") }
 
+/** 看图页默认加载画质：默认（适配屏幕尺寸） / 原图。 */
+enum class ImageBrowseQuality(val key: String, val label: String) {
+    Default("default", "默认"),
+    Original("original", "原图"),
+    ;
+
+    companion object {
+        fun fromKey(key: String?): ImageBrowseQuality =
+            entries.firstOrNull { it.key == key } ?: Default
+    }
+}
+
 /**
  * Persistent settings and the API device profile. Values are Compose state so screens
  * recompose when a setting changes; writes go straight to SharedPreferences.
@@ -91,6 +103,20 @@ class AppSettings(context: Context) {
         private set
 
     var showEmoji by mutableStateOf(prefs.getBoolean(KEY_SHOW_EMOJI, true))
+        private set
+
+    /** 看图页默认加载画质：默认（适配屏幕尺寸） / 原图。 */
+    var imageBrowseQuality by mutableStateOf(
+        ImageBrowseQuality.fromKey(prefs.getString(KEY_IMAGE_BROWSE_QUALITY, null)),
+    )
+        private set
+
+    /** 实况图滑动自动播放：开启后进入或滑动到实况图时自动播放一次，结束后仅支持长按重播。默认开。 */
+    var livePhotoAutoPlay by mutableStateOf(prefs.getBoolean(KEY_LIVE_PHOTO_AUTO_PLAY, true))
+        private set
+
+    /** 实况图声音播放：开启后播放实况图附带的视频声音，关闭时静音播放。默认开。 */
+    var livePhotoSound by mutableStateOf(prefs.getBoolean(KEY_LIVE_PHOTO_SOUND, true))
         private set
 
     /**
@@ -193,6 +219,15 @@ class AppSettings(context: Context) {
         put { putInt(KEY_HISTORY_CARD_MODE, value.ordinal) }.also { historyCardMode = value }
 
     fun updateShowEmoji(value: Boolean) = put { putBoolean(KEY_SHOW_EMOJI, value) }.also { showEmoji = value }
+
+    fun updateImageBrowseQuality(value: ImageBrowseQuality) =
+        put { putString(KEY_IMAGE_BROWSE_QUALITY, value.key) }.also { imageBrowseQuality = value }
+
+    fun updateLivePhotoAutoPlay(value: Boolean) =
+        put { putBoolean(KEY_LIVE_PHOTO_AUTO_PLAY, value) }.also { livePhotoAutoPlay = value }
+
+    fun updateLivePhotoSound(value: Boolean) =
+        put { putBoolean(KEY_LIVE_PHOTO_SOUND, value) }.also { livePhotoSound = value }
 
     fun updateShowHomeCarousel(value: Boolean) =
         put { putBoolean(KEY_SHOW_HOME_CAROUSEL, value) }.also { showHomeCarousel = value }
@@ -313,6 +348,9 @@ class AppSettings(context: Context) {
         const val KEY_RECORD_HISTORY = "recordHistory"
         const val KEY_HISTORY_CARD_MODE = "historyCardMode"
         const val KEY_SHOW_EMOJI = "showEmoji"
+        const val KEY_IMAGE_BROWSE_QUALITY = "imageBrowseQuality"
+        const val KEY_LIVE_PHOTO_AUTO_PLAY = "livePhotoAutoPlay"
+        const val KEY_LIVE_PHOTO_SOUND = "livePhotoSound"
         const val KEY_SHOW_HOME_CAROUSEL = "showHomeCarousel"
         const val KEY_SHOW_HOME_CHANNELS = "showHomeChannels"
         const val KEY_SHOW_HOME_TOPICS = "showHomeTopics"

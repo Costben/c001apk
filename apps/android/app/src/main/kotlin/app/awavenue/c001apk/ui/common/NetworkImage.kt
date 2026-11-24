@@ -8,9 +8,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -24,7 +26,9 @@ fun NetworkImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
     crossfade: Boolean = true,
+    onSuccess: ((AsyncImagePainter.State.Success) -> Unit)? = null,
 ) {
     val context = LocalPlatformContext.current
     val placeholder = Modifier.background(COUITheme.colorScheme.secondaryContainer)
@@ -44,7 +48,9 @@ fun NetworkImage(
         model = request,
         contentDescription = contentDescription,
         contentScale = contentScale,
+        alignment = alignment,
         modifier = modifier.then(placeholder),
+        onSuccess = onSuccess,
         onError = { if (attempt < lastAttempt) retry = true },
     )
     LaunchedEffect(retry) {
