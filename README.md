@@ -48,17 +48,17 @@ Fork 自 [c001apk-flutter](https://github.com/bggRGjQaUbCoE/c001apk-flutter) 的
   </tbody>
 </table>
 
-## 界面预览（2026-10-20，Android 2.0.2）
+## 界面预览（2026-11-25，Android 2.1.22-pre）
 
 <p align="center">
-  <img src="docs/media/screenshots/android-home-2.0.2.avif" width="44%" alt="Android 首页：搜索胶囊、分类标签与动态信息流">
-  <img src="docs/media/screenshots/android-detail-2.0.2.avif" width="44%" alt="Android 动态详情：图文内容、点赞与回复区">
+  <img src="docs/media/screenshots/android-home-2.1.22-pre.avif" width="44%" alt="Android 首页：分类标签、动态信息流与悬浮毛玻璃底栏">
+  <img src="docs/media/screenshots/android-detail-2.1.22-pre.avif" width="44%" alt="Android 动态详情：九宫格壁纸、内容保存与回复区">
 </p>
 <p align="center"><sub>Android · 首页 / 动态详情</sub></p>
 
 <p align="center">
-  <img src="docs/media/screenshots/android-search-2.0.2.avif" width="44%" alt="Android 搜索：内容类型与排序方式级联菜单">
-  <img src="docs/media/screenshots/android-settings-2.0.2.avif" width="44%" alt="Android 设置：主题、显示与浏览历史">
+  <img src="docs/media/screenshots/android-search-2.1.22-pre.avif" width="44%" alt="Android 搜索：原位搜索栏、带图标分类标签与搜索结果">
+  <img src="docs/media/screenshots/android-settings-2.1.22-pre.avif" width="44%" alt="Android 设置：使用教程、主题、内容过滤与字体大小滑杆">
 </p>
 <p align="center"><sub>Android · 搜索与筛选 / 设置</sub></p>
 
