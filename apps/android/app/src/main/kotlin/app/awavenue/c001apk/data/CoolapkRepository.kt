@@ -485,6 +485,25 @@ class CoolapkRepository(
         return actionResult(readActionObject(response))
     }
 
+    /** Fetches the editable raw fields and modification permission for an existing feed. */
+    suspend fun feedChangeDetail(id: String): Entity =
+        dataObject(api.getJson(Api.FEED_CHANGE_DETAIL, mapOf("id" to id)))
+
+    /** Submits edits to an existing feed and drops its cached detail so re-entry sees the update. */
+    suspend fun changeFeed(fields: List<Pair<String, String>>, files: List<FilePart> = emptyList()): ActionResult {
+        val normalized = normalizeFeedFields(fields)
+        val response = api.post(
+            Api.FEED_CHANGE,
+            body = if (files.isEmpty()) Body.Form(normalized) else Body.Multipart(normalized, files),
+        )
+        val result = actionResult(readActionObject(response))
+        if (result.message.isEmpty()) {
+            val id = normalized.firstOrNull { it.first == "id" }?.second
+            if (!id.isNullOrEmpty()) synchronized(detailCacheLock) { detailCache.remove(id) }
+        }
+        return result
+    }
+
     suspend fun sendMessage(uid: String, message: String, pic: String?): ActionResult {
         val fields = listOfNotNull("message" to message, pic?.let { "message_pic" to it })
         val response = api.post(Api.MESSAGE_SEND, query = mapOf("uid" to uid), body = Body.Form(fields))

@@ -73,6 +73,7 @@ import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.ReplyCard
+import app.awavenue.c001apk.ui.feed.reply.EditFeedInput
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -102,6 +103,7 @@ import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.icon.extended.More
 import io.github.suqi8.coui.kmp.icon.extended.Reply
 import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
@@ -136,6 +138,8 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     var showSource by remember { mutableStateOf(false) }
     var accountDialog by remember { mutableStateOf(false) }
     var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
+    var editingFeed by remember { mutableStateOf<EditFeedInput?>(null) }
+    var loadingEdit by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(true) }
     val deleteConfirm = rememberDeleteConfirmation()
 
@@ -235,50 +239,87 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                 TopBarIconButton(onClick = { menuOpen = true }) {
                                     Icon(COUIIcons.More, contentDescription = "更多")
                                 }
+                                val isOwnFeed = viewModel.feedUid.isNotEmpty() && viewModel.feedUid == app.session.uid
                                 MoreMenu(
                                     show = menuOpen,
                                     onDismissRequest = { menuOpen = false },
-                                    entries = buildList {
-                                        add("复制" to { context.copyText(viewModel.shareUrl) })
-                                        add("分享" to { context.shareText(viewModel.shareUrl) })
-                                        add((if (viewModel.isFav) "取消本地收藏" else "本地收藏") to viewModel::toggleFav)
-                                        add("收藏到账号收藏夹" to {
-                                            if (app.session.isLogin) {
-                                                collectionsOpen = true
-                                            } else {
-                                                context.toast("请先登录后使用账号收藏夹")
-                                            }
-                                        })
-                                        add((if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock)
-                                        if (viewModel.hasMarkdown) {
-                                            add((if (showSource) "格式化显示" else "查看原文") to { showSource = !showSource })
-                                        }
-                                        add("举报" to {
-                                            if (viewModel.feedUid.isNotEmpty()) {
-                                                navigator.push(Route.Web(viewModel.reportUrl))
-                                            }
-                                        })
-                                        if (viewModel.feedUid.isNotEmpty() && viewModel.feedUid == app.session.uid) {
-                                            add("删除" to {
-                                                deleteConfirm.ask("动态") {
-                                                    scope.launch {
-                                                        try {
-                                                            val result = app.repository.deleteFeed(viewModel.id)
-                                                            if (result.message.isNotEmpty()) {
-                                                                context.toast(result.message)
-                                                            } else {
-                                                                FeedActions.removeFeed(viewModel.id)
-                                                                context.toast(result.count.ifEmpty { "已删除" })
-                                                                navigator.pop()
+                                    groups = buildList {
+                                        add(
+                                            buildList {
+                                                add("复制" to { context.copyText(viewModel.shareUrl) })
+                                                if (isOwnFeed) {
+                                                    add("编辑" to {
+                                                        if (!loadingEdit) {
+                                                            loadingEdit = true
+                                                            scope.launch {
+                                                                try {
+                                                                    val detail = app.repository.feedChangeDetail(viewModel.id)
+                                                                    val reason = EditFeedInput.unavailableReason(detail)
+                                                                    if (reason != null) {
+                                                                        context.toast(reason)
+                                                                    } else {
+                                                                        editingFeed = EditFeedInput.fromChangeDetail(detail)
+                                                                    }
+                                                                } catch (e: CancellationException) {
+                                                                    throw e
+                                                                } catch (e: Exception) {
+                                                                    context.toast(ApiFailure.from(e).message)
+                                                                } finally {
+                                                                    loadingEdit = false
+                                                                }
                                                             }
-                                                        } catch (e: CancellationException) {
-                                                            throw e
-                                                        } catch (e: Exception) {
-                                                            context.toast(ApiFailure.from(e).message)
                                                         }
-                                                    }
+                                                    })
                                                 }
-                                            })
+                                                add("分享" to { context.shareText(viewModel.shareUrl) })
+                                                add((if (viewModel.isFav) "取消本地收藏" else "本地收藏") to viewModel::toggleFav)
+                                                add("添加到账号收藏夹" to {
+                                                    if (app.session.isLogin) {
+                                                        collectionsOpen = true
+                                                    } else {
+                                                        context.toast("请先登录后使用账号收藏夹")
+                                                    }
+                                                })
+                                                if (viewModel.hasMarkdown) {
+                                                    add((if (showSource) "格式化显示" else "查看原文") to { showSource = !showSource })
+                                                }
+                                            },
+                                        )
+                                        add(
+                                            listOf(
+                                                (if (viewModel.isBlocked) "取消屏蔽" else "屏蔽") to viewModel::toggleBlock,
+                                                "举报" to {
+                                                    if (viewModel.feedUid.isNotEmpty()) {
+                                                        navigator.push(Route.Web(viewModel.reportUrl))
+                                                    }
+                                                },
+                                            ),
+                                        )
+                                        if (isOwnFeed) {
+                                            add(
+                                                listOf(
+                                                    "删除" to {
+                                                        deleteConfirm.ask("动态") {
+                                                            scope.launch {
+                                                                try {
+                                                                    val result = app.repository.deleteFeed(viewModel.id)
+                                                                    if (result.message.isNotEmpty()) {
+                                                                        context.toast(result.message)
+                                                                    } else {
+                                                                        FeedActions.removeFeed(viewModel.id)
+                                                                        context.toast(result.count.ifEmpty { "已删除" })
+                                                                        navigator.pop()
+                                                                    }
+                                                                } catch (e: CancellationException) {
+                                                                    throw e
+                                                                } catch (e: Exception) {
+                                                                    context.toast(ApiFailure.from(e).message)
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                ),
+                                            )
                                         }
                                     },
                                 )
@@ -512,6 +553,18 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
             },
         )
     }
+
+    editingFeed?.let { editing ->
+        ReplyComposerSheet(
+            target = ReplyTarget(feedType = editing.feedType),
+            editingFeed = editing,
+            onDismiss = { editingFeed = null },
+            onEdited = { updated -> viewModel.onFeedEdited(updated) },
+            onPosted = { editingFeed = null },
+        )
+    }
+
+    OverlayLoadingDialog(show = loadingEdit, text = "正在加载动态信息")
 
     if (collectionsOpen) {
         AccountCollectionsSheet(

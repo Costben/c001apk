@@ -52,15 +52,21 @@ class OssUploadModel(
     )
 }
 
-/** A local file plus the metadata (and optional live-photo video) the server must be told about. */
+/**
+ * A picked local file (or an already-uploaded remote picture retained when editing a feed) plus
+ * the metadata the server must be told about when uploading new media.
+ */
 data class SelectedImage(
     val path: String,
     val model: OssUploadModel,
     val liveVideo: LivePhotoVideo? = null,
     val livePhotoEnabled: Boolean = liveVideo != null,
+    val remoteUrl: String? = null,
 ) {
+    val isRemote: Boolean get() = !remoteUrl.isNullOrEmpty()
+
     fun activeLiveVideo(enableLivePhoto: Boolean = true): LivePhotoVideo? =
-        liveVideo?.takeIf { enableLivePhoto && livePhotoEnabled }
+        liveVideo?.takeIf { enableLivePhoto && livePhotoEnabled && !isRemote }
 }
 
 /**

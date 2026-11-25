@@ -19,6 +19,7 @@ import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.model.FilterScope
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
+import app.awavenue.c001apk.ui.feed.FeedActions
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.text.MarkdownContent
@@ -159,6 +160,22 @@ class FeedDetailViewModel(
     }
 
     // ---- feed ----------------------------------------------------------------------------------
+
+    /** Applies the updated feed immediately and reloads full rendered detail from the server. */
+    fun onFeedEdited(updated: Entity?) {
+        if (updated != null && updated.id == id) {
+            applyFeed(updated)
+            FeedActions.rememberEdit(updated)
+        }
+        viewModelScope.launch {
+            runCatching { repository.feedDetail(id, verify = false) }.onSuccess { detail ->
+                applyFeed(detail.feed)
+                FeedActions.rememberEdit(detail.feed)
+                isPublic = detail.isPublic
+                feedStatus = ListStatus.Content
+            }
+        }
+    }
 
     /** Retries the body; [verify] re-runs it through the account-scoped call. */
     fun loadFeed(verify: Boolean = false) {

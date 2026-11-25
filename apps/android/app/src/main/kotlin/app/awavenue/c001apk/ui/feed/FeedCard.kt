@@ -56,6 +56,9 @@ import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
+import app.awavenue.c001apk.ui.feed.reply.EditFeedInput
+import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
+import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalFeedListState
 import app.awavenue.c001apk.ui.nav.LocalNavigator
@@ -72,6 +75,7 @@ import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.More
+import io.github.suqi8.coui.kmp.overlay.OverlayLoadingDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -95,6 +99,7 @@ internal object FeedActions {
     private val likes = mutableStateMapOf<String, FeedLike>()
     private val removedFeeds = mutableStateMapOf<String, Boolean>()
     private val blockedUsers = mutableStateMapOf<String, Boolean>()
+    private val editedFeeds = mutableStateMapOf<String, Entity>()
 
     /**
      * Feeds whose body overflowed the preview. A page rebuilt after a detail closes lays its
@@ -107,6 +112,15 @@ internal object FeedActions {
 
     fun rememberTruncated(id: String, truncated: Boolean) {
         if (truncated) truncatedFeeds.add(id) else truncatedFeeds.remove(id)
+    }
+
+    fun edited(feed: Entity): Entity = editedFeeds[feed.id] ?: feed
+
+    fun rememberEdit(feed: Entity) {
+        if (feed.id.isNotEmpty()) {
+            editedFeeds[feed.id] = feed
+            truncatedFeeds.remove(feed.id)
+        }
     }
 
     fun like(feed: Entity): FeedLike? = likes[feed.id]?.takeIf { it.source === feed }
@@ -141,6 +155,7 @@ fun FeedCard(
     isHistory: Boolean = false,
     onDelete: (() -> Unit)? = null,
 ) {
+    val feed = FeedActions.edited(feed)
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
@@ -181,6 +196,8 @@ fun FeedCard(
     }
     val openFeed = rememberHapticClick { navigator.push(Route.Feed(feed.id, preview = feed), origin) }
     var menuOpen by remember(feed) { mutableStateOf(false) }
+    var editingFeed by remember(feed.id) { mutableStateOf<EditFeedInput?>(null) }
+    var loadingEdit by remember(feed.id) { mutableStateOf(false) }
     // Deleting is the one entry of the more-menu that cannot be undone, so it asks first.
     val deleteConfirm = rememberDeleteConfirmation()
 
@@ -215,12 +232,36 @@ fun FeedCard(
             onUserClick = rememberHapticClick { navigator.push(Route.User(feed.uid)) },
             onMore = rememberHapticClick { menuOpen = true },
         ) {
+            val isOwnFeed = !isHistory && feed.uid.isNotEmpty() && feed.uid == app.session.uid
             MoreMenu(
                 show = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                entries = feedMenuEntries(
+                groups = feedMenuGroups(
+                    showEdit = isOwnFeed,
                     showDelete = isHistory || (feed.uid.isNotEmpty() && feed.uid == app.session.uid),
                     onCopy = { context.copyText("${Protocol.URL_COOLAPK}/feed/${feed.id}") },
+                    onEdit = {
+                        if (!loadingEdit) {
+                            loadingEdit = true
+                            scope.launch {
+                                try {
+                                    val detail = app.repository.feedChangeDetail(feed.id)
+                                    val reason = EditFeedInput.unavailableReason(detail)
+                                    if (reason != null) {
+                                        context.toast(reason)
+                                    } else {
+                                        editingFeed = EditFeedInput.fromChangeDetail(detail)
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    context.toast(ApiFailure.from(e).message)
+                                } finally {
+                                    loadingEdit = false
+                                }
+                            }
+                        }
+                    },
                     onBlock = {
                         app.blacklist.blockUser(feed.uid)
                         FeedActions.blockUser(feed.uid)
@@ -340,20 +381,54 @@ fun FeedCard(
         }
     }
 
+    editingFeed?.let { editing ->
+        ReplyComposerSheet(
+            target = ReplyTarget(feedType = editing.feedType),
+            editingFeed = editing,
+            onDismiss = { editingFeed = null },
+            onEdited = { updated ->
+                if (updated != null && updated.id == feed.id) {
+                    FeedActions.rememberEdit(updated)
+                }
+                scope.launch {
+                    runCatching { app.repository.feedDetail(feed.id, verify = false) }.onSuccess { detail ->
+                        FeedActions.rememberEdit(detail.feed)
+                    }
+                }
+            },
+            onPosted = { editingFeed = null },
+        )
+    }
+
+    OverlayLoadingDialog(show = loadingEdit, text = "正在加载动态信息")
+
     DeleteConfirmationDialog(deleteConfirm)
 }
 
-private fun feedMenuEntries(
+private fun feedMenuGroups(
+    showEdit: Boolean,
     showDelete: Boolean,
     onCopy: () -> Unit,
+    onEdit: () -> Unit,
     onBlock: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
-): List<Pair<String, () -> Unit>> = buildList {
-    add("复制" to onCopy)
-    add("屏蔽" to onBlock)
-    add("举报" to onReport)
-    if (showDelete) add("删除" to onDelete)
+): List<List<Pair<String, () -> Unit>>> = buildList {
+    add(
+        buildList {
+            add("复制" to onCopy)
+            if (showEdit) add("编辑" to onEdit)
+        },
+    )
+    add(
+        listOf(
+            "屏蔽" to onBlock,
+            "举报" to onReport,
+        ),
+    )
+    if (showDelete) {
+        add(listOf("删除" to onDelete))
+    }
 }
 
 @Composable

@@ -131,6 +131,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -149,6 +150,116 @@ data class ReplyTarget(
 )
 
 /**
+ * Editable snapshot of an existing feed fetched from `GET /v6/feed/changeDetail`.
+ * Preserves existing remote picture URLs and server-side metadata so editing text or visibility
+ * does not drop attached links, titles or topic bindings.
+ */
+data class EditFeedInput(
+    val id: String,
+    val feedType: String = "feed",
+    val message: String,
+    val messageTitle: String = "",
+    val picUrls: List<String> = emptyList(),
+    val onlySelf: Boolean = false,
+    val targetType: String = "",
+    val targetId: String = "",
+    val targetTitle: String = "",
+    val extraFields: List<Pair<String, String>> = emptyList(),
+) {
+    companion object {
+        private val preservedExtraKeys = listOf(
+            "extra_title",
+            "extra_url",
+            "extra_pic",
+            "extra_key",
+            "extra_type",
+            "disallow_reply",
+            "is_anonymous",
+            "location",
+        )
+
+        /**
+         * Validates whether [detail] from `changeDetail` can be edited in this plain-text sheet.
+         * Returns a user-facing reason when editing is disallowed, or `null` when editing may proceed.
+         */
+        fun unavailableReason(detail: Entity): String? = when {
+            detail.id.isEmpty() -> "未获取到动态信息，请稍后重试"
+            detail.string("is_html_article") == "1" -> "暂不支持编辑图文文章"
+            detail.int("enableModify") == 0 -> "该动态暂不可编辑"
+            else -> null
+        }
+
+        fun fromChangeDetail(detail: Entity): EditFeedInput {
+            val picUrls = detail.picArr.ifEmpty {
+                detail.pic.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            }
+            val turl = detail.string("turl")
+            val ttitle = detail.string("ttitle")
+            val targetType = when {
+                turl.startsWith("/t/") -> "tag"
+                else -> detail.string("targetType")
+            }
+            val targetId = detail.string("targetId").ifEmpty { detail.string("tid").takeIf { it != "0" }.orEmpty() }
+            val extra = preservedExtraKeys.mapNotNull { key ->
+                val value = detail.string(key)
+                if (value.isNotEmpty() && value != "0") key to value else null
+            }
+            return EditFeedInput(
+                id = detail.id,
+                feedType = detail.string("feedType").ifEmpty { "feed" },
+                message = detail.message,
+                messageTitle = detail.messageTitle,
+                picUrls = picUrls,
+                onlySelf = detail.isSelfOnly,
+                targetType = targetType,
+                targetId = targetId,
+                targetTitle = ttitle,
+                extraFields = extra,
+            )
+        }
+    }
+}
+
+/** Merges retained remote URLs and newly uploaded local image URLs while preserving picker order. */
+internal fun mergeUploadedPictures(
+    images: List<SelectedImage>,
+    uploadedLocalUrls: List<String>,
+): List<String> {
+    var localIndex = 0
+    return buildList {
+        for (image in images) {
+            val remote = image.remoteUrl
+            if (!remote.isNullOrEmpty()) {
+                add(remote)
+            } else if (localIndex < uploadedLocalUrls.size) {
+                add(uploadedLocalUrls[localIndex++])
+            }
+        }
+    }
+}
+
+/** Builds the form fields submitted to `POST /v6/feed/changeFeed`. */
+internal fun buildEditFeedFields(
+    editing: EditFeedInput,
+    message: String,
+    pic: String,
+    onlySelf: Boolean,
+    activeTarget: ReplyTarget,
+): List<Pair<String, String>> {
+    val fields = linkedMapOf<String, String>()
+    for ((k, v) in editing.extraFields) fields[k] = v
+    fields["id"] = editing.id
+    fields["type"] = editing.feedType.ifEmpty { "feed" }
+    if (editing.messageTitle.isNotEmpty()) fields["message_title"] = editing.messageTitle
+    if (activeTarget.targetType.isNotEmpty()) fields["targetType"] = activeTarget.targetType
+    if (activeTarget.targetId.isNotEmpty()) fields["targetId"] = activeTarget.targetId
+    fields["message"] = message
+    fields["status"] = if (onlySelf) "-1" else "1"
+    fields["pic"] = pic
+    return fields.entries.map { it.key to it.value }
+}
+
+/**
  * The reply and publish sheet, ported from the Flutter `ReplyPage`: pictures first go to OSS,
  * then the write endpoint is called, and the legacy picture captcha is answered inline when the
  * server asks for it.
@@ -156,6 +267,9 @@ data class ReplyTarget(
  * [draft] reopens a composition that was put aside: its text, pictures and target take the place
  * of the ones [target] would start with, and leaving the sheet again updates that same draft
  * instead of filing a second one. Closing a sheet with unsaved work asks whether to keep it.
+ *
+ * [editingFeed] opens the sheet in edit mode for an existing feed: retained remote URLs stay in
+ * place without re-uploading, newly picked pictures upload to OSS, and saving calls `changeFeed`.
  */
 @OptIn(ExperimentalCOUIApi::class)
 @Composable
@@ -164,25 +278,37 @@ fun ReplyComposerSheet(
     onDismiss: () -> Unit,
     onPosted: () -> Unit,
     draft: Draft? = null,
+    editingFeed: EditFeedInput? = null,
+    onEdited: ((Entity?) -> Unit)? = null,
 ) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val isEditing = editingFeed != null
 
-    // A resumed draft carries its own target and content; a fresh sheet starts from the target it
-    // was opened for. Everything below reads this one, so publishing stays single-minded.
-    val initialTarget = remember(target, draft) {
-        draft?.let {
-            ReplyTarget(
-                id = it.replyId,
-                type = it.replyType,
-                targetType = it.targetType,
-                targetId = it.targetId,
-                title = it.title,
-                feedType = it.feedType,
+    // A resumed draft carries its own target and content; an edit carries the feed's own target;
+    // a fresh sheet starts from the target it was opened for.
+    val initialTarget = remember(target, draft, editingFeed) {
+        when {
+            editingFeed != null -> ReplyTarget(
+                id = "",
+                type = "feed",
+                targetType = editingFeed.targetType,
+                targetId = editingFeed.targetId,
+                title = editingFeed.targetTitle,
+                feedType = editingFeed.feedType,
             )
-        } ?: target
+            draft != null -> ReplyTarget(
+                id = draft.replyId,
+                type = draft.replyType,
+                targetType = draft.targetType,
+                targetId = draft.targetId,
+                title = draft.title,
+                feedType = draft.feedType,
+            )
+            else -> target
+        }
     }
     var activeTarget by remember { mutableStateOf(initialTarget) }
     var appliedTopicTag by remember {
@@ -195,14 +321,16 @@ fun ReplyComposerSheet(
         )
     }
 
-    val initialText = draft?.text
+    val initialText = editingFeed?.message
+        ?: draft?.text
         ?: if (initialTarget.targetType == "tag" && initialTarget.title.isNotEmpty()) {
             "#${initialTarget.title}# "
         } else {
             ""
         }
+    val initialOnlySelf = editingFeed?.onlySelf ?: (draft?.onlySelf == true)
     val input = rememberEmojiInputState(initialText)
-    var onlySelf by remember { mutableStateOf(draft?.onlySelf == true) }
+    var onlySelf by remember { mutableStateOf(initialOnlySelf) }
     var expanded by remember { mutableStateOf(false) }
     var activePanel by remember { mutableStateOf<ComposerSubPanel?>(null) }
     var cachedTopics by remember { mutableStateOf<List<Entity>?>(null) }
@@ -211,13 +339,22 @@ fun ReplyComposerSheet(
     // 谁可以看 is asked in a dialog over the panel, the way the reference client does it.
     var visibilityMenu by remember { mutableStateOf(false) }
     var images by remember {
-        mutableStateOf(draft?.images.orEmpty().map { it.toSelectedImage() })
+        mutableStateOf(
+            editingFeed?.picUrls?.map { url ->
+                SelectedImage(
+                    path = url,
+                    model = OssUploadModel(name = "", resolution = "", md5 = ""),
+                    remoteUrl = url,
+                )
+            } ?: draft?.images.orEmpty().map { it.toSelectedImage() },
+        )
     }
     // The id the draft box files this composition under: a resumed draft keeps its own, so
     // saving twice replaces rather than duplicates.
     val draftId = remember { draft?.id ?: UUID.randomUUID().toString() }
     val initialImages = remember {
-        draft?.images.orEmpty().map { it.path to (it.liveVideoPath.isNotEmpty() && it.livePhotoEnabled) }
+        editingFeed?.picUrls?.map { it to false }
+            ?: draft?.images.orEmpty().map { it.path to (it.liveVideoPath.isNotEmpty() && it.livePhotoEnabled) }
     }
     var askSave by remember { mutableStateOf(false) }
     var savingDraft by remember { mutableStateOf(false) }
@@ -230,6 +367,7 @@ fun ReplyComposerSheet(
     var pendingImport by remember { mutableStateOf<Draft?>(null) }
 
     val hint = when {
+        isEditing -> "编辑动态"
         activeTarget.id.isNotEmpty() -> "回复: ${activeTarget.title}"
         activeTarget.title.isNotEmpty() -> "发布于: ${activeTarget.title}"
         else -> "发布动态"
@@ -262,7 +400,8 @@ fun ReplyComposerSheet(
     fun hasUnsavedWork(): Boolean =
         input.text.trim() != initialText.trim() ||
             images.map { it.path to (it.liveVideo != null && it.livePhotoEnabled) } != initialImages ||
-            activeTarget != initialTarget
+            activeTarget != initialTarget ||
+            onlySelf != initialOnlySelf
 
     /** Slides the panel out; [then] runs once it has left the screen. */
     fun leave(then: () -> Unit) {
@@ -381,24 +520,51 @@ fun ReplyComposerSheet(
     suspend fun publish() {
         if (publishing) return
         publishing = true
-        var stage = "准备发布"
+        var stage = if (isEditing) "准备保存" else "准备发布"
         try {
             var pic = ""
             val resolvedFeedType =
                 if (activeTarget.targetType == "apk") "comment" else activeTarget.feedType.ifEmpty { "feed" }
             if (images.isNotEmpty()) {
-                stage = "上传图片"
-                progress = "准备上传图片"
-                pic = OssUpload.upload(
-                    repository = app.repository,
-                    images = images,
-                    feedType = resolvedFeedType,
-                    onProgress = { index, total -> progress = "正在上传图片 $index/$total" },
-                ).joinToString(",")
+                val localImages = images.filterNot { it.isRemote }
+                val uploadedLocalUrls = if (localImages.isNotEmpty()) {
+                    stage = "上传图片"
+                    progress = "准备上传图片"
+                    OssUpload.upload(
+                        repository = app.repository,
+                        images = localImages,
+                        feedType = resolvedFeedType,
+                        onProgress = { index, total -> progress = "正在上传图片 $index/$total" },
+                    )
+                } else {
+                    emptyList()
+                }
+                pic = mergeUploadedPictures(images, uploadedLocalUrls).joinToString(",")
             }
-            progress = "正在发布"
+            progress = if (isEditing) "正在保存" else "正在发布"
             val fields = mutableListOf("message" to input.text)
-            if (activeTarget.id.isEmpty()) {
+            if (editingFeed != null) {
+                stage = "编辑动态"
+                val editFields = buildEditFeedFields(
+                    editing = editingFeed,
+                    message = input.text,
+                    pic = pic,
+                    onlySelf = onlySelf,
+                    activeTarget = activeTarget,
+                )
+                val result = app.repository.changeFeed(editFields)
+                progress = null
+                if (result.message.isNotEmpty()) {
+                    context.toast(result.message)
+                } else {
+                    val updated = (result.data as? JsonObject)?.let(::Entity)
+                    context.toast("修改成功")
+                    leave {
+                        onEdited?.invoke(updated)
+                        onPosted()
+                    }
+                }
+            } else if (activeTarget.id.isEmpty()) {
                 stage = "发布动态"
                 val feedFields = mutableListOf("type" to resolvedFeedType)
                 if (activeTarget.targetType.isNotEmpty()) feedFields += "targetType" to activeTarget.targetType
@@ -570,35 +736,39 @@ fun ReplyComposerSheet(
                         .weight(1f)
                         .padding(horizontal = 12.dp),
                 )
-                Box {
-                    OverflowButton(onClick = { menuOpen = true })
-                    MoreMenu(
-                        show = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                        entries = listOf(
-                            // 导入草稿箱内容: any page can pull a composition written elsewhere onto
-                            // itself. Only the words and the pictures travel — the target stays this
-                            // sheet's, which is the whole reason the entry exists.
-                            "导入草稿箱内容" to {
-                                if (app.drafts.drafts.isEmpty()) {
-                                    context.toast("草稿箱是空的")
-                                } else {
-                                    input.clearFocus()
-                                    focusManager.clearFocus()
-                                    pickingDraft = true
-                                }
-                            },
-                            // An untouched sheet has nothing worth filing; the box would just collect
-                            // blanks, so the entry says so instead.
-                            "保存到草稿箱" to {
-                                if (input.text.isNotBlank() || images.isNotEmpty()) {
-                                    saveToDrafts()
-                                } else {
-                                    context.toast("还没有写内容")
-                                }
-                            },
-                        ),
-                    )
+                if (isEditing) {
+                    Spacer(Modifier.size(ComposerPanel.ToolbarButtonHeight))
+                } else {
+                    Box {
+                        OverflowButton(onClick = { menuOpen = true })
+                        MoreMenu(
+                            show = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                            entries = listOf(
+                                // 导入草稿箱内容: any page can pull a composition written elsewhere onto
+                                // itself. Only the words and the pictures travel — the target stays this
+                                // sheet's, which is the whole reason the entry exists.
+                                "导入草稿箱内容" to {
+                                    if (app.drafts.drafts.isEmpty()) {
+                                        context.toast("草稿箱是空的")
+                                    } else {
+                                        input.clearFocus()
+                                        focusManager.clearFocus()
+                                        pickingDraft = true
+                                    }
+                                },
+                                // An untouched sheet has nothing worth filing; the box would just collect
+                                // blanks, so the entry says so instead.
+                                "保存到草稿箱" to {
+                                    if (input.text.isNotBlank() || images.isNotEmpty()) {
+                                        saveToDrafts()
+                                    } else {
+                                        context.toast("还没有写内容")
+                                    }
+                                },
+                            ),
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(ComposerPanel.ToolbarToBodyGap))
@@ -723,7 +893,7 @@ fun ReplyComposerSheet(
                         images.forEachIndexed { imageIndex, image ->
                             Box(Modifier.size(64.dp)) {
                                 AsyncImage(
-                                    model = File(image.path),
+                                    model = image.remoteUrl ?: File(image.path),
                                     contentDescription = null,
                                     modifier = Modifier.size(64.dp).clip(rememberSquircleShape(10.dp)),
                                 )
@@ -757,6 +927,18 @@ fun ReplyComposerSheet(
                                         } else {
                                             Color.White
                                         },
+                                    )
+                                } else if (image.remoteUrl?.contains("-livepic@", ignoreCase = true) == true) {
+                                    Text(
+                                        "实况",
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(4.dp)
+                                            .clip(rememberSquircleShape(4.dp))
+                                            .background(COUITheme.colorScheme.primaryContainer)
+                                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                                        style = COUITheme.textStyles.footnote2,
+                                        color = COUITheme.colorScheme.onPrimaryContainer,
                                     )
                                 }
                                 IconButton(
@@ -901,7 +1083,7 @@ fun ReplyComposerSheet(
                 }
                 Spacer(Modifier.height(ComposerPanel.ActionGap))
                 ActionCapsule(
-                    text = "发布",
+                    text = if (isEditing) "保存" else "发布",
                     enabled = canPublish,
                     onClick = { scope.launch { publish() } },
                 )
@@ -912,16 +1094,16 @@ fun ReplyComposerSheet(
 
     // The question the close path raises, as the library's centered alert dialog: 继续编辑 is the
     // negative answer, 保存 the positive one, and an exit while it is up drops the composition
-    // instead of filing it.
+    // instead of filing it. In edit mode, closing offers to discard changes instead of filing a draft.
     OverlayAlertDialog(
         buttonColors = appDialogButtonColors(),
         show = askSave,
-        title = "保存到草稿箱？",
-        summary = "这次编辑还没发布，存进草稿箱下次可以接着写。",
+        title = if (isEditing) "放弃修改？" else "保存到草稿箱？",
+        summary = if (isEditing) "已修改的内容尚未保存，退出后将丢失这些改动。" else "这次编辑还没发布，存进草稿箱下次可以接着写。",
         cancelText = "继续编辑",
-        confirmText = "保存",
+        confirmText = if (isEditing) "放弃" else "保存",
         onCancel = { keepEditing() },
-        onConfirm = { saveToDrafts() },
+        onConfirm = { if (isEditing) discardDraft() else saveToDrafts() },
     ) {
         BackHandler(enabled = askSave) { discardDraft() }
     }
