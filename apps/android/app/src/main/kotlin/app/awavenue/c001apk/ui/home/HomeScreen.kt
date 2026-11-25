@@ -342,7 +342,9 @@ fun HomeScreen(
             Layout(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .scrollToTopOnTap()
+                    // Keep the second-row slot transparent to taps while search history sits under it;
+                    // leaving scrollToTopOnTap active consumes taps before they reach the clear button.
+                    .scrollToTopOnTap(enabled = !searchExpanded || resultsShown)
                     .onGloballyPositioned {
                         appBarBounds.report(barSlot, it.positionInRoot().y + it.size.height)
                     },

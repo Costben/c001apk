@@ -604,7 +604,9 @@ private fun TopicPage(tag: String?, id: String?) {
                 Layout(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .scrollToTopOnTap()
+                        // Keep the tab-row slot transparent to taps while search history sits under it;
+                        // leaving scrollToTopOnTap active consumes taps before they reach the clear button.
+                        .scrollToTopOnTap(enabled = !search.expanded || resultsShown)
                         .onGloballyPositioned {
                             appBarBounds.reportPage(
                                 if (isTopic) Route.Topic(tag.orEmpty()) else Route.Product(id.orEmpty()),

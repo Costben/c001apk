@@ -41,7 +41,7 @@ import io.github.suqi8.coui.kmp.basic.SearchBarDefaults
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.core.ExperimentalCOUIApi
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Clear
+import io.github.suqi8.coui.kmp.icon.extended.Delete
 import io.github.suqi8.coui.kmp.overlay.OverlayAlertDialog
 
 /**
@@ -156,7 +156,7 @@ fun SearchHistorySection(
                     fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = { showClearDialog = true }) {
-                    Icon(COUIIcons.Clear, contentDescription = "清除全部")
+                    Icon(COUIIcons.Delete, contentDescription = "清除全部")
                 }
             }
             FlowLayout(
