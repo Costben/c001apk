@@ -28,7 +28,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
-import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListPosition
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -89,11 +89,12 @@ fun ParamsScreen() {
         ) {
             item {
                 SmallTitle("客户端")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                SettingsGroupCard {
                     EditTextPreference(
                         title = "客户端版本名称",
                         value = params.versionName,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(versionName = value) } },
+                        cardListPosition = CardListPosition.Head,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -101,6 +102,7 @@ fun ParamsScreen() {
                         title = "API 版本",
                         value = params.apiVersion,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(apiVersion = value) } },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -108,6 +110,7 @@ fun ParamsScreen() {
                         title = "客户端版本号",
                         value = params.versionCode,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(versionCode = value) } },
+                        cardListPosition = CardListPosition.Tail,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -115,11 +118,12 @@ fun ParamsScreen() {
             }
             item {
                 SmallTitle("设备")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                SettingsGroupCard {
                     EditTextPreference(
                         title = "设备标识（SZLM ID）",
                         value = settings.szlmId,
                         onValueChange = settings::updateSzlmId,
+                        cardListPosition = CardListPosition.Head,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                         summary = "留空时随机生成",
@@ -152,6 +156,7 @@ fun ParamsScreen() {
                         onValueChange = { value ->
                             settings.updateDeviceParams(updateXAppDevice = true) { it.copy(manufacturer = value) }
                         },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -161,6 +166,7 @@ fun ParamsScreen() {
                         onValueChange = { value ->
                             settings.updateDeviceParams(updateXAppDevice = true) { it.copy(brand = value) }
                         },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -170,6 +176,7 @@ fun ParamsScreen() {
                         onValueChange = { value ->
                             settings.updateDeviceParams(updateXAppDevice = true) { it.copy(model = value) }
                         },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -179,6 +186,7 @@ fun ParamsScreen() {
                         onValueChange = { value ->
                             settings.updateDeviceParams(updateXAppDevice = true) { it.copy(buildNumber = value) }
                         },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -186,6 +194,7 @@ fun ParamsScreen() {
                         title = "SDK 版本",
                         value = params.sdkInt,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(sdkInt = value) } },
+                        cardListPosition = CardListPosition.Middle,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -193,6 +202,7 @@ fun ParamsScreen() {
                         title = "Android 版本",
                         value = params.androidVersion,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(androidVersion = value) } },
+                        cardListPosition = CardListPosition.Tail,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                     )
@@ -200,17 +210,19 @@ fun ParamsScreen() {
             }
             item {
                 SmallTitle("请求头")
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                SettingsGroupCard {
                     ArrowPreference(
                         title = "用户代理（User-Agent）",
                         summary = params.userAgent,
                         startAction = { PreferenceStartIcon(COUIIcons.Copy) },
+                        cardListPosition = CardListPosition.Head,
                         onClick = { context.copyText(params.userAgent) },
                     )
                     EditTextPreference(
                         title = "设备编码（X-App-Device）",
                         value = params.xAppDevice,
                         onValueChange = { value -> settings.updateDeviceParams { it.copy(xAppDevice = value) } },
+                        cardListPosition = CardListPosition.Tail,
                         confirmButtonText = "确定",
                         cancelButtonText = "取消",
                         bottomAction = {
@@ -225,10 +237,11 @@ fun ParamsScreen() {
                 }
             }
             item {
-                Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                SettingsGroupCard {
                     ArrowPreference(
                         title = "重新生成参数",
                         startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                        cardListPosition = CardListPosition.Full,
                         onClick = settings::regenerateDeviceParams,
                     )
                 }

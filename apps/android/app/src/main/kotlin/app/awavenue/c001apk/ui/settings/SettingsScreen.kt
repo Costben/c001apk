@@ -4,8 +4,10 @@ import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,6 +54,8 @@ import coil3.SingletonImageLoader
 import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardDefaults
+import io.github.suqi8.coui.kmp.basic.CardListPosition
 import io.github.suqi8.coui.kmp.basic.DropdownEntry
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.DropdownImpl
@@ -222,35 +226,39 @@ fun SettingsScreen() {
             ) {
                 item {
                     SmallTitle("c001apk")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         ArrowPreference(
                             title = "使用教程",
                             summary = "从官方酷安导入设备标识，减少人机验证",
                             startAction = { PreferenceStartIcon(COUIIcons.Info) },
+                            cardListPosition = CardListPosition.Head,
                             onClick = rememberHapticClick { settings.restartOnboarding() },
                         )
                         ArrowPreference(
                             title = "协议参数",
                             summary = "${settings.deviceParams.brand} ${settings.deviceParams.model}",
                             startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                            cardListPosition = CardListPosition.Tail,
                             onClick = rememberHapticClick { navigator.push(Route.Params) },
                         )
                     }
                 }
                 item {
                     SmallTitle("主题")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         SwitchPreference(
                             title = "动态取色",
                             checked = settings.dynamicColor,
                             onCheckedChange = settings::updateDynamicColor,
                             startAction = { PreferenceStartIcon(COUIIcons.Background) },
+                            cardListPosition = CardListPosition.Head,
                             enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
                         )
                         OverlayDropdownPreference(
                             entry = seedColorEntry,
                             title = "主题颜色",
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = !settings.dynamicColor,
                             maxHeight = 380.dp,
                         )
@@ -260,26 +268,30 @@ fun SettingsScreen() {
                             selectedIndex = darkModes.indexOf(settings.darkMode),
                             onSelectedIndexChange = { settings.updateDarkMode(darkModes[it]) },
                             startAction = { PreferenceStartIcon(COUIIcons.Theme) },
+                            cardListPosition = CardListPosition.Tail,
                         )
                     }
                 }
                 item {
                     SmallTitle("显示")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         ArrowPreference(
                             title = "用户黑名单",
                             startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
+                            cardListPosition = CardListPosition.Head,
                             onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.User)) },
                         )
                         ArrowPreference(
                             title = "话题黑名单",
                             startAction = { PreferenceStartIcon(COUIIcons.Blocklist) },
+                            cardListPosition = CardListPosition.Middle,
                             onClick = rememberHapticClick { navigator.push(Route.Blacklist(BlacklistType.Topic)) },
                         )
                         ArrowPreference(
                             title = "内容过滤",
                             summary = contentFilterSummary(app.contentFilter.preferences),
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                            cardListPosition = CardListPosition.Middle,
                             onClick = rememberHapticClick { navigator.push(Route.ContentFilter) },
                         )
                         SliderPreference(
@@ -291,6 +303,7 @@ fun SettingsScreen() {
                                 if (snapped != settings.fontScale) settings.updateFontScale(snapped)
                             },
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                            cardListPosition = CardListPosition.Middle,
                             valueText = "${scaleText(fontScaleDraft)}x",
                             valueRange = fontScaleSteps.first()..fontScaleSteps.last(),
                             steps = fontScaleSteps.size - 2,
@@ -306,12 +319,14 @@ fun SettingsScreen() {
                             checked = settings.openInBrowser,
                             onCheckedChange = settings::updateOpenInBrowser,
                             startAction = { PreferenceStartIcon(COUIIcons.Link) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "记录浏览历史",
                             checked = settings.recordHistory,
                             onCheckedChange = settings::updateRecordHistory,
                             startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         OverlayDropdownPreference(
                             title = "浏览历史卡片",
@@ -322,12 +337,14 @@ fun SettingsScreen() {
                                 settings.updateHistoryCardMode(HistoryCardMode.entries[it])
                             },
                             startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "显示表情",
                             checked = settings.showEmoji,
                             onCheckedChange = settings::updateShowEmoji,
                             startAction = { PreferenceStartIcon(AppIcons.EmojiEmotions) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         OverlayDropdownPreference(
                             title = "浏览图片",
@@ -337,6 +354,7 @@ fun SettingsScreen() {
                                 settings.updateImageBrowseQuality(ImageBrowseQuality.entries[it])
                             },
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "实况图自动播放",
@@ -344,6 +362,7 @@ fun SettingsScreen() {
                             checked = settings.livePhotoAutoPlay,
                             onCheckedChange = settings::updateLivePhotoAutoPlay,
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "实况图播放声音",
@@ -351,6 +370,7 @@ fun SettingsScreen() {
                             checked = settings.livePhotoSound,
                             onCheckedChange = settings::updateLivePhotoSound,
                             startAction = { PreferenceStartIcon(AppIcons.VolumeOn) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "检查已安装应用更新",
@@ -358,18 +378,20 @@ fun SettingsScreen() {
                             checked = settings.checkUpdate,
                             onCheckedChange = settings::updateCheckUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                            cardListPosition = CardListPosition.Tail,
                         )
                     }
                 }
                 item {
                     SmallTitle("首页内容")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         SwitchPreference(
                             title = "显示轮播横幅",
                             summary = "首页动态顶部的大图推荐和活动横幅",
                             checked = settings.showHomeCarousel,
                             onCheckedChange = settings::updateShowHomeCarousel,
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            cardListPosition = CardListPosition.Head,
                         )
                         SwitchPreference(
                             title = "显示频道快捷入口",
@@ -377,6 +399,7 @@ fun SettingsScreen() {
                             checked = settings.showHomeChannels,
                             onCheckedChange = settings::updateShowHomeChannels,
                             startAction = { PreferenceStartIcon(COUIIcons.ListView) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "显示推荐话题与数码入口",
@@ -384,18 +407,20 @@ fun SettingsScreen() {
                             checked = settings.showHomeTopics,
                             onCheckedChange = settings::updateShowHomeTopics,
                             startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                            cardListPosition = CardListPosition.Tail,
                         )
                     }
                 }
                 item {
                     SmallTitle("交互")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         SwitchPreference(
                             title = "预测性返回手势",
                             summary = "返回时页面跟随手指并露出下一层；关闭后直接返回",
                             checked = settings.predictiveBack,
                             onCheckedChange = settings::updatePredictiveBack,
                             startAction = { PreferenceStartIcon(COUIIcons.Back) },
+                            cardListPosition = CardListPosition.Head,
                         )
                         SwitchPreference(
                             title = "动态卡片返回跟手轨迹",
@@ -403,6 +428,7 @@ fun SettingsScreen() {
                             checked = settings.predictiveBackCardFling,
                             onCheckedChange = settings::updatePredictiveBackCardFling,
                             startAction = { PreferenceStartIcon(COUIIcons.Notes) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = settings.predictiveBack,
                         )
                         SwitchPreference(
@@ -411,6 +437,7 @@ fun SettingsScreen() {
                             checked = settings.predictiveBackImageFling,
                             onCheckedChange = settings::updatePredictiveBackImageFling,
                             startAction = { PreferenceStartIcon(COUIIcons.Photos) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = settings.predictiveBack,
                         )
                         SwitchPreference(
@@ -419,6 +446,7 @@ fun SettingsScreen() {
                             checked = settings.hapticFeedback,
                             onCheckedChange = settings::updateHapticFeedback,
                             startAction = { PreferenceStartIcon(COUIIcons.Tune) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "自定义触感",
@@ -426,6 +454,7 @@ fun SettingsScreen() {
                             checked = settings.customHaptics,
                             onCheckedChange = settings::updateCustomHaptics,
                             startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = settings.hapticFeedback,
                         )
                         SwitchPreference(
@@ -434,6 +463,7 @@ fun SettingsScreen() {
                             checked = settings.reverseHapticEffects,
                             onCheckedChange = settings::updateReverseHapticEffects,
                             startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = settings.hapticFeedback && settings.customHaptics,
                         )
                         OverlayDropdownPreference(
@@ -444,6 +474,7 @@ fun SettingsScreen() {
                                 settings.updateHapticStrength(HapticStrength.entries[it])
                             },
                             startAction = { PreferenceStartIcon(COUIIcons.ListView) },
+                            cardListPosition = CardListPosition.Tail,
                             enabled = settings.hapticFeedback,
                         )
                     }
@@ -451,7 +482,7 @@ fun SettingsScreen() {
                 item {
                     val label = if (app.session.isLogin) "悄悄关注" else "本地关注"
                     SmallTitle("关注")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         if (app.session.isLogin) {
                             SwitchPreference(
                                 title = "悄悄关注",
@@ -459,31 +490,35 @@ fun SettingsScreen() {
                                 checked = app.localFollow.secretEnabled,
                                 onCheckedChange = app.localFollow::updateSecretEnabled,
                                 startAction = { PreferenceStartIcon(COUIIcons.Hide) },
+                                cardListPosition = CardListPosition.Head,
                             )
                         } else {
                             BasicComponent(
                                 title = "本地关注",
                                 summary = "游客可在用户主页直接关注，并在底栏“关注”查看内容。名单仅保存在本机",
                                 startAction = { PreferenceStartIcon(COUIIcons.Contacts) },
+                                cardListPosition = CardListPosition.Head,
                             )
                         }
                         ArrowPreference(
                             title = "管理$label",
                             summary = "查看本机关注名单、进入用户主页或取消关注",
                             startAction = { PreferenceStartIcon(COUIIcons.ContactsBook) },
+                            cardListPosition = CardListPosition.Tail,
                             onClick = rememberHapticClick { navigator.push(Route.LocalFollowList) },
                         )
                     }
                 }
                 item {
                     SmallTitle("更新")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         SwitchPreference(
                             title = "自动检查 c001apk 更新",
                             summary = "每次启动时检查一次最新版本",
                             checked = settings.autoCheckAppUpdate,
                             onCheckedChange = settings::updateAutoCheckAppUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Refresh) },
+                            cardListPosition = CardListPosition.Head,
                         )
                         SwitchPreference(
                             title = "接收预发布更新",
@@ -491,6 +526,7 @@ fun SettingsScreen() {
                             checked = settings.acceptPrereleaseUpdates,
                             onCheckedChange = settings::updateAcceptPrereleaseUpdates,
                             startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         SwitchPreference(
                             title = "应用内更新",
@@ -498,6 +534,7 @@ fun SettingsScreen() {
                             checked = settings.inAppUpdate,
                             onCheckedChange = settings::updateInAppUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                            cardListPosition = CardListPosition.Middle,
                         )
                         ArrowPreference(
                             title = if (checkingUpdate) "正在检查更新…" else "检查更新",
@@ -507,6 +544,7 @@ fun SettingsScreen() {
                                 "查看 c001apk 的最新正式版本"
                             },
                             startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                            cardListPosition = CardListPosition.Middle,
                             enabled = !checkingUpdate,
                             onClick = rememberHapticClick {
                                 scope.launch {
@@ -526,6 +564,7 @@ fun SettingsScreen() {
                             title = "版本更新说明",
                             summary = "查看最新版本的更新日志与发布说明",
                             startAction = { PreferenceStartIcon(COUIIcons.Notes) },
+                            cardListPosition = CardListPosition.Tail,
                             enabled = !checkingUpdate,
                             onClick = rememberHapticClick {
                                 scope.launch {
@@ -543,23 +582,26 @@ fun SettingsScreen() {
                 }
                 item {
                     SmallTitle("其他")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         ArrowPreference(
                             title = "账号管理",
                             summary = "已保存 ${app.accounts.accounts.size} 个账号 · 切换、添加或移除",
                             startAction = { PreferenceStartIcon(COUIIcons.ContactsCircle) },
+                            cardListPosition = CardListPosition.Head,
                             onClick = rememberHapticClick { navigator.push(Route.Accounts) },
                         )
                         ArrowPreference(
                             title = "关于",
                             summary = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
                             startAction = { PreferenceStartIcon(COUIIcons.Info) },
+                            cardListPosition = CardListPosition.Middle,
                             onClick = rememberHapticClick { navigator.push(Route.About) },
                         )
                         ArrowPreference(
                             title = "清理缓存",
                             summary = cacheSize?.let(::formatSize),
                             startAction = { PreferenceStartIcon(COUIIcons.Clear) },
+                            cardListPosition = CardListPosition.Tail,
                             onClick = rememberHapticClick {
                                 scope.launch {
                                     cacheSize = runCatching { cacheBytes(context) }.getOrNull()
@@ -593,12 +635,25 @@ fun SettingsScreen() {
 
 }
 
+/** Grouped preference card using COUI 17 group corner radius and weight. */
+@Composable
+internal fun SettingsGroupCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp),
+        cornerRadius = CardDefaults.GroupCornerRadius,
+        insideMargin = PaddingValues(0.dp),
+        weight = CardDefaults.GroupWeight,
+        content = content,
+    )
+}
+
 /** The start icon every preference row on the settings pages shares. */
 @Composable
 internal fun PreferenceStartIcon(icon: ImageVector) {
-    Box(Modifier.padding(end = 8.dp)) {
-        Icon(imageVector = icon, contentDescription = null, tint = COUITheme.colorScheme.onBackground)
-    }
+    Icon(imageVector = icon, contentDescription = null, tint = COUITheme.colorScheme.onBackground)
 }
 
 /** A filled dot in [color], used as the leading slot of a 主题颜色 option. */

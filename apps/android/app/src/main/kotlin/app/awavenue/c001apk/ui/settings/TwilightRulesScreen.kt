@@ -19,7 +19,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
-import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListPosition
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTitle
@@ -88,7 +88,7 @@ fun TwilightRulesScreen() {
             } else {
                 item {
                     SmallTitle("版本 ${snapshot.revision}")
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         Text(
                             "共 ${snapshot.rules.size} 条 · 发布于 ${snapshot.publishedAt}",
                             style = COUITheme.textStyles.footnote1,
@@ -98,11 +98,12 @@ fun TwilightRulesScreen() {
                     }
                 }
                 items(snapshot.rules, key = { it.key }) { rule ->
-                    Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                    SettingsGroupCard {
                         SwitchPreference(
                             title = rule.reason,
                             summary = ruleSummary(rule),
                             checked = rule.key !in prefs.disabledTwilightRules,
+                            cardListPosition = CardListPosition.Full,
                             onCheckedChange = { enabled -> app.contentFilter.setTwilightRuleEnabled(rule.key, enabled) },
                         )
                     }

@@ -35,7 +35,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.nav.rememberPageScrollState
-import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListPosition
 import io.github.suqi8.coui.kmp.basic.Chip
 import io.github.suqi8.coui.kmp.basic.FlowLayout
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -45,6 +45,7 @@ import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.cardListPositionOf
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Add
@@ -133,18 +134,19 @@ fun ContentFilterScreen() {
                     bottom = innerPadding.calculateBottomPadding(),
                 ),
         ) {
-            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+            SettingsGroupCard {
                 SwitchPreference(
                     title = "启用内容过滤",
                     summary = "命中规则的动态、评论与用户卡片会从列表里移除",
                     checked = prefs.enabled,
+                    cardListPosition = CardListPosition.Full,
                     onCheckedChange = { enabled -> store.update { it.copy(enabled = enabled) } },
                 )
             }
 
             SmallTitle("生效范围")
-            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                FilterScope.entries.forEach { scope ->
+            SettingsGroupCard {
+                FilterScope.entries.forEachIndexed { index, scope ->
                     SwitchPreference(
                         title = scope.label,
                         summary = when (scope) {
@@ -153,6 +155,7 @@ fun ContentFilterScreen() {
                             FilterScope.User -> "搜索与关注列表里的用户卡片"
                         },
                         checked = scope in prefs.scopes,
+                        cardListPosition = cardListPositionOf(index, FilterScope.entries.size),
                         enabled = prefs.enabled,
                         onCheckedChange = { on ->
                             store.update { current ->
@@ -166,12 +169,13 @@ fun ContentFilterScreen() {
             }
 
             SmallTitle("秋风规则")
-            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+            SettingsGroupCard {
                 ArrowPreference(
                     title = if (importingRules) "正在更新远程规则…" else "更新远程规则",
                     summary = prefs.twilight?.let {
                         "版本 ${it.revision} · ${it.rules.size} 条 · 发布于 ${it.publishedAt}"
                     } ?: "从 TG-Twilight 导入公开规则快照，个人规则与已有关闭项不受影响",
+                    cardListPosition = if (prefs.twilight != null) CardListPosition.Head else CardListPosition.Full,
                     enabled = !importingRules,
                     onClick = {
                         importingRules = true
@@ -196,19 +200,21 @@ fun ContentFilterScreen() {
                         title = "严格模式",
                         summary = "同时启用标记为「严格」的规则",
                         checked = prefs.twilightStrict,
+                        cardListPosition = CardListPosition.Middle,
                         enabled = prefs.enabled,
                         onCheckedChange = store::setTwilightStrict,
                     )
                     ArrowPreference(
                         title = "规则明细",
                         summary = "逐条查看并单独开关（${snapshot.rules.size} 条）",
+                        cardListPosition = CardListPosition.Tail,
                         onClick = { navigator.push(Route.TwilightRules) },
                     )
                 }
             }
 
             SmallTitle("规则")
-            Card(Modifier.padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+            SettingsGroupCard {
                 if (prefs.rules.isEmpty()) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text("还没有规则", style = COUITheme.textStyles.body1)
@@ -219,10 +225,11 @@ fun ContentFilterScreen() {
                         )
                     }
                 } else {
-                    prefs.rules.forEach { rule ->
+                    prefs.rules.forEachIndexed { index, rule ->
                         ArrowPreference(
                             title = rule.title,
                             summary = ruleSummary(rule),
+                            cardListPosition = cardListPositionOf(index, prefs.rules.size),
                             onClick = { editing = rule },
                         )
                     }
