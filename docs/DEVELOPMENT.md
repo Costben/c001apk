@@ -32,7 +32,7 @@ c001apk/
 ## 工具链
 
 界面组件来自 [coui17](https://github.com/Costben/coui17)（ColorOS 风格的 Compose Multiplatform
-组件库），通过 Maven 坐标 `io.github.suqi8.coui.kmp:*:1.2.0-SNAPSHOT` 引入：本机存在同级
+组件库），通过 Maven 坐标 `io.github.costben.coui17:*:1.2.0-SNAPSHOT` 引入：本机存在同级
 `../coui/build/repository/local` 时优先读取本地最新快照，外部环境或 CI 自动从
 [Costben/coui17 `maven-repo`](https://github.com/Costben/coui17/tree/maven-repo) 分支拉取。
 

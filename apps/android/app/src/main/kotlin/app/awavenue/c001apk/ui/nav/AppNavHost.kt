@@ -58,9 +58,11 @@ import androidx.compose.ui.util.lerp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -72,7 +74,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -984,13 +985,13 @@ private fun LeavingPage(
     LaunchedEffect(covered) {
         if (covered) {
             withFrameNanos { }
-            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            captureLayerBitmap(picture)?.let { entry.snapshot = it }
             delay(SnapshotSettleMillis)
-            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            captureLayerBitmap(picture)?.let { entry.snapshot = it }
             // The row may have been moved clear of the bar after the settle; the picture has to
             // match the position the page will come back to.
             delay(ReturnSnapshotDelayMillis)
-            if (picture.size != IntSize.Zero) entry.snapshot = picture.toImageBitmap()
+            captureLayerBitmap(picture)?.let { entry.snapshot = it }
         } else {
             // Let the rebuilt page paint over its own picture, so its first frame cannot blink.
             withFrameNanos { }

@@ -157,9 +157,12 @@ fun Modifier.expandOrigin(origin: ExpandOrigin): Modifier {
     return onPlaced { origin.coordinates = it }
         .drawWithContent {
             // 始终把原卡片内容录制进 origin.layer，确保底层隐藏时不破坏展开/缩回帧自身的画面。
-            origin.layer.record { this@drawWithContent.drawContent() }
+            val hasSize = size.width > 0f && size.height > 0f
+            if (hasSize) {
+                origin.layer.record { this@drawWithContent.drawContent() }
+            }
             if (visibility?.isHidden(origin, currentEntry) != true) {
-                drawLayer(origin.layer)
+                if (hasSize) drawLayer(origin.layer) else drawContent()
             }
         }
 }
@@ -290,13 +293,23 @@ internal fun ExpandFrame(
                     clip = false
                     return@graphicsLayer
                 }
+                val radius = lerp(source.cornerRadius.toPx(), screenCornerRadius.toPx(), p) / scale
+                val unscaledHeight = height / scale
+                if (!radius.isFinite() || !unscaledHeight.isFinite() || unscaledHeight <= 0f) {
+                    translationX = 0f
+                    translationY = 0f
+                    scaleX = 1f
+                    scaleY = 1f
+                    shape = RectangleShape
+                    clip = false
+                    return@graphicsLayer
+                }
                 transformOrigin = TransformOrigin(0f, 0f)
                 translationX = left
                 translationY = top
                 scaleX = scale
                 scaleY = scale
-                val radius = lerp(source.cornerRadius.toPx(), screenCornerRadius.toPx(), p) / scale
-                shape = FrameShape(height / scale, (radius / density).dp, squircle)
+                shape = FrameShape(unscaledHeight, (radius / density).dp, squircle)
                 clip = true
             }
             .drawWithContent {
@@ -336,22 +349,29 @@ internal fun ExpandFrame(
                 val picture = source.picture
                 if (alpha > 0f && bounds.width > 0f && bounds.height > 0f && (source.isAvailable || picture != null)) {
                     val k = size.width / bounds.width
-                    if (!k.isFinite() || k <= 0f) return@drawWithContent
-                    withTransform({ scale(k, k, pivot = Offset.Zero) }) {
-                        drawIntoCanvas { canvas ->
-                            canvas.saveLayer(Rect(Offset.Zero, bounds.size), Paint().apply { this.alpha = alpha })
-                            // The tapped row is transparent on its card; keep the card's own tone
-                            // behind it so the strip still reads as that card, not as the page.
-                            drawRect(source.color.compositeOver(pageColor), size = bounds.size)
-                            if (source.isAvailable) {
-                                drawLayer(source.layer)
-                            } else if (picture != null) {
-                                drawImage(
-                                    picture,
-                                    dstSize = IntSize(bounds.width.roundToInt(), bounds.height.roundToInt()),
-                                )
+                    val dstWidth = bounds.width.roundToInt()
+                    val dstHeight = bounds.height.roundToInt()
+                    val canSaveLayer = k.isFinite() && k > 0f &&
+                        dstWidth > 0 && dstHeight > 0 &&
+                        (bounds.width * k) <= MaxSnapshotDimensionPx &&
+                        (bounds.height * k) <= MaxSnapshotDimensionPx
+                    if (canSaveLayer) {
+                        withTransform({ scale(k, k, pivot = Offset.Zero) }) {
+                            drawIntoCanvas { canvas ->
+                                canvas.saveLayer(Rect(Offset.Zero, bounds.size), Paint().apply { this.alpha = alpha })
+                                // The tapped row is transparent on its card; keep the card's own tone
+                                // behind it so the strip still reads as that card, not as the page.
+                                drawRect(source.color.compositeOver(pageColor), size = bounds.size)
+                                if (source.isAvailable) {
+                                    drawLayer(source.layer)
+                                } else if (picture != null) {
+                                    drawImage(
+                                        picture,
+                                        dstSize = IntSize(dstWidth, dstHeight),
+                                    )
+                                }
+                                canvas.restore()
                             }
-                            canvas.restore()
                         }
                     }
                 }
@@ -404,8 +424,9 @@ private class ExpandGeometry {
         }
         val host = host?.takeIf { it.isAttached } ?: return origin.lastBounds
         val element = origin.coordinates?.takeIf { it.isAttached } ?: return origin.lastBounds
-        val rect = host.localBoundingBoxOf(element, clipBounds = false)
-            .takeIf { it.width > 0f && it.height > 0f }
+        val rect = runCatching { host.localBoundingBoxOf(element, clipBounds = false) }
+            .getOrNull()
+            ?.takeIf { it.width.isFinite() && it.height.isFinite() && it.width > 0f && it.height > 0f }
             ?: return origin.lastBounds
         origin.lastBounds = rect
         if (freeze) {
@@ -416,7 +437,18 @@ private class ExpandGeometry {
     }
 }
 
-private const val MaxSnapshotDimensionPx = 4096
+internal const val MaxSnapshotDimensionPx = 4096
+
+/**
+ * Captures [layer] as a bitmap when its dimensions are safe to allocate.
+ * Oversized layers or layers released mid-frame return null instead of crashing navigation.
+ */
+internal suspend fun captureLayerBitmap(layer: GraphicsLayer): ImageBitmap? {
+    if (layer.isReleased) return null
+    val size = layer.size
+    if (size.width !in 1..MaxSnapshotDimensionPx || size.height !in 1..MaxSnapshotDimensionPx) return null
+    return runCatching { layer.toImageBitmap() }.getOrNull()
+}
 
 /**
  * Captures [origin]'s recorded layer as a bitmap when its dimensions are safe to allocate.
@@ -424,9 +456,7 @@ private const val MaxSnapshotDimensionPx = 4096
  */
 private suspend fun captureOriginPicture(origin: ExpandOrigin) {
     if (!origin.isAvailable) return
-    val size = origin.layer.size
-    if (size.width !in 1..MaxSnapshotDimensionPx || size.height !in 1..MaxSnapshotDimensionPx) return
-    runCatching { origin.layer.toImageBitmap() }.getOrNull()?.let { origin.picture = it }
+    captureLayerBitmap(origin.layer)?.let { origin.picture = it }
 }
 
 /** The frame's outline: the element's corner shape over the top [height] of the unscaled page. */
