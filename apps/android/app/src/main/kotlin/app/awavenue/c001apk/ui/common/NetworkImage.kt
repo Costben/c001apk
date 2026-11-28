@@ -10,6 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
@@ -28,10 +30,12 @@ fun NetworkImage(
     contentScale: ContentScale = ContentScale.Crop,
     alignment: Alignment = Alignment.Center,
     crossfade: Boolean = true,
+    placeholderColor: Color = COUITheme.colorScheme.secondaryContainer,
+    filterQuality: FilterQuality = FilterQuality.Medium,
     onSuccess: ((AsyncImagePainter.State.Success) -> Unit)? = null,
 ) {
     val context = LocalPlatformContext.current
-    val placeholder = Modifier.background(COUITheme.colorScheme.secondaryContainer)
+    val placeholder = if (placeholderColor != Color.Transparent) Modifier.background(placeholderColor) else Modifier
     // A dropped connection used to leave the slot blank until the card was composed again.
     // One quiet retry covers those transient failures; after that the address is tried without its
     // size suffix, because a thumbnail that has expired often still resolves as the original.
@@ -49,6 +53,7 @@ fun NetworkImage(
         contentDescription = contentDescription,
         contentScale = contentScale,
         alignment = alignment,
+        filterQuality = filterQuality,
         modifier = modifier.then(placeholder),
         onSuccess = onSuccess,
         onError = { if (attempt < lastAttempt) retry = true },

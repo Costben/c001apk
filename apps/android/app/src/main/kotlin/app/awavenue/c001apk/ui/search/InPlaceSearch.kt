@@ -7,6 +7,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,10 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -37,10 +40,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.awavenue.c001apk.ui.LocalApp
@@ -259,6 +268,12 @@ internal fun InPlaceSearchBar(
             // Embedded: the bar's own material is drawn behind it, not a capsule of its own.
             gradientColor = Color.Transparent,
             extraActions = extraActions,
+            trailingIcon = {
+                SearchClearButton(
+                    visible = state.query.isNotEmpty(),
+                    onClick = { state.onQueryChange("") },
+                )
+            },
             titleContent = titleContent,
         )
         BackHandler(state.expanded && !covered && state.submitted != null) {
@@ -399,6 +414,55 @@ internal fun InPlaceSearchPanel(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Compact circular clear icon shown inside search fields when the query is non-empty, matching
+ * COUI's native `InputField` clear affordance.
+ */
+@Composable
+internal fun SearchClearButton(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(tween(120)),
+        exit = fadeOut(tween(120)),
+    ) {
+        val circleColor = COUITheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.45f)
+        Box(
+            modifier = Modifier
+                .padding(end = 2.dp)
+                .size(34.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = "清空搜索框" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.size(18.dp)) {
+                drawCircle(color = circleColor)
+                val half = 3.6.dp.toPx()
+                val stroke = 1.5.dp.toPx()
+                drawLine(
+                    color = Color.White,
+                    start = Offset(center.x - half, center.y - half),
+                    end = Offset(center.x + half, center.y + half),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = Color.White,
+                    start = Offset(center.x - half, center.y + half),
+                    end = Offset(center.x + half, center.y - half),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
             }
         }
     }

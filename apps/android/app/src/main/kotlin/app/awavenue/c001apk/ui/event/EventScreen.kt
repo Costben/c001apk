@@ -59,6 +59,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.HtmlText
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Button
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
@@ -170,13 +171,15 @@ private fun EventContent(event: Entity, modifier: Modifier, onOpenUser: (String)
 
     Column(modifier) {
         if (titles.isNotEmpty()) {
-            TabRowWithContour(
-                tabs = titles,
-                selectedTabIndex = pagerState.currentPage,
-                onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                colors = appTabRowColors(),
-            )
+            CappedChromeFontDensity {
+                TabRowWithContour(
+                    tabs = titles,
+                    selectedTabIndex = pagerState.currentPage,
+                    onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    colors = appTabRowColors(),
+                )
+            }
         }
         HorizontalPager(
             state = pagerState,

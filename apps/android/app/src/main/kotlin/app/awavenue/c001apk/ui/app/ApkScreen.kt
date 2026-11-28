@@ -78,6 +78,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
@@ -462,13 +463,15 @@ private fun CommentHeader(
     Column(Modifier.fillMaxWidth().background(COUITheme.colorScheme.surface)) {
         HorizontalDivider()
         if (commentsOpen) {
-            TabRowWithContour(
-                tabs = AppCommentTab.entries.map { it.label },
-                selectedTabIndex = tab.ordinal,
-                onTabSelected = { onTabSelected(AppCommentTab.entries[it]) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                colors = appTabRowColors(),
-            )
+            CappedChromeFontDensity {
+                TabRowWithContour(
+                    tabs = AppCommentTab.entries.map { it.label },
+                    selectedTabIndex = tab.ordinal,
+                    onTabSelected = { onTabSelected(AppCommentTab.entries[it]) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    colors = appTabRowColors(),
+                )
+            }
         }
         HorizontalDivider()
     }

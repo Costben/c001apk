@@ -38,6 +38,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
@@ -253,13 +254,15 @@ private fun NestedTabs(
     // The pager fills the screen behind the caller's bar, so the tab row takes the top inset and
     // the child lists start right below it instead of applying that inset a second time.
     Column(Modifier.fillMaxSize().padding(tabRowPadding)) {
-        TabRowWithContour(
-            tabs = entries.map { it.title },
-            selectedTabIndex = pagerState.currentPage,
-            onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-            colors = appTabRowColors(),
-        )
+        CappedChromeFontDensity {
+            TabRowWithContour(
+                tabs = entries.map { it.title },
+                selectedTabIndex = pagerState.currentPage,
+                onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = appTabRowColors(),
+            )
+        }
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),

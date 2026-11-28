@@ -262,6 +262,10 @@ fun SearchResultScreen(keyword: String, title: String, pageType: String?, pagePa
                             )
                         }
                     }
+                    SearchClearButton(
+                        visible = draft.isNotEmpty(),
+                        onClick = { draft = "" },
+                    )
                     if (pagerState.currentPage == 0) {
                         SearchFilterButton(
                             searchType = searchType,

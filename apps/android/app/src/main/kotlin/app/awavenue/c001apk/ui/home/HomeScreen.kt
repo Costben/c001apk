@@ -79,6 +79,7 @@ import app.awavenue.c001apk.ui.feed.PageLoader
 import app.awavenue.c001apk.ui.nav.LocalAppBarBounds
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import app.awavenue.c001apk.ui.theme.ChromeDensity
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
@@ -501,23 +502,25 @@ fun HomeScreen(
                                         .padding(vertical = TAB_ROW_VERTICAL_PADDING)
                                         .height(TabRowDefaults.TabRowWithContourHeight),
                                 ) {
-                                    TabRowWithContour(
-                                        tabs = tabs.map { it.label },
-                                        selectedTabIndex = selectedTabIndex,
-                                        onTabSelected = {
-                                            if (it == selectedTabIndex) returnTop.requestReturn()
-                                            scope.launch { pagerState.animateScrollToPage(it) }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        // COUI's transparent blur highlight: the capsule blurs the page
-                                        // under it, with the library's own colours and indicator material.
-                                        // Six labels have to share the narrower capsule: COUI's 52dp floor and
-                                        // 12dp segment padding overflow it, so the segments give up some of
-                                        // both instead of the capsule growing.
-                                        minWidth = 44.dp,
-                                        segmentPadding = 8.dp,
-                                        backdrop = backdrop,
-                                    )
+                                    CappedChromeFontDensity {
+                                        TabRowWithContour(
+                                            tabs = tabs.map { it.label },
+                                            selectedTabIndex = selectedTabIndex,
+                                            onTabSelected = {
+                                                if (it == selectedTabIndex) returnTop.requestReturn()
+                                                scope.launch { pagerState.animateScrollToPage(it) }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            // COUI's transparent blur highlight: the capsule blurs the page
+                                            // under it, with the library's own colours and indicator material.
+                                            // Six labels have to share the narrower capsule: COUI's 52dp floor and
+                                            // 12dp segment padding overflow it, so the segments give up some of
+                                            // both instead of the capsule growing.
+                                            minWidth = 44.dp,
+                                            segmentPadding = 8.dp,
+                                            backdrop = backdrop,
+                                        )
+                                    }
                                 }
                             }
                             }

@@ -29,6 +29,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.pageMemoryPage
 import app.awavenue.c001apk.ui.nav.rememberPageMemoryRecorder
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.Icon
 import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
@@ -112,13 +113,15 @@ fun FFFListScreen(type: FFFListType, uid: String?, id: String?, title: String?) 
                     },
                     bottomContent = {
                         if (tabs != null) {
-                            TabRowWithContour(
-                                tabs = tabs,
-                                selectedTabIndex = pagerState.currentPage,
-                                onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                                colors = appTabRowColors(),
-                            )
+                            CappedChromeFontDensity {
+                                TabRowWithContour(
+                                    tabs = tabs,
+                                    selectedTabIndex = pagerState.currentPage,
+                                    onTabSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                    colors = appTabRowColors(),
+                                )
+                            }
                         }
                     },
                 )

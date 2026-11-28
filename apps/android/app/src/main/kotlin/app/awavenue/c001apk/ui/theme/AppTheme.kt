@@ -148,3 +148,20 @@ fun ChromeDensity(content: @Composable () -> Unit) {
     val density = rememberChromeDensity()
     CompositionLocalProvider(LocalDensity provides density, content = content)
 }
+
+/**
+ * Caps font scaling for fixed chrome bars (such as top segmented tab rows) so enlarged system or
+ * in-app font sizes do not collapse short labels into single-character ellipses.
+ */
+@Composable
+fun CappedChromeFontDensity(maxFontScale: Float = 1.35f, content: @Composable () -> Unit) {
+    val current = LocalDensity.current
+    val capped = remember(current, maxFontScale) {
+        if (current.fontScale <= maxFontScale) {
+            current
+        } else {
+            Density(density = current.density, fontScale = maxFontScale)
+        }
+    }
+    CompositionLocalProvider(LocalDensity provides capped, content = content)
+}

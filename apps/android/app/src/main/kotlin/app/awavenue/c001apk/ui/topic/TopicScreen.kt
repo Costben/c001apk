@@ -109,6 +109,7 @@ import app.awavenue.c001apk.ui.search.InPlaceSearchBar
 import app.awavenue.c001apk.ui.search.InPlaceSearchPanel
 import app.awavenue.c001apk.ui.search.SearchResultTabs
 import app.awavenue.c001apk.ui.search.rememberInPlaceSearchState
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlay
 import io.github.suqi8.coui.kmp.basic.AppBarBlurOverlayDefaults
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
@@ -875,17 +876,19 @@ private fun TopicPage(tag: String?, id: String?) {
                                                     // the same width and padding there, and the
                                                     // translucent COUI fill samples the list under the
                                                     // bar instead of an opaque segment colour.
-                                                    TabRowWithContour(
-                                                        tabs = tabList.map { it.title },
-                                                        selectedTabIndex = pagerState.currentPage,
-                                                        onTabSelected = {
-                                                            scope.launch { pagerState.animateScrollToPage(it) }
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        minWidth = 44.dp,
-                                                        segmentPadding = 8.dp,
-                                                        backdrop = backdrop,
-                                                    )
+                                                    CappedChromeFontDensity {
+                                                        TabRowWithContour(
+                                                            tabs = tabList.map { it.title },
+                                                            selectedTabIndex = pagerState.currentPage,
+                                                            onTabSelected = {
+                                                                scope.launch { pagerState.animateScrollToPage(it) }
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            minWidth = 44.dp,
+                                                            segmentPadding = 8.dp,
+                                                            backdrop = backdrop,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
