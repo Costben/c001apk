@@ -1,13 +1,11 @@
 package app.awavenue.c001apk.ui.text
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,10 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
@@ -197,6 +198,7 @@ private fun MarkdownBlocks(
     onOpenImage: (String) -> Unit,
     depth: Int,
 ) {
+    if (depth > MAX_MARKDOWN_DEPTH) return
     blocks.forEach { block ->
         when (block) {
             is MdBlock.Heading -> {
@@ -313,6 +315,14 @@ private fun CodeBlock(block: MdBlock.Code, fontSize: TextUnit) {
     }
 }
 
+private const val MAX_MARKDOWN_DEPTH = 16
+private val TABLE_MAX_CELL_WIDTH = 280.dp
+
+private class TableGridMetrics {
+    var colWidths = IntArray(0)
+    var rowHeights = IntArray(0)
+}
+
 @Composable
 private fun MarkdownTable(
     table: MdBlock.Table,
@@ -323,16 +333,41 @@ private fun MarkdownTable(
 ) {
     val columns = maxOf(table.header.size, table.rows.maxOfOrNull { it.size } ?: 0)
     if (columns == 0) return
-    val scheme = COUITheme.colorScheme
+    val rowCount = 1 + table.rows.size
+    val dividerColor = COUITheme.colorScheme.dividerLine
+    val headerBg = COUITheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+    val metrics = remember { TableGridMetrics() }
     Box(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .horizontalScroll(rememberScrollState()),
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            repeat(columns) { column ->
-                Column(Modifier.width(IntrinsicSize.Max)) {
+        // Measure each cell once in a single custom Layout instead of nesting IntrinsicSize.Min
+        // over IntrinsicSize.Max around Text with links/inlineContent.
+        Layout(
+            modifier = Modifier.drawBehind {
+                val cw = metrics.colWidths
+                val rh = metrics.rowHeights
+                if (cw.isEmpty() || rh.isEmpty()) return@drawBehind
+                val totalW = cw.sum().toFloat()
+                val totalH = rh.sum().toFloat()
+                if (totalW <= 0f || totalH <= 0f) return@drawBehind
+                val stroke = 0.5.dp.toPx()
+                drawRect(headerBg, size = Size(totalW, rh[0].toFloat()))
+                var x = 0f
+                for (c in 0..cw.size) {
+                    drawLine(dividerColor, Offset(x, 0f), Offset(x, totalH), strokeWidth = stroke)
+                    if (c < cw.size) x += cw[c]
+                }
+                var y = 0f
+                for (r in 0..rh.size) {
+                    drawLine(dividerColor, Offset(0f, y), Offset(totalW, y), strokeWidth = stroke)
+                    if (r < rh.size) y += rh[r]
+                }
+            },
+            content = {
+                repeat(columns) { column ->
                     TableCell(
                         table.header.getOrNull(column).orEmpty(),
                         table.aligns.getOrNull(column) ?: MdAlign.Start,
@@ -342,7 +377,9 @@ private fun MarkdownTable(
                         onOpenUrl = onOpenUrl,
                         onOpenImage = onOpenImage,
                     )
-                    table.rows.forEach { row ->
+                }
+                table.rows.forEach { row ->
+                    repeat(columns) { column ->
                         TableCell(
                             row.getOrNull(column).orEmpty(),
                             table.aligns.getOrNull(column) ?: MdAlign.Start,
@@ -353,6 +390,48 @@ private fun MarkdownTable(
                             onOpenImage = onOpenImage,
                         )
                     }
+                }
+            },
+        ) { measurables, _ ->
+            val maxCellPx = TABLE_MAX_CELL_WIDTH.roundToPx().coerceAtLeast(1)
+            val cellConstraints = Constraints(minWidth = 0, maxWidth = maxCellPx, minHeight = 0, maxHeight = Constraints.Infinity)
+            val placeables = measurables.map { it.measure(cellConstraints) }
+            val colWidths = IntArray(columns)
+            val rowHeights = IntArray(rowCount)
+            for (r in 0 until rowCount) {
+                for (c in 0 until columns) {
+                    val idx = r * columns + c
+                    if (idx >= placeables.size) continue
+                    val p = placeables[idx]
+                    if (p.width > colWidths[c]) colWidths[c] = p.width
+                    if (p.height > rowHeights[r]) rowHeights[r] = p.height
+                }
+            }
+            metrics.colWidths = colWidths
+            metrics.rowHeights = rowHeights
+            val totalWidth = colWidths.sum()
+            val totalHeight = rowHeights.sum()
+            layout(totalWidth, totalHeight) {
+                var y = 0
+                for (r in 0 until rowCount) {
+                    var x = 0
+                    val rh = rowHeights[r]
+                    for (c in 0 until columns) {
+                        val idx = r * columns + c
+                        val cw = colWidths[c]
+                        if (idx < placeables.size) {
+                            val p = placeables[idx]
+                            val dx = when (table.aligns.getOrNull(c) ?: MdAlign.Start) {
+                                MdAlign.Center -> ((cw - p.width) / 2).coerceAtLeast(0)
+                                MdAlign.End -> (cw - p.width).coerceAtLeast(0)
+                                MdAlign.Start -> 0
+                            }
+                            val dy = ((rh - p.height) / 2).coerceAtLeast(0)
+                            p.placeRelative(x + dx, y + dy)
+                        }
+                        x += cw
+                    }
+                    y += rh
                 }
             }
         }
@@ -371,9 +450,7 @@ private fun TableCell(
 ) {
     InlineFlow(
         inlines,
-        modifier = Modifier
-            .border(0.5.dp, COUITheme.colorScheme.dividerLine)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
         style = HtmlTextDefaults.style().copy(
             fontSize = fontSize,
             fontWeight = if (header) FontWeight.SemiBold else FontWeight.Normal,
@@ -399,7 +476,7 @@ private fun MarkdownImage(
     if (!MarkdownContent.allowsUrl(url, image = true)) return
     BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         val (width, height) = imageSize(url)
-        val ratio = if (width <= 0f) 1f else height / width
+        val ratio = (if (width <= 0f) 1f else height / width).takeIf { it.isFinite() && it > 0f } ?: 1f
         val imageWidth = maxWidth
         val imageHeight = imageWidth * minOf(ratio, LONG_IMAGE_RATIO)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

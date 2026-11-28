@@ -442,7 +442,9 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                     ListStatus.Content -> {
                                         itemsIndexed(
                                             viewModel.replies,
-                                            key = { index, reply -> reply.entityId.ifEmpty { "reply-$index" } },
+                                            key = { index, reply ->
+                                                reply.entityId.takeIf { it.isNotEmpty() }?.let { "r:$it" } ?: "reply-$index"
+                                            },
                                             contentType = { _, _ -> "reply" },
                                         ) { _, reply ->
                                             val highlight = remember { Animatable(0f) }
@@ -691,7 +693,7 @@ fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier, forcePlain: Bool
             }
             InsetBlock(onLongClick = { navigator.push(Route.Copy(hotReply.message)) }) {
                 HtmlText(
-                    "<a href=\"/u/${hotReply.uid}\">${hotReply.username}</a>: ${hotReply.message}$hotReplyPic",
+                    "<a href=\"/u/${hotReply.uid}\">${app.awavenue.c001apk.ui.text.escapeHtml(hotReply.username)}</a>: ${hotReply.message}$hotReplyPic",
                     style = COUITheme.textStyles.footnote1,
                     maxLines = 3,
                     onShowTotalReply = { navigator.push(Route.Feed(feed.id)) },

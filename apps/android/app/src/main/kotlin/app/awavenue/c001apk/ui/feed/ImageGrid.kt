@@ -71,11 +71,11 @@ fun ImageGrid(
     val shown = pictures.take(maxCount)
     val hidden = pictures.size - shown.size
     BoxWithConstraints(modifier) {
-        val cell = (maxWidth - GridSpacing * 2) / 3
+        val cell = ((maxWidth - GridSpacing * 2) / 3).coerceAtLeast(0.dp)
         if (pictures.size == 1) {
             val (width, height) = imageSize(pictures[0])
-            val ratioWH = width / height
-            val ratioHW = height / width
+            val ratioWH = (width / height).takeIf { it.isFinite() && it > 0f } ?: 1f
+            val ratioHW = (height / width).takeIf { it.isFinite() && it > 0f } ?: 1f
             val itemWidth = when {
                 ratioWH > 1.5f -> maxWidth
                 ratioWH >= 1f || (height > width && ratioHW < 1.5f) -> cell * 2
@@ -149,7 +149,9 @@ private fun GridImage(
                 origins.putCacheKey(url, state.result.memoryCacheKey)
                 if (declaredAspect == null) {
                     val s = state.painter.intrinsicSize
-                    if (s.width > 0f && s.height > 0f) measuredAspect = s.width / s.height
+                    if (s.width.isFinite() && s.height.isFinite() && s.width > 0f && s.height > 0f) {
+                        measuredAspect = s.width / s.height
+                    }
                 }
             },
         )

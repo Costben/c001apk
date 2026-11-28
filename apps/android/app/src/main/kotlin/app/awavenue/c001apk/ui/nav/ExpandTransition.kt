@@ -243,13 +243,9 @@ internal fun ExpandFrame(
             // frame too, while the element is certainly still drawn; the later one replaces it when
             // the element did survive long enough for the press feedback to be gone.
             withFrameNanos { }
-            if (origin.isAvailable && origin.layer.size != IntSize.Zero) {
-                origin.picture = origin.layer.toImageBitmap()
-            }
+            captureOriginPicture(origin)
             delay(SnapshotSettleMillis)
-            if (origin.isAvailable && origin.layer.size != IntSize.Zero) {
-                origin.picture = origin.layer.toImageBitmap()
-            }
+            captureOriginPicture(origin)
         }
     }
 
@@ -284,7 +280,16 @@ internal fun ExpandFrame(
                 val width = lerp(bounds.width, size.width, p)
                 val height = lerp(bounds.height, size.height, p)
                 // Scaled by width only, so the page keeps its own layout and just reads smaller.
-                val scale = width / size.width
+                val scale = if (size.width > 0f) width / size.width else 0f
+                if (!scale.isFinite() || scale <= 0f || !height.isFinite() || height <= 0f) {
+                    translationX = 0f
+                    translationY = 0f
+                    scaleX = 1f
+                    scaleY = 1f
+                    shape = RectangleShape
+                    clip = false
+                    return@graphicsLayer
+                }
                 transformOrigin = TransformOrigin(0f, 0f)
                 translationX = left
                 translationY = top
@@ -329,8 +334,9 @@ internal fun ExpandFrame(
                 // Live while the element is still on screen, so it follows what changed on it;
                 // otherwise the still taken on the way in.
                 val picture = source.picture
-                if (alpha > 0f && (source.isAvailable || picture != null)) {
+                if (alpha > 0f && bounds.width > 0f && bounds.height > 0f && (source.isAvailable || picture != null)) {
                     val k = size.width / bounds.width
+                    if (!k.isFinite() || k <= 0f) return@drawWithContent
                     withTransform({ scale(k, k, pivot = Offset.Zero) }) {
                         drawIntoCanvas { canvas ->
                             canvas.saveLayer(Rect(Offset.Zero, bounds.size), Paint().apply { this.alpha = alpha })
@@ -408,6 +414,19 @@ private class ExpandGeometry {
         }
         return rect
     }
+}
+
+private const val MaxSnapshotDimensionPx = 4096
+
+/**
+ * Captures [origin]'s recorded layer as a bitmap when its dimensions are safe to allocate.
+ * Oversized tall feed cards or layers released mid-frame are skipped instead of crashing entry.
+ */
+private suspend fun captureOriginPicture(origin: ExpandOrigin) {
+    if (!origin.isAvailable) return
+    val size = origin.layer.size
+    if (size.width !in 1..MaxSnapshotDimensionPx || size.height !in 1..MaxSnapshotDimensionPx) return
+    runCatching { origin.layer.toImageBitmap() }.getOrNull()?.let { origin.picture = it }
 }
 
 /** The frame's outline: the element's corner shape over the top [height] of the unscaled page. */

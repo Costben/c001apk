@@ -1,5 +1,10 @@
 package app.awavenue.c001apk.ui.text
 
+import android.graphics.Typeface
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
+import android.text.style.URLSpan
+import android.text.style.UnderlineSpan
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -29,9 +34,12 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.core.text.HtmlCompat
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -100,9 +108,11 @@ fun HtmlText(
     }
     val currentOpenLink by rememberUpdatedState(openLink)
     val text = remember(html, linkColor, showEmoji, badgeTags) {
-        val parsed = tintLinks(AnnotatedString.fromHtml(html.replace("\n", "<br/>")), linkColor)
+        val parsed = parseHtmlToAnnotatedString(html, linkColor)
         if (showEmoji || badgeTags) {
-            decorate(parsed, linkColor, showEmoji = showEmoji, badgeTags = badgeTags)
+            runCatching {
+                decorate(parsed, linkColor, showEmoji = showEmoji, badgeTags = badgeTags)
+            }.getOrElse { parsed to emptyMap() }
         } else {
             parsed to emptyMap()
         }
@@ -135,27 +145,81 @@ fun HtmlText(
 }
 
 private const val LinkTag = "html-link"
+private val FallbackTagPattern = Regex("<[^>]*>")
 
-/** Turns the parsed links into tinted ranges tagged with their url, which [linkAt] reads back. */
+/**
+ * Parses Coolapk HTML safely into an [AnnotatedString].
+ *
+ * Compose's `AnnotatedString.fromHtml` throws `IllegalArgumentException` whenever Android's HTML
+ * parser emits overlapping `ParagraphStyle` spans (e.g. nested alignment, quote or list tags).
+ * Falling back to [HtmlCompat.fromHtml] with span-only conversion preserves links and emphasis
+ * without crashing on malformed or nested block markup.
+ */
+internal fun parseHtmlToAnnotatedString(html: String, linkColor: Color): AnnotatedString {
+    val normalized = html.replace("\n", "<br/>")
+    runCatching {
+        return tintLinks(AnnotatedString.fromHtml(normalized), linkColor)
+    }
+    runCatching {
+        val spanned = HtmlCompat.fromHtml(normalized, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        return buildAnnotatedString {
+            append(spanned.toString())
+            val length = spanned.length
+            spanned.getSpans(0, length, Any::class.java).forEach { span ->
+                val start = spanned.getSpanStart(span).coerceIn(0, length)
+                val end = spanned.getSpanEnd(span).coerceIn(start, length)
+                if (start >= end) return@forEach
+                when (span) {
+                    is URLSpan -> {
+                        val url = span.url.orEmpty()
+                        addStyle(SpanStyle(color = linkColor), start, end)
+                        addStringAnnotation(LinkTag, url, start, end)
+                    }
+                    is StyleSpan -> when (span.style) {
+                        Typeface.BOLD -> addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
+                        Typeface.ITALIC -> addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
+                        Typeface.BOLD_ITALIC -> addStyle(
+                            SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic),
+                            start,
+                            end,
+                        )
+                    }
+                    is UnderlineSpan -> addStyle(SpanStyle(textDecoration = TextDecoration.Underline), start, end)
+                    is StrikethroughSpan -> addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, end)
+                }
+            }
+        }
+    }
+    return AnnotatedString(FallbackTagPattern.replace(html, ""))
+}
+
+/**
+ * Turns the parsed links into tinted ranges tagged with their url, which [linkAt] reads back.
+ * Paragraph styles are dropped so later emoji/tag decoration can slice the text without splitting
+ * paragraph ranges mid-line.
+ */
 private fun tintLinks(source: AnnotatedString, linkColor: Color): AnnotatedString {
     val links = source.getLinkAnnotations(0, source.length)
-    if (links.isEmpty()) return source
+    if (links.isEmpty() && source.paragraphStyles.isEmpty()) return source
     return buildAnnotatedString {
-        append(AnnotatedString(source.text, source.spanStyles, source.paragraphStyles))
+        append(AnnotatedString(source.text, source.spanStyles))
         links.forEach { range ->
+            val start = range.start.coerceIn(0, source.length)
+            val end = range.end.coerceIn(start, source.length)
+            if (start >= end) return@forEach
             val url = (range.item as? LinkAnnotation.Url)?.url.orEmpty()
-            addStyle(SpanStyle(color = linkColor), range.start, range.end)
-            addStringAnnotation(LinkTag, url, range.start, range.end)
+            addStyle(SpanStyle(color = linkColor), start, end)
+            addStringAnnotation(LinkTag, url, start, end)
         }
     }
 }
 
 /** The url of the link whose glyph sits under [position], or `null` when the touch misses every link. */
 private fun TextLayoutResult.linkAt(text: AnnotatedString, position: Offset): String? {
-    val offset = getOffsetForPosition(position)
+    val offset = runCatching { getOffsetForPosition(position) }.getOrNull() ?: return null
     // The offset is the caret nearest the touch, so the glyph under it is on either side.
-    val char = listOf(offset, offset - 1).firstOrNull {
-        it in text.indices && getBoundingBox(it).contains(position)
+    val char = listOf(offset, offset - 1).firstOrNull { index ->
+        index in text.indices && runCatching { getBoundingBox(index).contains(position) }.getOrDefault(false)
     } ?: return null
     return text.getStringAnnotations(LinkTag, char, char + 1).firstOrNull()?.item
 }

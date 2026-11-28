@@ -293,7 +293,9 @@ class FeedDetailViewModel(
 
     private fun applyFeed(data: Entity) {
         feed = data
-        val blocks = FeedArticle.parse(data.string("message_raw_output")).toMutableList()
+        val blocks = runCatching {
+            FeedArticle.parse(data.string("message_raw_output"))
+        }.getOrDefault(emptyList()).toMutableList()
         if (blocks.isNotEmpty()) {
             if (data.title.isNotEmpty()) blocks.add(0, FeedArticle(type = "title", title = data.title))
             val cover = data.string("message_cover")

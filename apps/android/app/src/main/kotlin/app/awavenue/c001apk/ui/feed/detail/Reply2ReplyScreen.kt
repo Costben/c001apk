@@ -161,7 +161,9 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                     ) {
                         itemsIndexed(
                             viewModel.replies,
-                            key = { index, reply -> reply.entityId.ifEmpty { "reply2reply-$index" } },
+                            key = { index, reply ->
+                                reply.entityId.takeIf { it.isNotEmpty() }?.let { "r:$it" } ?: "reply2reply-$index"
+                            },
                             contentType = { _, _ -> "reply" },
                         ) { index, reply ->
                             Column(

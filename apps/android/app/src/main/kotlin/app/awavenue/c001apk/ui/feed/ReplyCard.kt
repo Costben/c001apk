@@ -53,6 +53,7 @@ import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
+import app.awavenue.c001apk.ui.text.escapeHtml
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
@@ -433,7 +434,7 @@ private fun ReplyBottomInfo(reply: Entity, onLike: ((id: String, liked: Boolean)
 
 /** The author line: the plain variant outside the reply-to-reply page, links inside it. */
 private fun usernameHtml(reply: Entity, isReply2Reply: Boolean, isTopReply: Boolean, uid: String?): String {
-    val username = reply.username
+    val username = escapeHtml(reply.username)
     if (!isReply2Reply) {
         val authorTag = if (reply.uid.isNotEmpty() && reply.uid == reply.string("feedUid")) " [楼主]" else ""
         val topTag = if (isTopReply) " [置顶]" else ""
@@ -456,7 +457,7 @@ private fun usernameHtml(reply: Entity, isReply2Reply: Boolean, isTopReply: Bool
         ruid == uid -> " [层主] "
         else -> ""
     }
-    return "${self}回复<a href=\"/u/$ruid\">${reply.string("rusername")}$rReplyTag</a>"
+    return "${self}回复<a href=\"/u/$ruid\">${escapeHtml(reply.string("rusername"))}$rReplyTag</a>"
 }
 
 /** One nested reply, with the same tags and picture link the Flutter client builds. */
@@ -478,14 +479,14 @@ private fun nestedReplyHtml(nested: Entity, parent: Entity): String {
     val rReplyUser = if (ruid.isEmpty() || ruid == "0" || rusername.isEmpty()) {
         ""
     } else {
-        "<a href=\"/u/$ruid\">$rusername$rReplyTag</a>"
+        "<a href=\"/u/$ruid\">${escapeHtml(rusername)}$rReplyTag</a>"
     }
     val replyPic = if (nested.picArr.isEmpty()) {
         ""
     } else {
         " <a href=\"${nested.pic}\">查看图片(${nested.picArr.size})</a>"
     }
-    return "<a href=\"/u/${nested.uid}\">${nested.username}$replyTag</a>回复$rReplyUser: ${nested.message}$replyPic"
+    return "<a href=\"/u/${nested.uid}\">${escapeHtml(nested.username)}$replyTag</a>回复$rReplyUser: ${nested.message}$replyPic"
 }
 
 private val tagPattern = Regex("<[^>]*>")

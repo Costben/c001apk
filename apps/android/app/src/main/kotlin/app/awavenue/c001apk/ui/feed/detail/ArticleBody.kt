@@ -150,10 +150,10 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
     val url = article.url
     BoxWithConstraints(modifier) {
         val (width, height) = imageSize(url)
-        val declaredAspect = if (width == 1f && height == 1f) null else width / height
+        val declaredAspect = if (width == 1f && height == 1f) null else (width / height).takeIf { it.isFinite() && it > 0f }
         var measuredAspect by remember(url) { mutableStateOf<Float?>(null) }
         val aspect = declaredAspect ?: measuredAspect
-        val ratioHW = if (width <= 0f) 1f else height / width
+        val ratioHW = (if (width <= 0f) 1f else height / width).takeIf { it.isFinite() && it > 0f } ?: 1f
         val imageWidth = maxWidth
         val imageHeight = imageWidth * minOf(ratioHW, LONG_IMAGE_RATIO)
         val isLive = url.isLivePhotoUrl()
@@ -186,7 +186,9 @@ private fun ArticleImage(article: FeedArticle, images: List<String>, modifier: M
                         origins.putCacheKey(url, state.result.memoryCacheKey)
                         if (declaredAspect == null) {
                             val s = state.painter.intrinsicSize
-                            if (s.width > 0f && s.height > 0f) measuredAspect = s.width / s.height
+                            if (s.width.isFinite() && s.height.isFinite() && s.width > 0f && s.height > 0f) {
+                                measuredAspect = s.width / s.height
+                            }
                         }
                     },
                 )

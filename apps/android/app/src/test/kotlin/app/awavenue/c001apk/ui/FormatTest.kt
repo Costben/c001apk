@@ -49,6 +49,8 @@ class FormatTest {
     fun readsEncodedImageSize() {
         assertEquals(1080f to 2400f, imageSize("https://image.coolapk.com/feed/a@1080x2400.jpg"))
         assertEquals(1f to 1f, imageSize("https://image.coolapk.com/feed/a.jpg"))
+        assertEquals(1f to 1f, imageSize("https://image.coolapk.com/feed/a@0x2400.jpg"))
+        assertEquals(1f to 1f, imageSize("https://image.coolapk.com/feed/a@1e40x1e40.jpg"))
         assertEquals("https://x/a.jpg.s.jpg", thumbnail("https://x/a.jpg"))
         assertEquals("", thumbnail(""))
     }

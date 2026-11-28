@@ -107,5 +107,8 @@ fun imageSize(url: String): Pair<Float, Float> {
     if (at == -1 || x <= at || dot <= x) return 1f to 1f
     val width = path.substring(at + 1, x).toFloatOrNull()
     val height = path.substring(x + 1, dot).toFloatOrNull()
-    return if (width != null && height != null && width > 0 && height > 0) width to height else 1f to 1f
+    if (width == null || height == null || !width.isFinite() || !height.isFinite() || width <= 0f || height <= 0f) {
+        return 1f to 1f
+    }
+    return if ((width / height).isFinite() && (height / width).isFinite()) width to height else 1f to 1f
 }
