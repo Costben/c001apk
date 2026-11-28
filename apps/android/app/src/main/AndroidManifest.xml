@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-sdk tools:overrideLibrary="rikka.shizuku.api,rikka.shizuku.provider,rikka.shizuku.shared,rikka.shizuku.aidl" />
+
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- The installed-app list needs every third-party package, as the Flutter client's manifest asks. -->
@@ -72,6 +74,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <receiver
+            android:name=".platform.PackageInstallSessionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

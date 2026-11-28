@@ -325,9 +325,11 @@ private fun MessageList(
             )
         }
     }
+    val context = LocalContext.current
+    val settings = app.settings
     val localFollows = app.localFollow.users
     val drafts = app.drafts.drafts
-    val historyRows = if (app.settings.historyCardMode == HistoryCardMode.Full) history else history.take(5)
+    val historyRows = if (settings.historyCardMode == HistoryCardMode.Full) history else history.take(5)
 
     AppPullToRefresh(
         isRefreshing = refreshing,
@@ -384,19 +386,21 @@ private fun MessageList(
                         }
                     }
                 }
-                item(key = "drafts", contentType = "drafts") {
-                    PreviewCard(
-                        title = "草稿箱",
-                        onClick = { navigator.push(Route.Drafts) },
-                    ) {
-                        if (drafts.isEmpty()) {
-                            PreviewEmpty("暂无草稿")
-                        } else {
-                            drafts.take(5).forEach { draft ->
-                                DraftPreviewRow(
-                                    draft = draft,
-                                    onClick = { navigator.push(Route.Drafts) },
-                                )
+                if (settings.showMineDrafts) {
+                    item(key = "drafts", contentType = "drafts") {
+                        PreviewCard(
+                            title = "草稿箱",
+                            onClick = { navigator.push(Route.Drafts) },
+                        ) {
+                            if (drafts.isEmpty()) {
+                                PreviewEmpty("暂无草稿")
+                            } else {
+                                drafts.take(5).forEach { draft ->
+                                    DraftPreviewRow(
+                                        draft = draft,
+                                        onClick = { navigator.push(Route.Drafts) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -414,15 +418,17 @@ private fun MessageList(
                             }
                         }
                     }
-                    item(key = "follow", contentType = "follow") {
-                        PreviewCard(
-                            title = "我的关注",
-                            onClick = { navigator.push(Route.FFFList(FFFListType.Follow)) },
-                        ) {
-                            when {
-                                follows == null -> Unit
-                                follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
-                                else -> follows.take(5).forEach { item -> FollowPreviewRow(item) }
+                    if (settings.showMineFollow) {
+                        item(key = "follow", contentType = "follow") {
+                            PreviewCard(
+                                title = "我的关注",
+                                onClick = { navigator.push(Route.FFFList(FFFListType.Follow)) },
+                            ) {
+                                when {
+                                    follows == null -> Unit
+                                    follows.isEmpty() -> PreviewEmpty("还没有关注任何人")
+                                    else -> follows.take(5).forEach { item -> FollowPreviewRow(item) }
+                                }
                             }
                         }
                     }

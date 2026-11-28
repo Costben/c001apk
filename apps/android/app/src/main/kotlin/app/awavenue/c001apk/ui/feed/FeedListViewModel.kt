@@ -245,49 +245,90 @@ class FeedListViewModel(
                     requestLast = cursorLast
                 }
                 if (id != requestId) return@launch
-                if (isRefresh) {
-                    page = 1
-                    firstItem = null
-                    lastItem = null
-                    isEnd = false
-                    filteredCount = hidden
-                } else {
-                    filteredCount += hidden
-                }
-                if (firstItem == null) firstItem = cursorFirst
-                cursorLast?.let { lastItem = it }
-                page = startPage + requests
                 when {
                     collected.isNotEmpty() -> {
-                        val merged = if (isRefresh) collected else items + collected
-                        val seen = HashSet<String>()
-                        // Contact rows share their own entityId (the signed-in account); the followed
-                        // side is what tells them apart.
-                        items = merged.filter { item ->
-                            val key = if (item.entityType == "contacts") item.contactUid else item.entityId
-                            key.isEmpty() || seen.add(key)
+                        val deduped = dedupeItems(collected)
+                        val keyOf: (Entity) -> String = { item ->
+                            if (item.entityType == "contacts") item.contactUid else item.entityId
+                        }
+                        if (isRefresh && items.isNotEmpty()) {
+                            val merged = mergeRefreshedFeedItems(items, deduped)
+                            if (merged == null) {
+                                // Refresh produced no new or changed top items: keep the list and
+                                // scroll/pagination state untouched so nothing flashes.
+                                return@launch
+                            }
+                            val topKeys = deduped.mapNotNullTo(HashSet()) { keyOf(it).takeIf(String::isNotEmpty) }
+                            val hasOverlap = items.any { old ->
+                                val key = keyOf(old)
+                                key.isNotEmpty() && key in topKeys
+                            }
+                            if (hasOverlap) {
+                                items = merged
+                                filteredCount = hidden
+                                if (firstItem == null) firstItem = cursorFirst
+                            } else {
+                                page = 1
+                                firstItem = cursorFirst
+                                lastItem = cursorLast
+                                isEnd = reachedEnd
+                                filteredCount = hidden
+                                page = startPage + requests
+                                items = merged
+                                footer = if (reachedEnd) FooterStatus.End else FooterStatus.Idle
+                            }
+                        } else {
+                            if (isRefresh) {
+                                page = 1
+                                firstItem = null
+                                lastItem = null
+                                isEnd = false
+                                filteredCount = hidden
+                            } else {
+                                filteredCount += hidden
+                            }
+                            if (firstItem == null) firstItem = cursorFirst
+                            cursorLast?.let { lastItem = it }
+                            page = startPage + requests
+                            val merged = if (isRefresh) deduped else items + deduped
+                            items = dedupeItems(merged)
+                            isEnd = reachedEnd
+                            footer = if (reachedEnd) FooterStatus.End else FooterStatus.Idle
                         }
                         status = ListStatus.Content
-                        isEnd = reachedEnd
-                        footer = if (reachedEnd) FooterStatus.End else FooterStatus.Idle
                     }
                     reachedEnd -> {
-                        isEnd = true
-                        if (isRefresh) {
+                        if (isRefresh && items.isEmpty()) {
+                            page = 1
+                            firstItem = null
+                            lastItem = null
+                            filteredCount = hidden
+                            isEnd = true
                             items = emptyList()
                             status = ListStatus.Empty
                             footer = FooterStatus.Idle
-                        } else {
+                        } else if (!isRefresh) {
+                            isEnd = true
                             footer = FooterStatus.End
+                        } else {
+                            // Refresh returned empty while existing items are displayed: leave existing content untouched.
+                            filteredCount = hidden
                         }
                     }
                     else -> {
                         // The batch stopped with nothing left to show; the reader decides to go on.
-                        if (isRefresh) {
+                        if (isRefresh && items.isEmpty()) {
+                            page = 1
+                            firstItem = null
+                            lastItem = null
+                            filteredCount = hidden
                             items = emptyList()
                             status = ListStatus.Content
+                            footer = FooterStatus.Filtered(filteredCount)
+                        } else if (!isRefresh) {
+                            filteredCount += hidden
+                            footer = FooterStatus.Filtered(filteredCount)
                         }
-                        footer = FooterStatus.Filtered(filteredCount)
                     }
                 }
             } catch (e: CancellationException) {
@@ -311,6 +352,37 @@ class FeedListViewModel(
                 }
             }
         }
+    }
+}
+
+internal fun mergeRefreshedFeedItems(existing: List<Entity>, refreshed: List<Entity>): List<Entity>? {
+    if (refreshed.isEmpty()) return null
+    val keyOf: (Entity) -> String = { item ->
+        if (item.entityType == "contacts") item.contactUid else item.entityId
+    }
+    if (existing.size >= refreshed.size && existing.subList(0, refreshed.size) == refreshed) {
+        return null
+    }
+    val topKeys = refreshed.mapNotNullTo(HashSet()) { keyOf(it).takeIf(String::isNotEmpty) }
+    val hasOverlap = existing.any { old ->
+        val key = keyOf(old)
+        key.isNotEmpty() && key in topKeys
+    }
+    if (!hasOverlap) return refreshed
+    val preservedTail = existing.filter { old ->
+        val key = keyOf(old)
+        key.isNotEmpty() && key !in topKeys
+    }
+    val merged = refreshed + preservedTail
+    return if (merged == existing) null else merged
+}
+
+private fun dedupeItems(list: List<Entity>): List<Entity> {
+    val seen = HashSet<String>()
+    // Contact rows share their own entityId (the signed-in account); the followed side tells them apart.
+    return list.filter { item ->
+        val key = if (item.entityType == "contacts") item.contactUid else item.entityId
+        key.isEmpty() || seen.add(key)
     }
 }
 

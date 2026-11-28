@@ -49,6 +49,7 @@ android {
     buildTypes {
         release {
             optimization.enable = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -60,6 +61,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        aidl = true
     }
 
     dependenciesInfo {
@@ -102,6 +104,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.rikka.shizuku.api)
+    implementation(libs.rikka.shizuku.provider)
 
     testImplementation(libs.junit)
 }

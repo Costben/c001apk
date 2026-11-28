@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,7 +31,12 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.awavenue.c001apk.BuildConfig
+import app.awavenue.c001apk.platform.InstallerAppOption
+import app.awavenue.c001apk.platform.ShizukuInstaller
 import app.awavenue.c001apk.data.BlacklistType
 import app.awavenue.c001apk.data.DarkMode
 import app.awavenue.c001apk.data.HapticStrength
@@ -130,6 +136,21 @@ fun SettingsScreen() {
     var askClearCache by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateResult.Available?>(null) }
+    var shizukuAvailable by remember { mutableStateOf(ShizukuInstaller.isShizukuAvailable()) }
+    var shizukuGranted by remember { mutableStateOf(ShizukuInstaller.hasShizukuPermission()) }
+    var availableInstallers by remember { mutableStateOf(ShizukuInstaller.queryAvailableInstallers(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                shizukuAvailable = ShizukuInstaller.isShizukuAvailable()
+                shizukuGranted = ShizukuInstaller.hasShizukuPermission()
+                availableInstallers = ShizukuInstaller.queryAvailableInstallers(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var menu by remember { mutableStateOf(false) }
 
     // 字体大小 drags against a local draft and only commits on release: the scale is applied by
@@ -326,6 +347,22 @@ fun SettingsScreen() {
                             checked = settings.recordHistory,
                             onCheckedChange = settings::updateRecordHistory,
                             startAction = { PreferenceStartIcon(COUIIcons.Recent) },
+                            cardListPosition = CardListPosition.Middle,
+                        )
+                        SwitchPreference(
+                            title = "在“我的”显示草稿箱",
+                            summary = "关闭后可隐藏“我的”页面中的草稿箱卡片",
+                            checked = settings.showMineDrafts,
+                            onCheckedChange = settings::updateShowMineDrafts,
+                            startAction = { PreferenceStartIcon(COUIIcons.Hide) },
+                            cardListPosition = CardListPosition.Middle,
+                        )
+                        SwitchPreference(
+                            title = "在“我的”显示我的关注",
+                            summary = "关闭后可隐藏“我的”页面中的我的关注卡片",
+                            checked = settings.showMineFollow,
+                            onCheckedChange = settings::updateShowMineFollow,
+                            startAction = { PreferenceStartIcon(COUIIcons.Hide) },
                             cardListPosition = CardListPosition.Middle,
                         )
                         OverlayDropdownPreference(
@@ -543,6 +580,70 @@ fun SettingsScreen() {
                             checked = settings.inAppUpdate,
                             onCheckedChange = settings::updateInAppUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Download) },
+                            cardListPosition = CardListPosition.Middle,
+                        )
+                        val installerOptions = remember(availableInstallers, settings.preferredInstallerPackage) {
+                            buildList {
+                                add(InstallerAppOption(packageName = "", label = "系统默认（自动匹配）"))
+                                addAll(availableInstallers)
+                                val saved = settings.preferredInstallerPackage
+                                if (saved.isNotEmpty() && none { it.packageName == saved }) {
+                                    add(InstallerAppOption(packageName = saved, label = "$saved（未安装）"))
+                                }
+                            }
+                        }
+                        val selectedInstallerIndex = installerOptions
+                            .indexOfFirst { it.packageName == settings.preferredInstallerPackage }
+                            .coerceAtLeast(0)
+                        OverlayDropdownPreference(
+                            title = "APK 安装器",
+                            summary = installerOptions[selectedInstallerIndex].displayTitle,
+                            items = installerOptions.map { it.displayTitle },
+                            selectedIndex = selectedInstallerIndex,
+                            onSelectedIndexChange = { index ->
+                                settings.updatePreferredInstallerPackage(installerOptions[index].packageName)
+                            },
+                            startAction = { PreferenceStartIcon(COUIIcons.Settings) },
+                            cardListPosition = CardListPosition.Middle,
+                        )
+                        SwitchPreference(
+                            title = "通过 Shizuku 静默安装",
+                            summary = when {
+                                Build.VERSION.SDK_INT < Build.VERSION_CODES.N -> "Shizuku 静默安装需要 Android 7.0 及以上系统"
+                                !shizukuAvailable -> "未检测到 Shizuku 服务运行；开启前需先启动 Shizuku"
+                                !shizukuGranted -> "Shizuku 已运行，开启时将申请授权"
+                                settings.shizukuInstall -> "已授权，安装应用更新与下载的 APK 时优先静默安装"
+                                else -> "Shizuku 已授权，开启后可免确认安装 APK"
+                            },
+                            checked = settings.shizukuInstall,
+                            enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) {
+                                    settings.updateShizukuInstall(false)
+                                    return@SwitchPreference
+                                }
+                                shizukuAvailable = ShizukuInstaller.isShizukuAvailable()
+                                if (!shizukuAvailable) {
+                                    context.toast("请先安装并启动 Shizuku 服务")
+                                    return@SwitchPreference
+                                }
+                                if (ShizukuInstaller.hasShizukuPermission()) {
+                                    shizukuGranted = true
+                                    settings.updateShizukuInstall(true)
+                                } else {
+                                    ShizukuInstaller.requestShizukuPermission { granted ->
+                                        shizukuGranted = granted
+                                        if (granted) {
+                                            settings.updateShizukuInstall(true)
+                                            context.toast("已授予 Shizuku 权限")
+                                        } else {
+                                            settings.updateShizukuInstall(false)
+                                            context.toast("未授予 Shizuku 权限")
+                                        }
+                                    }
+                                }
+                            },
+                            startAction = { PreferenceStartIcon(COUIIcons.Update) },
                             cardListPosition = CardListPosition.Middle,
                         )
                         ArrowPreference(

@@ -1,12 +1,17 @@
 package app.awavenue.c001apk.ui.user
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -15,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -25,7 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -68,6 +76,8 @@ import io.github.suqi8.coui.kmp.basic.ScrollBehavior
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.fullPagePullToRefreshColors
+import io.github.suqi8.coui.kmp.basic.rememberFullPagePullToRefreshState
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -134,35 +144,47 @@ fun UserScreen(uid: String) {
     var username by header.username
     var menuOpen by remember(uid) { mutableStateOf(false) }
     var infoOpen by remember(uid) { mutableStateOf(false) }
+    var headerRefreshing by remember(uid) { mutableStateOf(false) }
 
-    val loadUser: suspend () -> Unit = {
-        loading = true
-        error = null
+    val loadUser: suspend (Boolean) -> Unit = { silent ->
+        val showSpinner = !silent && user == null
+        if (showSpinner) {
+            loading = true
+            error = null
+        } else {
+            headerRefreshing = true
+        }
         try {
             val data = app.repository.userSpace(uid)
-            resolvedUid = data.uid.ifEmpty { uid }
-            username = data.username
-            blocked = app.blacklist.isUserBlocked(resolvedUid)
-            user = data
+            val nextUid = data.uid.ifEmpty { uid }
+            val nextUsername = data.username
+            val nextBlocked = app.blacklist.isUserBlocked(nextUid)
+            if (resolvedUid != nextUid) resolvedUid = nextUid
+            if (username != nextUsername) username = nextUsername
+            if (blocked != nextBlocked) blocked = nextBlocked
+            if (user?.json != data.json) user = data
             header.loaded = true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error = ApiFailure.from(e).message
+            val message = ApiFailure.from(e).message
+            if (showSpinner) error = message else context.toast(message)
         } finally {
-            loading = false
+            if (showSpinner) loading = false
+            headerRefreshing = false
         }
     }
 
     LaunchedEffect(uid) {
-        if (!header.loaded) loadUser()
+        if (!header.loaded) loadUser(false)
     }
 
     val hasFeed = user != null && !blocked
     val collapsed by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 105 }
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240 }
     }
     val opaque = collapsed || !hasFeed
+    val topBarIconTint = if (opaque) COUITheme.colorScheme.onSurface else Color.White
 
     var followBusy by remember(uid) { mutableStateOf(false) }
 
@@ -228,7 +250,7 @@ fun UserScreen(uid: String) {
                     scrollBehavior = scrollBehavior,
                     navigationIcon = {
                         TopBarIconButton(onClick = rememberHapticClick { navigator.pop() }) {
-                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回")
+                            Icon(COUIIcons.ChevronBackward, contentDescription = "返回", tint = topBarIconTint)
                         }
                     },
                     actions = {
@@ -241,12 +263,12 @@ fun UserScreen(uid: String) {
                                         )
                                     },
                                 ) {
-                                    Icon(COUIIcons.Search, contentDescription = "搜索")
+                                    Icon(COUIIcons.Search, contentDescription = "搜索", tint = topBarIconTint)
                                 }
                             }
                             Box {
                                 TopBarIconButton(onClick = rememberHapticClick { menuOpen = true }) {
-                                    Icon(COUIIcons.More, contentDescription = "更多")
+                                    Icon(COUIIcons.More, contentDescription = "更多", tint = topBarIconTint)
                                 }
                                 UserMenu(
                                     show = menuOpen,
@@ -286,7 +308,7 @@ fun UserScreen(uid: String) {
                     user == null -> CenterState(innerPadding) {
                         TextButton(
                             text = error ?: "暂无内容",
-                            onClick = rememberHapticClick { scope.launch { loadUser() } },
+                            onClick = rememberHapticClick { scope.launch { loadUser(false) } },
                         )
                     }
                     blocked -> CenterState(innerPadding) {
@@ -299,12 +321,20 @@ fun UserScreen(uid: String) {
                                 app::contentGate,
                             )
                         }
+                        val refreshState = rememberFullPagePullToRefreshState()
+                        var headerHeightPx by remember { mutableIntStateOf(0) }
+                        val coverUrl = user?.string("cover").orEmpty()
+                        val pullExpanding = refreshState.dragOffset > 0.5f && headerHeightPx > 0
                         UserFeed(
                             viewModel = feed,
                             listState = listState,
                             scrollBehavior = scrollBehavior,
                             contentPadding = contentPadding,
-                            onReloadUser = { scope.launch { loadUser() } },
+                            headerRefreshing = headerRefreshing,
+                            refreshState = refreshState,
+                            cover = coverUrl,
+                            headerHeightPx = headerHeightPx,
+                            onReloadUser = { scope.launch { loadUser(true) } },
                             header = {
                                 user?.let { data ->
                                     UserInfoCard(
@@ -320,6 +350,9 @@ fun UserScreen(uid: String) {
                                             }
                                             navigator.push(Route.FFFList(target, uid = resolvedUid))
                                         },
+                                        modifier = Modifier.onSizeChanged { headerHeightPx = it.height },
+                                        pullProgress = refreshState.pullProgress,
+                                        hideInlineCover = pullExpanding,
                                     )
                                 }
                             },
@@ -384,10 +417,16 @@ private fun UserFeed(
     listState: LazyListState,
     scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
+    headerRefreshing: Boolean,
+    refreshState: io.github.suqi8.coui.kmp.basic.FullPagePullToRefreshState,
+    cover: String,
+    headerHeightPx: Int,
     onReloadUser: () -> Unit,
     header: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LaunchedEffect(viewModel.refreshError) {
         viewModel.refreshError?.let {
@@ -404,13 +443,33 @@ private fun UserFeed(
     }
 
     AppPullToRefresh(
-        isRefreshing = viewModel.isRefreshing,
+        isRefreshing = viewModel.isRefreshing || headerRefreshing,
         onRefresh = {
             onReloadUser()
             viewModel.refresh()
         },
-        contentPadding = contentPadding,
+        state = refreshState,
+        contentPadding = PaddingValues(top = statusTop),
         topAppBarScrollBehavior = scrollBehavior,
+        colors = fullPagePullToRefreshColors(
+            backgroundColor = COUITheme.colorScheme.background,
+            textColor = Color.White.copy(alpha = 0.9f),
+            indicatorColor = Color.White,
+        ),
+        background = { state ->
+            if (state.dragOffset > 0.5f && headerHeightPx > 0) {
+                val expandedHeight = with(density) { (headerHeightPx + state.dragOffset).toDp() }
+                val coverScale = 1f + (state.dragOffset / 600f).coerceIn(0f, 0.24f)
+                UserCoverBackdrop(
+                    cover = cover,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(expandedHeight),
+                    scale = coverScale,
+                )
+            }
+        },
     ) {
         CompositionLocalProvider(LocalFeedListState provides listState) {
             LazyColumn(
@@ -436,8 +495,12 @@ private fun UserFeed(
                         FeedMessage(status.message) { viewModel.refresh() }
                     }
                     ListStatus.Content -> {
+                        val visibleItems = viewModel.items.filterNot(FeedActions::isHidden)
                         itemsIndexed(
-                            viewModel.items.filterNot(FeedActions::isHidden),
+                            visibleItems,
+                            key = { index, item ->
+                                item.entityId.ifEmpty { item.id }.ifEmpty { "user-feed-$index" }
+                            },
                             contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
                         ) { _, item ->
                             EntityItem(item)

@@ -209,6 +209,10 @@ fun FeedList(
                         }
                         itemsIndexed(
                             shownItems,
+                            key = { index, item ->
+                                val idKey = if (item.entityType == "contacts") item.contactUid else item.entityId
+                                idKey.ifEmpty { item.id }.ifEmpty { "feed-$index" }
+                            },
                             contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
                         ) { _, item ->
                             EntityItem(

@@ -164,6 +164,20 @@ class AppSettings(context: Context) {
     var inAppUpdate by mutableStateOf(prefs.getBoolean(KEY_IN_APP_UPDATE, true))
         private set
 
+    var preferredInstallerPackage by mutableStateOf(
+        prefs.getString(KEY_PREFERRED_INSTALLER_PACKAGE, "").orEmpty(),
+    )
+        private set
+
+    var shizukuInstall by mutableStateOf(prefs.getBoolean(KEY_SHIZUKU_INSTALL, false))
+        private set
+
+    var showMineDrafts by mutableStateOf(prefs.getBoolean(KEY_SHOW_MINE_DRAFTS, true))
+        private set
+
+    var showMineFollow by mutableStateOf(prefs.getBoolean(KEY_SHOW_MINE_FOLLOW, true))
+        private set
+
     var skippedAppUpdateVersion by mutableStateOf(prefs.getString(KEY_SKIPPED_APP_UPDATE, "").orEmpty())
         private set
 
@@ -268,6 +282,18 @@ class AppSettings(context: Context) {
     fun updateInAppUpdate(value: Boolean) =
         put { putBoolean(KEY_IN_APP_UPDATE, value) }.also { inAppUpdate = value }
 
+    fun updatePreferredInstallerPackage(value: String) =
+        put { putString(KEY_PREFERRED_INSTALLER_PACKAGE, value) }.also { preferredInstallerPackage = value }
+
+    fun updateShizukuInstall(value: Boolean) =
+        put { putBoolean(KEY_SHIZUKU_INSTALL, value) }.also { shizukuInstall = value }
+
+    fun updateShowMineDrafts(value: Boolean) =
+        put { putBoolean(KEY_SHOW_MINE_DRAFTS, value) }.also { showMineDrafts = value }
+
+    fun updateShowMineFollow(value: Boolean) =
+        put { putBoolean(KEY_SHOW_MINE_FOLLOW, value) }.also { showMineFollow = value }
+
     fun skipAppUpdate(version: String) =
         put { putString(KEY_SKIPPED_APP_UPDATE, version) }.also { skippedAppUpdateVersion = version }
 
@@ -370,6 +396,10 @@ class AppSettings(context: Context) {
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
         const val KEY_ACCEPT_PRERELEASE_UPDATES = "acceptPrereleaseUpdates"
         const val KEY_IN_APP_UPDATE = "inAppUpdate"
+        const val KEY_PREFERRED_INSTALLER_PACKAGE = "preferredInstallerPackage"
+        const val KEY_SHIZUKU_INSTALL = "shizukuInstall"
+        const val KEY_SHOW_MINE_DRAFTS = "showMineDrafts"
+        const val KEY_SHOW_MINE_FOLLOW = "showMineFollow"
         const val KEY_SKIPPED_APP_UPDATE = "skippedAppUpdateVersion"
         const val KEY_SZLM_ID = "szlmId"
         const val KEY_ONBOARDING_DONE = "onboardingDone"

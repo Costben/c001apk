@@ -1,12 +1,16 @@
 package app.awavenue.c001apk.ui.common
 
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.suqi8.coui.kmp.basic.FullPagePullToRefresh
+import io.github.suqi8.coui.kmp.basic.FullPagePullToRefreshColors
+import io.github.suqi8.coui.kmp.basic.FullPagePullToRefreshState
 import io.github.suqi8.coui.kmp.basic.FullPagePullToRefreshTexts
 import io.github.suqi8.coui.kmp.basic.ScrollBehavior
+import io.github.suqi8.coui.kmp.basic.fullPagePullToRefreshColors
 import io.github.suqi8.coui.kmp.basic.rememberFullPagePullToRefreshState
 
 /**
@@ -47,19 +51,24 @@ fun AppPullToRefresh(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    state: FullPagePullToRefreshState = rememberFullPagePullToRefreshState(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     topAppBarScrollBehavior: ScrollBehavior? = null,
+    colors: FullPagePullToRefreshColors = fullPagePullToRefreshColors(),
+    background: (@Composable BoxScope.(FullPagePullToRefreshState) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     FullPagePullToRefresh(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         modifier = modifier,
-        state = rememberFullPagePullToRefreshState(),
+        state = state,
         contentPadding = contentPadding,
         topAppBarScrollBehavior = topAppBarScrollBehavior,
         completeHoldDurationMillis = COMPLETE_HOLD_MILLIS,
+        colors = colors,
         refreshTexts = AppRefreshTexts,
+        background = background,
         content = content,
     )
 }

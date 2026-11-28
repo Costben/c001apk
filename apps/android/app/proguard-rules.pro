@@ -1,0 +1,3 @@
+-keep class app.awavenue.c001apk.platform.ShizukuInstallUserService { *; }
+-keep class app.awavenue.c001apk.platform.IShizukuInstallService** { *; }
+-keep class rikka.shizuku.** { *; }
