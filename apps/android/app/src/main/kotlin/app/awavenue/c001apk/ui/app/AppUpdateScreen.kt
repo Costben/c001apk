@@ -1,5 +1,6 @@
 package app.awavenue.c001apk.ui.app
 
+import android.content.Context
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -30,32 +32,32 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.awavenue.c001apk.data.CoolapkRepository
 import app.awavenue.c001apk.data.TokenUtils
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
+import app.awavenue.c001apk.platform.ApkDownloadManager
 import app.awavenue.c001apk.platform.InstalledApp
+import app.awavenue.c001apk.platform.ObservePackageInstallEvents
 import app.awavenue.c001apk.platform.installedApps
-import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.fromToday
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
-import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.EmptyState
 import io.github.suqi8.coui.kmp.basic.Icon
-import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
@@ -76,8 +78,8 @@ fun AppUpdateScreen() {
     val app = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val backdrop = rememberGlassBackdrop()
-    val download = rememberApkDownload()
 
     var installed by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
     var updates by remember { mutableStateOf<List<Entity>?>(null) }
@@ -85,6 +87,32 @@ fun AppUpdateScreen() {
     var attempts by remember { mutableStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
     var total by remember { mutableStateOf<Int?>(null) }
+
+    // Automatically re-check installed versions when any package finishes installing or when
+    // returning from the system installer, immediately hiding apps that are now up to date.
+    ObservePackageInstallEvents(context) { changedPkg ->
+        scope.launch {
+            val deviceApps = withContext(Dispatchers.IO) { installedApps(context) }
+            installed = deviceApps
+            val byPkg = deviceApps.associateBy { it.packageName }
+            if (changedPkg != null) {
+                byPkg[changedPkg]?.let {
+                    ApkDownloadManager.onPackageInstalled(context, changedPkg, it.versionCode)
+                }
+            } else {
+                deviceApps.forEach {
+                    ApkDownloadManager.onPackageInstalled(context, it.packageName, it.versionCode)
+                }
+            }
+            val current = updates ?: return@launch
+            val remaining = pruneUpdatedApps(current, byPkg)
+            if (remaining.size != current.size) {
+                updates = remaining
+                total = remaining.size.takeIf { it > 0 }
+                InstalledAppUpdateState.update(remaining.size)
+            }
+        }
+    }
 
     LaunchedEffect(attempts) {
         refreshing = updates != null
@@ -101,11 +129,15 @@ fun AppUpdateScreen() {
                 updates = null
                 total = null
             } else {
-                val data = (response["data"] as? JsonArray).orEmpty()
-                    .mapNotNull { (it as? JsonObject)?.let(::Entity) }
+                val data = pruneUpdatedApps(
+                    updates = (response["data"] as? JsonArray).orEmpty()
+                        .mapNotNull { (it as? JsonObject)?.let(::Entity) },
+                    installedByPackage = deviceApps.associateBy { it.packageName },
+                )
                 message = null
                 updates = data
                 total = data.size.takeIf { it > 0 }
+                InstalledAppUpdateState.update(data.size)
             }
         } catch (e: CancellationException) {
             throw e
@@ -144,7 +176,7 @@ fun AppUpdateScreen() {
                 }
                 list == null -> CenterBox(innerPadding) { InfiniteProgressIndicator() }
                 list.isEmpty() -> CenterBox(innerPadding) {
-                    EmptyState(title = "暂无内容", actionText = "刷新", onActionClick = { attempts++ })
+                    EmptyState(title = "全部应用已是最新版本", actionText = "刷新", onActionClick = { attempts++ })
                 }
                 else -> AppPullToRefresh(
                     isRefreshing = refreshing,
@@ -166,12 +198,12 @@ fun AppUpdateScreen() {
                     ) {
                         items(
                             list,
-                            key = { it.string("packageName").ifEmpty { it.id } },
+                            key = { it.updatePackageName().ifEmpty { it.id } },
                         ) { item ->
                             AppUpdateCard(
                                 app = item,
-                                installed = versions[item.string("packageName")],
-                                download = download,
+                                installed = versions[item.updatePackageName()],
+                                modifier = Modifier.animateItem(),
                             )
                         }
                     }
@@ -185,28 +217,22 @@ fun AppUpdateScreen() {
 private fun AppUpdateCard(
     app: Entity,
     installed: InstalledApp?,
-    download: (url: String, fileName: String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val repository = LocalApp.current.repository
+    val container = LocalApp.current
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var expanded by remember { mutableStateOf(false) }
-    var url by remember { mutableStateOf<String?>(null) }
-    // Asking the API for the file takes a round trip; the button says so instead of looking dead.
-    var resolving by remember { mutableStateOf(false) }
 
-    val packageName = app.string("packageName")
+    val packageName = app.updatePackageName()
     val versionName = app.string("apkversionname")
     val versionCode = app.string("apkversioncode")
-    val bitType = when (app.int("pkgBitType")) {
-        1 -> "32位"
-        2, 3 -> "64位"
-        else -> ""
-    }
+    val versionCodeLong = app.long("apkversioncode") ?: 0L
+    val bitType = app.updateBitTypeLabel()
+    val downloadState = ApkDownloadManager.stateOf(packageName, versionCodeLong)
 
     Card(
-        Modifier.fillMaxWidth(),
+        modifier.fillMaxWidth(),
         insideMargin = PaddingValues(10.dp),
         onClick = { navigator.push(Route.Apk(packageName)) },
     ) {
@@ -218,52 +244,48 @@ private fun AppUpdateCard(
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f).animateContentSize()) {
-                Row(verticalAlignment = Alignment.Top) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
                                 app.title,
+                                modifier = Modifier.weight(1f, fill = false),
                                 style = COUITheme.textStyles.body1,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                bitType,
-                                style = COUITheme.textStyles.body2,
-                                color = COUITheme.colorScheme.outline,
-                            )
+                            if (bitType.isNotEmpty()) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    bitType,
+                                    style = COUITheme.textStyles.body2,
+                                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                         val current = installed?.let { "${it.versionName}(${it.versionCode})" } ?: "未知"
                         Text(
                             "$current > $versionName($versionCode)",
                             style = COUITheme.textStyles.body2,
-                            color = COUITheme.colorScheme.outline,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    TextButton(
-                        text = if (resolving) "获取中…" else "下载",
-                        enabled = !resolving,
+                    Spacer(Modifier.width(8.dp))
+                    ApkDownloadPill(
+                        state = downloadState,
+                        idleText = "更新",
                         onClick = {
-                            if (resolving) return@TextButton
-                            resolving = true
-                            scope.launch {
-                                try {
-                                    val target = url ?: repository.appDownloadUrl(
-                                        packageName = packageName,
-                                        id = app.id.toIntOrNull() ?: 0,
-                                        versionCode = versionCode.toIntOrNull() ?: 0,
-                                    )
-                                    if (target.isNullOrEmpty()) {
-                                        context.toast("无法获取下载链接，请稍后重试")
-                                        return@launch
-                                    }
-                                    url = target
-                                    download(target, "${app.title}-$versionName-$versionCode.apk")
-                                } finally {
-                                    resolving = false
-                                }
-                            }
+                            ApkDownloadManager.startOrToggle(
+                                context = context,
+                                repository = container.repository,
+                                userAgent = container.settings.deviceParams.userAgent,
+                                packageName = packageName,
+                                appId = app.id.toIntOrNull() ?: 0,
+                                versionCode = versionCodeLong,
+                            )
                         },
                     )
                 }
@@ -271,26 +293,107 @@ private fun AppUpdateCard(
                     Text(
                         fromToday(app.long("lastupdate")),
                         style = COUITheme.textStyles.body2,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
                         app.string("apksize"),
                         style = COUITheme.textStyles.body2,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
                 Text(
                     app.string("changelog").ifEmpty { "暂无更新说明" },
                     modifier = Modifier.clickable { expanded = !expanded },
                     style = COUITheme.textStyles.body2,
-                    color = COUITheme.colorScheme.outline,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = if (expanded) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
+}
+
+/**
+ * Shared availability state for installed-app updates on Coolapk, so the bottom-right floating
+ * update ball on the 应用 tab can highlight its icon and optional badge dot immediately.
+ */
+internal object InstalledAppUpdateState {
+    private const val CHECK_COOLDOWN_MILLIS = 5 * 60 * 1000L
+
+    var availableCount by mutableIntStateOf(0)
+        private set
+
+    private var lastCheckedAt = 0L
+    private var checking = false
+
+    fun update(count: Int) {
+        availableCount = count.coerceAtLeast(0)
+        lastCheckedAt = System.currentTimeMillis()
+    }
+
+    fun clear() {
+        availableCount = 0
+        lastCheckedAt = 0L
+    }
+
+    suspend fun refreshIfNeeded(
+        context: Context,
+        repository: CoolapkRepository,
+        force: Boolean = false,
+    ) {
+        val now = System.currentTimeMillis()
+        if (checking) return
+        if (!force && lastCheckedAt > 0L && now - lastCheckedAt < CHECK_COOLDOWN_MILLIS) return
+        checking = true
+        try {
+            val deviceApps = withContext(Dispatchers.IO) { installedApps(context) }
+            if (deviceApps.isEmpty()) {
+                update(0)
+                return
+            }
+            val request = JsonObject(
+                deviceApps.associate { it.packageName to JsonPrimitive("0,${it.versionCode},0") },
+            )
+            val response = repository.appsUpdate(TokenUtils.base64NoPad(Json.encodeToString(request)))
+            val serverMessage = (response["message"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            if (serverMessage.isEmpty()) {
+                val count = (response["data"] as? JsonArray).orEmpty().count { it is JsonObject }
+                update(count)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Silent background check: leave the previous state intact on transient network failure.
+        } finally {
+            checking = false
+        }
+    }
+}
+
+internal fun Entity.updatePackageName(): String =
+    string("packageName").ifEmpty { string("apkname") }
+
+internal fun Entity.updateBitTypeLabel(): String = when (int("pkg_bit_type") ?: int("pkgBitType")) {
+    1 -> "32位"
+    2, 3 -> "64位"
+    else -> ""
+}
+
+/**
+ * Drops apps that have already been updated to (or past) the offered Coolapk version, or are no
+ * longer installed on the device.
+ */
+internal fun pruneUpdatedApps(
+    updates: List<Entity>,
+    installedByPackage: Map<String, InstalledApp>,
+): List<Entity> = updates.filter { item ->
+    val pkg = item.updatePackageName()
+    if (pkg.isEmpty()) return@filter true
+    val local = installedByPackage[pkg] ?: return@filter false
+    val remoteVersionCode = item.long("apkversioncode") ?: return@filter true
+    remoteVersionCode > local.versionCode
 }
 
 @Composable

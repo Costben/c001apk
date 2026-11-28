@@ -374,11 +374,20 @@ fun SettingsScreen() {
                         )
                         SwitchPreference(
                             title = "检查已安装应用更新",
-                            summary = "在应用列表中显示已安装应用的更新入口",
+                            summary = "在应用页右下角显示已安装应用的更新入口，并在有更新时高亮图标",
                             checked = settings.checkUpdate,
                             onCheckedChange = settings::updateCheckUpdate,
                             startAction = { PreferenceStartIcon(COUIIcons.Update) },
+                            cardListPosition = CardListPosition.Middle,
+                        )
+                        SwitchPreference(
+                            title = "应用更新角标红点",
+                            summary = "检测到应用更新时在更新球右上角显示强调色圆点；关闭后仅高亮图标",
+                            checked = settings.appUpdateBadge,
+                            onCheckedChange = settings::updateAppUpdateBadge,
+                            startAction = { PreferenceStartIcon(COUIIcons.Update) },
                             cardListPosition = CardListPosition.Tail,
+                            enabled = settings.checkUpdate,
                         )
                     }
                 }

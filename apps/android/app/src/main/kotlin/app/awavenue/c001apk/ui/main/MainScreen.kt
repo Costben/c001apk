@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -40,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
@@ -51,6 +55,7 @@ import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.app.AppFilterBall
 import app.awavenue.c001apk.ui.app.AppFilterSearchPanel
 import app.awavenue.c001apk.ui.app.AppFilterState
+import app.awavenue.c001apk.ui.app.InstalledAppUpdateState
 import app.awavenue.c001apk.ui.app.LocalAppFilter
 import app.awavenue.c001apk.ui.common.AppIcons
 import app.awavenue.c001apk.ui.common.ReturnTopController
@@ -194,6 +199,7 @@ private fun MainContent(
     var barHeightPx by remember { mutableIntStateOf(0) }
     val onHome = pagerState.currentPage == MainTab.Home.ordinal
     val app = LocalApp.current
+    val context = LocalContext.current
     val session = app.session
     val settings = app.settings
 
@@ -231,11 +237,19 @@ private fun MainContent(
     // Shared with the 应用 tab: the ball that edits this sits in the bar, the list one page deeper.
     val appFilter = remember { AppFilterState() }
     // The menu and the field belong to the 应用 page, so leaving it must not leave them armed.
-    LaunchedEffect(homePagerState.currentPage, homeTabs, onHome) {
-        val onApp = onHome && homeTabs.getOrNull(homePagerState.currentPage) == HomeTab.App
-        if (!onApp) {
+    val currentHomeTab = homeTabs.getOrNull(homePagerState.currentPage)
+    val onAppTab = onHome && currentHomeTab == HomeTab.App
+    LaunchedEffect(onAppTab) {
+        if (!onAppTab) {
             appFilter.menuOpen = false
             appFilter.searchOpen = false
+        }
+    }
+    LaunchedEffect(onAppTab, settings.checkUpdate, navigator.stack.size) {
+        if (!settings.checkUpdate) {
+            InstalledAppUpdateState.clear()
+        } else if (onAppTab && navigator.stack.size == 1) {
+            InstalledAppUpdateState.refreshIfNeeded(context, app.repository)
         }
     }
 
@@ -295,11 +309,12 @@ private fun MainContent(
                     // the middle whether a ball is out or not; a ball only melts out of the capsule
                     // into its slot, the way 相册's five-slot bar behaves. 筛选 takes the slot before
                     // the capsule on 应用, 发布动态 / 更新 the one after it.
-                    val currentHomeTab = homeTabs.getOrNull(homePagerState.currentPage)
                     val onFeed = onHome && currentHomeTab == HomeTab.Feed
-                    val onApp = onHome && currentHomeTab == HomeTab.App
+                    val onApp = onAppTab
                     val composeBall = onFeed && session.isLogin
                     val updateBall = onApp && settings.checkUpdate
+                    val hasAppUpdates = updateBall && InstalledAppUpdateState.availableCount > 0
+                    val showUpdateBadge = hasAppUpdates && settings.appUpdateBadge
                     BottomFloatingAccessoryNavigationBar(
                         startAccessoryVisible = onApp,
                         startAccessory = { AppFilterBall(filter = appFilter) },
@@ -343,11 +358,25 @@ private fun MainContent(
                                     },
                                     label = "accessory-mark",
                                 ) { update ->
-                                    Icon(
-                                        imageVector = if (update) COUIIcons.Update else COUIIcons.Add,
-                                        contentDescription = if (update) "更新" else "发布动态",
-                                        tint = COUITheme.colorScheme.onSurface,
-                                    )
+                                    Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (update) COUIIcons.Update else COUIIcons.Add,
+                                            contentDescription = if (update) "更新" else "发布动态",
+                                            tint = if (update && hasAppUpdates) {
+                                                COUITheme.colorScheme.primary
+                                            } else {
+                                                COUITheme.colorScheme.onSurface
+                                            },
+                                        )
+                                        if (update && showUpdateBadge) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .size(7.dp)
+                                                    .background(COUITheme.colorScheme.primary, CircleShape),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         },

@@ -148,6 +148,10 @@ class AppSettings(context: Context) {
     var checkUpdate by mutableStateOf(prefs.getBoolean(KEY_CHECK_UPDATE, true))
         private set
 
+    /** Whether to draw an accent badge dot on the bottom-right update ball when app updates exist. */
+    var appUpdateBadge by mutableStateOf(prefs.getBoolean(KEY_APP_UPDATE_BADGE, true))
+        private set
+
     /** This client's own release check, once per cold start. */
     var autoCheckAppUpdate by mutableStateOf(prefs.getBoolean(KEY_AUTO_CHECK_APP_UPDATE, true))
         private set
@@ -251,6 +255,9 @@ class AppSettings(context: Context) {
         put { putString(KEY_HAPTIC_STRENGTH, value.name) }.also { hapticStrength = value }
 
     fun updateCheckUpdate(value: Boolean) = put { putBoolean(KEY_CHECK_UPDATE, value) }.also { checkUpdate = value }
+
+    fun updateAppUpdateBadge(value: Boolean) =
+        put { putBoolean(KEY_APP_UPDATE_BADGE, value) }.also { appUpdateBadge = value }
 
     fun updateAutoCheckAppUpdate(value: Boolean) =
         put { putBoolean(KEY_AUTO_CHECK_APP_UPDATE, value) }.also { autoCheckAppUpdate = value }
@@ -359,6 +366,7 @@ class AppSettings(context: Context) {
         const val KEY_REVERSE_HAPTIC_EFFECTS = "reverseHapticEffects"
         const val KEY_HAPTIC_STRENGTH = "hapticStrength"
         const val KEY_CHECK_UPDATE = "checkUpdate"
+        const val KEY_APP_UPDATE_BADGE = "appUpdateBadge"
         const val KEY_AUTO_CHECK_APP_UPDATE = "autoCheckAppUpdate"
         const val KEY_ACCEPT_PRERELEASE_UPDATES = "acceptPrereleaseUpdates"
         const val KEY_IN_APP_UPDATE = "inAppUpdate"

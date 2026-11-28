@@ -45,9 +45,11 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.network.ApiFailureKind
+import app.awavenue.c001apk.platform.ApkDownloadManager
+import app.awavenue.c001apk.platform.ApkDownloadState
 import app.awavenue.c001apk.platform.InstalledApp
+import app.awavenue.c001apk.platform.ObservePackageInstallEvents
 import app.awavenue.c001apk.platform.installedApp
-import app.awavenue.c001apk.platform.rememberApkDownload
 import app.awavenue.c001apk.ui.LocalApp
 import app.awavenue.c001apk.ui.common.AppFloatingActionButton
 import app.awavenue.c001apk.ui.common.AppPullToRefresh
@@ -131,7 +133,6 @@ fun ApkScreen(packageName: String) {
     val scrollBehavior = rememberPageScrollBehavior("apk")
     val listState = rememberPageListState("apk")
     BindScrollToTop(listState)
-    val download = rememberApkDownload()
 
     var detail by remember(packageName) { mutableStateOf<Entity?>(null) }
     var failure by remember(packageName) { mutableStateOf<String?>(null) }
@@ -141,13 +142,21 @@ fun ApkScreen(packageName: String) {
     var tab by remember(packageName) { mutableStateOf(AppCommentTab.Reply) }
     var menu by remember { mutableStateOf(false) }
     var compose by remember { mutableStateOf(false) }
-    var downloadUrl by remember(packageName) { mutableStateOf<String?>(null) }
-    // The header's 下载 has to answer the tap before the download URL is in hand: resolving it is a
-    // request of its own and can take a second. Flip this synchronously and label the button.
-    var resolving by remember(packageName) { mutableStateOf(false) }
 
     LaunchedEffect(packageName) {
         localApp = withContext(Dispatchers.IO) { installedApp(context, packageName) }
+    }
+
+    ObservePackageInstallEvents(context) { changedPkg ->
+        if (changedPkg != null && changedPkg != packageName) return@ObservePackageInstallEvents
+        scope.launch {
+            val latest = withContext(Dispatchers.IO) { installedApp(context, packageName) }
+            localApp = latest
+            if (latest != null) {
+                ApkDownloadManager.onPackageInstalled(context, packageName, latest.versionCode)
+                InstalledAppUpdateState.refreshIfNeeded(context, app.repository, force = true)
+            }
+        }
     }
 
     LaunchedEffect(packageName, attempts) {
@@ -166,7 +175,7 @@ fun ApkScreen(packageName: String) {
 
     val id = detail?.id.orEmpty()
     val appName = detail?.title.orEmpty()
-    val commentStatus = detail?.int("commentStatus") ?: 0
+    val commentStatus = detail?.apkCommentStatus() ?: 0
     val commentStatusText = detail?.string("commentStatusText").orEmpty()
     var isFollow by remember(detail) { mutableStateOf(detail?.userAction?.string("follow") == "1") }
     var isBlocked by remember(detail) {
@@ -214,28 +223,18 @@ fun ApkScreen(packageName: String) {
         }
     }
 
+    val remoteVersionCode = detail?.long("apkversioncode") ?: 0L
+    val downloadState = ApkDownloadManager.stateOf(packageName, remoteVersionCode)
+
     fun onDownloadClick() {
-        if (resolving) return
-        val versionName = detail?.string("apkversionname").orEmpty()
-        val versionCode = detail?.string("apkversioncode").orEmpty()
-        resolving = true
-        scope.launch {
-            try {
-                val url = downloadUrl ?: app.repository.appDownloadUrl(
-                    packageName = packageName,
-                    id = id.toIntOrNull() ?: 0,
-                    versionCode = versionCode.toIntOrNull() ?: 0,
-                )
-                if (url.isNullOrEmpty()) {
-                    context.toast("无法获取下载链接，请稍后重试")
-                    return@launch
-                }
-                downloadUrl = url
-                download(url, "$appName-$versionName-$versionCode.apk")
-            } finally {
-                resolving = false
-            }
-        }
+        ApkDownloadManager.startOrToggle(
+            context = context,
+            repository = app.repository,
+            userAgent = app.settings.deviceParams.userAgent,
+            packageName = packageName,
+            appId = id.toIntOrNull() ?: 0,
+            versionCode = remoteVersionCode,
+        )
     }
 
     Scaffold(
@@ -371,11 +370,12 @@ fun ApkScreen(packageName: String) {
                         item(contentType = "header") {
                             ApkHeader(
                                 app = current,
-                                downloading = resolving,
+                                localApp = localApp,
+                                downloadState = downloadState,
                                 onOpenIcon = rememberHapticClick {
                                     navigator.push(Route.ImageView(listOf(current.logo)))
                                 },
-                                onDownload = rememberHapticClick { onDownloadClick() },
+                                onDownload = { onDownloadClick() },
                             )
                         }
                         item(key = "comments", contentType = "comments") {
@@ -390,7 +390,7 @@ fun ApkScreen(packageName: String) {
                                 StateBox { Text("已屏蔽 $appName") }
                             }
                             commentStatus != 1 -> item(contentType = "state") {
-                                StateBox { Text(commentStatusText) }
+                                StateBox { Text(commentStatusText.ifEmpty { "暂不支持评论" }) }
                             }
                             listViewModel != null -> when (val status = listViewModel.status) {
                                 ListStatus.Loading -> item(contentType = "state") {
@@ -414,7 +414,9 @@ fun ApkScreen(packageName: String) {
                                 ListStatus.Content -> {
                                     itemsIndexed(
                                         listViewModel.items.filterNot(FeedActions::isHidden),
-                                        key = { index, item -> item.entityId.ifEmpty { "comment-$index" } },
+                                        key = { index, item ->
+                                            item.entityId.takeIf { it.isNotEmpty() }?.let { "c:$it" } ?: "comment-$index"
+                                        },
                                         contentType = { _, item -> item.entityTemplate.ifEmpty { item.entityType } },
                                     ) { _, item -> EntityItem(item) }
                                     item(contentType = "footer") { CommentFooter(listViewModel) }
@@ -551,8 +553,31 @@ private fun LocalApkFallback(
     }
 }
 
+/** Coolapk `/v6/apk/detail` sends `comment_status` (snake_case), with `commentStatus` as fallback. */
+internal fun Entity.apkCommentStatus(): Int = int("comment_status") ?: int("commentStatus") ?: 0
+
+/** True when the remote APK version code is strictly newer than the installed local package. */
+internal fun Entity.hasNewerVersionThan(localApp: InstalledApp?): Boolean {
+    val installedCode = localApp?.versionCode ?: return false
+    val remoteCode = long("apkversioncode") ?: return false
+    return remoteCode > installedCode
+}
+
 @Composable
-private fun ApkHeader(app: Entity, downloading: Boolean, onOpenIcon: () -> Unit, onDownload: () -> Unit) {
+private fun ApkHeader(
+    app: Entity,
+    localApp: InstalledApp?,
+    downloadState: ApkDownloadState,
+    onOpenIcon: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    val hasUpdate = app.hasNewerVersionThan(localApp)
+    val remoteVersion = "${app.string("apkversionname")}(${app.string("apkversioncode")})"
+    val versionLine = if (hasUpdate && localApp != null) {
+        "版本: ${localApp.versionName}(${localApp.versionCode}) > $remoteVersion"
+    } else {
+        "版本: $remoteVersion"
+    }
     Card(Modifier.fillMaxWidth(), insideMargin = PaddingValues(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NetworkImage(
@@ -574,7 +599,7 @@ private fun ApkHeader(app: Entity, downloading: Boolean, onOpenIcon: () -> Unit,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "版本: ${app.string("apkversionname")}(${app.string("apkversioncode")})",
+                    versionLine,
                     style = COUITheme.textStyles.body2,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -595,9 +620,10 @@ private fun ApkHeader(app: Entity, downloading: Boolean, onOpenIcon: () -> Unit,
                         )
                     }
                     if (app.entityType == "apk") {
-                        TextButton(
-                            text = if (downloading) "获取中…" else "下载",
-                            enabled = !downloading,
+                        Spacer(Modifier.width(8.dp))
+                        ApkDownloadPill(
+                            state = downloadState,
+                            idleText = if (hasUpdate) "更新" else "下载",
                             onClick = onDownload,
                         )
                     }

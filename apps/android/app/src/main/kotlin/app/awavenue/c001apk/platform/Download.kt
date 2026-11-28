@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import app.awavenue.c001apk.ui.common.openBrowser
+import app.awavenue.c001apk.ui.common.toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -36,7 +37,9 @@ fun downloadApk(context: Context, url: String, fileName: String) {
         request.setVisibleInDownloadsUi(true)
     }
     val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    if (runCatching { manager.enqueue(request) }.isFailure) {
+    if (runCatching { manager.enqueue(request) }.isSuccess) {
+        context.toast("已开始下载 $fileName")
+    } else {
         context.openBrowser(url)
     }
 }
