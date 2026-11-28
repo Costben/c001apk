@@ -57,4 +57,45 @@ class CoolapkRepositoryTest {
         assertEquals("0", fields["publish_status"])
         assertEquals("1", fields["status"])
     }
+
+    @Test
+    fun sendsFeedOnlySearchFiltersOnlyForFeedType() {
+        val feedParams = searchQueryParams(
+            type = "feed",
+            feedType = "all",
+            sort = "dateline",
+            searchValue = "via",
+            isStrict = 0,
+            pageType = null,
+            pageParam = null,
+            page = 1,
+            firstItem = null,
+            lastItem = null,
+        )
+        assertEquals("feed", feedParams["type"])
+        assertEquals("all", feedParams["feedType"])
+        assertEquals("dateline", feedParams["sort"])
+        assertEquals(0, feedParams["isStrict"])
+        assertEquals("via", feedParams["searchValue"])
+
+        for (nonFeedType in listOf("apk", "game", "feedTopic", "product", "user")) {
+            val params = searchQueryParams(
+                type = nonFeedType,
+                feedType = "all",
+                sort = "dateline",
+                searchValue = "via",
+                isStrict = 0,
+                pageType = null,
+                pageParam = null,
+                page = 1,
+                firstItem = null,
+                lastItem = null,
+            )
+            assertEquals(nonFeedType, params["type"])
+            assertEquals(null, params["feedType"])
+            assertEquals(null, params["sort"])
+            assertEquals(null, params["isStrict"])
+            assertEquals("via", params["searchValue"])
+        }
+    }
 }

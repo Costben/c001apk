@@ -80,7 +80,7 @@ fun LikeCard(item: Entity, modifier: Modifier = Modifier) {
                 Text(
                     fromToday(time),
                     fontSize = 13.sp,
-                    color = COUITheme.colorScheme.outline,
+                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
             Spacer(Modifier.height(10.dp))

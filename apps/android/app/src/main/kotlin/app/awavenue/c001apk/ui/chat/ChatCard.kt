@@ -70,7 +70,7 @@ fun MessageRow(item: Entity, showUnread: Boolean, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(username, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.width(10.dp))
-                    Text(fromToday(item.dateline), fontSize = 13.sp, color = COUITheme.colorScheme.outline)
+                    Text(fromToday(item.dateline), fontSize = 13.sp, color = COUITheme.colorScheme.onSurfaceVariantSummary)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HtmlText(item.message, modifier = Modifier.weight(1f), maxLines = 1)

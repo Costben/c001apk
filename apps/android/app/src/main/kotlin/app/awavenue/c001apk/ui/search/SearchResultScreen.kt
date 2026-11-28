@@ -404,10 +404,16 @@ internal fun SearchResultPager(
     ) { page ->
         ScrollToTopPage(active = page == pagerState.settledPage) {
             val contentType = tabs[page]
-            val feedType = searchType.feedType
-            val sort = sortType.sort
-            val isStrict = sortType.isStrict
-            val viewModel = viewModel(key = "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict") {
+            val isFeedTab = contentType == SearchContentType.Feed
+            val feedType = if (isFeedTab) searchType.feedType else null
+            val sort = if (isFeedTab) sortType.sort else null
+            val isStrict = if (isFeedTab) sortType.isStrict else null
+            val vmKey = if (isFeedTab) {
+                "search-$query-$pageType-$pageParam-${contentType.name}-$feedType-$sort-$isStrict"
+            } else {
+                "search-$query-$pageType-$pageParam-${contentType.name}"
+            }
+            val viewModel = viewModel(key = vmKey) {
                 FeedListViewModel(
                     PageLoader { p, first, last ->
                         app.repository.search(

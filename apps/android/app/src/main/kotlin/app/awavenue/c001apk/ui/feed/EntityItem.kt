@@ -230,7 +230,7 @@ private fun StatText(value: String) {
     Text(
         value,
         style = COUITheme.textStyles.footnote1,
-        color = COUITheme.colorScheme.outline,
+        color = COUITheme.colorScheme.onSurfaceVariantSummary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -259,7 +259,7 @@ private fun TitleCard(item: Entity, modifier: Modifier) {
             fontWeight = FontWeight.Bold,
         )
         if (item.url.isNotEmpty()) {
-            Icon(COUIIcons.ChevronForward, contentDescription = null, tint = COUITheme.colorScheme.outline)
+            Icon(COUIIcons.ChevronForward, contentDescription = null, tint = COUITheme.colorScheme.onSurfaceSecondary)
         }
     }
 }
@@ -288,20 +288,20 @@ private fun CollectionRow(item: Entity, modifier: Modifier) {
                     Text(
                         item.string("is_open_title"),
                         style = COUITheme.textStyles.footnote1,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         "${item.string("follow_num")}人关注",
                         style = COUITheme.textStyles.footnote1,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
                     )
                     Text(
                         "${item.string("item_num")}个内容",
                         style = COUITheme.textStyles.footnote1,
-                        color = COUITheme.colorScheme.outline,
+                        color = COUITheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
                     )
                 }

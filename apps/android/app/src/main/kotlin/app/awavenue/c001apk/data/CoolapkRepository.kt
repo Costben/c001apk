@@ -200,10 +200,10 @@ class CoolapkRepository(
 
     suspend fun search(
         type: String,
-        feedType: String,
-        sort: String,
+        feedType: String?,
+        sort: String?,
         searchValue: String,
-        isStrict: Int,
+        isStrict: Int?,
         pageType: String?,
         pageParam: String?,
         page: Int,
@@ -212,18 +212,17 @@ class CoolapkRepository(
     ): List<Entity> = parse(
         api.get(
             Api.SEARCH,
-            mapOf(
-                "type" to type,
-                "feedType" to feedType,
-                "sort" to sort,
-                "searchValue" to searchValue,
-                "isStrict" to isStrict,
-                "pageType" to pageType?.ifEmpty { null },
-                "pageParam" to pageParam?.ifEmpty { null },
-                "page" to page,
-                "firstItem" to firstItem?.ifEmpty { null },
-                "lastItem" to lastItem?.ifEmpty { null },
-                "showAnonymous" to -1,
+            searchQueryParams(
+                type = type,
+                feedType = feedType,
+                sort = sort,
+                searchValue = searchValue,
+                isStrict = isStrict,
+                pageType = pageType,
+                pageParam = pageParam,
+                page = page,
+                firstItem = firstItem,
+                lastItem = lastItem,
             ),
         ),
     )
@@ -699,4 +698,38 @@ internal fun normalizeFeedFields(fields: List<Pair<String, String>>): List<Pair<
     map.putIfAbsent("publish_status", if (map["status"] == "-1") "1" else "0")
     map["status"] = "1"
     return map.toList()
+}
+
+/**
+ * Builds `/v6/search` query parameters.
+ *
+ * Coolapk only accepts `feedType`, `sort` and `isStrict` for `type=feed`; sending them on `apk`,
+ * `game`, `product` or `user` searches causes the server to return an empty list.
+ */
+internal fun searchQueryParams(
+    type: String,
+    feedType: String?,
+    sort: String?,
+    searchValue: String,
+    isStrict: Int?,
+    pageType: String?,
+    pageParam: String?,
+    page: Int,
+    firstItem: String?,
+    lastItem: String?,
+): Map<String, Any?> {
+    val isFeed = type == "feed"
+    return mapOf(
+        "type" to type,
+        "feedType" to if (isFeed) feedType else null,
+        "sort" to if (isFeed) sort else null,
+        "searchValue" to searchValue,
+        "isStrict" to if (isFeed) isStrict else null,
+        "pageType" to pageType?.ifEmpty { null },
+        "pageParam" to pageParam?.ifEmpty { null },
+        "page" to page,
+        "firstItem" to firstItem?.ifEmpty { null },
+        "lastItem" to lastItem?.ifEmpty { null },
+        "showAnonymous" to -1,
+    )
 }

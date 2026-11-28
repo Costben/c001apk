@@ -283,7 +283,7 @@ fun ChatScreen(ukey: String, uid: String, username: String) {
                                     item.title,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     fontSize = 13.sp,
-                                    color = COUITheme.colorScheme.outline,
+                                    color = COUITheme.colorScheme.onSurfaceVariantSummary,
                                     textAlign = TextAlign.Center,
                                 )
 

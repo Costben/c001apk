@@ -91,7 +91,7 @@ private fun MetaText(value: String) {
     Text(
         value,
         style = COUITheme.textStyles.footnote1,
-        color = COUITheme.colorScheme.outline,
+        color = COUITheme.colorScheme.onSurfaceVariantSummary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )

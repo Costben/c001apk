@@ -68,6 +68,7 @@ import app.awavenue.c001apk.ui.nav.rememberExpandOrigin
 import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
+import app.awavenue.c001apk.ui.text.escapeHtml
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.CardDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
@@ -363,7 +364,7 @@ fun FeedCard(
                 onLongClick = { navigator.push(Route.Copy(hotReply.message)) },
             ) {
                 HtmlText(
-                    "<a href=\"/u/${hotReply.uid}\">${hotReply.username}</a>: ${hotReply.message}$hotReplyPic",
+                    "<a href=\"/u/${hotReply.uid}\">${escapeHtml(hotReply.username)}</a>: ${hotReply.message}$hotReplyPic",
                     style = COUITheme.textStyles.footnote1,
                     maxLines = 3,
                     onTextClick = openFeed,
@@ -485,7 +486,7 @@ private fun FeedHeader(
         if (feed.isStickTop) StickTopTag()
         Box {
             IconButton(onClick = onMore) {
-                Icon(COUIIcons.More, contentDescription = "更多", tint = COUITheme.colorScheme.outline)
+                Icon(COUIIcons.More, contentDescription = "更多", tint = COUITheme.colorScheme.onSurfaceVariantSummary)
             }
             menu()
         }
