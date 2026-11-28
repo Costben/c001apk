@@ -147,6 +147,8 @@ data class ReplyTarget(
     val targetId: String = "",
     val title: String = "",
     val feedType: String = "feed",
+    val fid: String = "",
+    val isAnonymous: Boolean = false,
 )
 
 /**
@@ -567,10 +569,14 @@ fun ReplyComposerSheet(
             } else if (activeTarget.id.isEmpty()) {
                 stage = "发布动态"
                 val feedFields = mutableListOf("type" to resolvedFeedType)
+                if (activeTarget.fid.isNotEmpty()) feedFields += "fid" to activeTarget.fid
                 if (activeTarget.targetType.isNotEmpty()) feedFields += "targetType" to activeTarget.targetType
                 if (activeTarget.targetId.isNotEmpty()) feedFields += "targetId" to activeTarget.targetId
                 feedFields += "message" to input.text
                 feedFields += "status" to if (onlySelf) "-1" else "1"
+                if (resolvedFeedType == "voteComment") {
+                    feedFields += "is_anonymous" to if (activeTarget.isAnonymous) "1" else "0"
+                }
                 feedFields += "pic" to pic
                 val result = app.repository.createFeed(feedFields, emptyList())
                 progress = null

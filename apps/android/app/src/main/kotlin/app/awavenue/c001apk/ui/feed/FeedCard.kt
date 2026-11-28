@@ -334,6 +334,25 @@ fun FeedCard(
                 )
             }
         }
+        if (feed.feedType == "voteComment" && feed.extraTitle.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "投票观点：${feed.extraTitle.replace("@()@", "、")}",
+                modifier = Modifier
+                    .clip(rememberSquircleShape(8.dp))
+                    .background(COUITheme.colorScheme.surface)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                style = COUITheme.textStyles.footnote1,
+                color = COUITheme.colorScheme.primary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val vote = if (feed.isVoteFeed) VoteActions.voteFor(feed) else null
+        if (vote != null) {
+            Spacer(Modifier.height(10.dp))
+            FeedVotePreview(feed = feed, vote = vote)
+        }
         if (feed.picArr.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
             ImageGrid(
@@ -520,7 +539,7 @@ private fun ForwardSource(source: Entity?) {
             Text("动态已被删除", color = COUITheme.colorScheme.onSurfaceVariantSummary, maxLines = 1)
             return@InsetBlock
         }
-        val author = "<a href=\"/u/${sourceFeed.uid}\">@${sourceFeed.username}</a>: "
+        val author = "<a href=\"/u/${sourceFeed.uid}\">@${escapeHtml(sourceFeed.username)}</a>: "
         if (sourceFeed.messageTitle.isNotEmpty()) {
             HtmlText(author + sourceFeed.messageTitle, maxLines = 2)
             FeedText(sourceFeed.message, preview = true, previewMaxLines = 6)

@@ -22,6 +22,12 @@ import app.awavenue.c001apk.network.ApiFailureKind
 import app.awavenue.c001apk.ui.feed.FeedActions
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
+import app.awavenue.c001apk.ui.feed.VoteActions
+import app.awavenue.c001apk.ui.feed.isVoteClosed
+import app.awavenue.c001apk.ui.feed.isVoteUpcoming
+import app.awavenue.c001apk.ui.feed.voteOptions
+import app.awavenue.c001apk.ui.feed.voteSelectedIds
+import app.awavenue.c001apk.ui.feed.voteSelectionRange
 import app.awavenue.c001apk.ui.text.MarkdownContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -88,11 +94,20 @@ class FeedDetailViewModel(
 
     /** One-shot text for a toast; the screen clears it after showing it. */
     var notice by mutableStateOf<String?>(null)
+    var submittingVote by mutableStateOf(false)
+        private set
+    var voteError by mutableStateOf<String?>(null)
+        private set
 
     val feedUid: String get() = feed?.uid.orEmpty()
     val feedUsername: String get() = feed?.username.orEmpty()
     val feedTypeName: String? get() = feed?.string("feedTypeName")?.ifEmpty { null }
-    val replyCount: String get() = feed?.replyNum.orEmpty()
+    val replyCount: String
+        get() = if (feed?.isVoteFeed == true) {
+            feed?.vote?.string("total_comment_num")?.takeIf { it.isNotEmpty() } ?: feed?.replyNum.orEmpty()
+        } else {
+            feed?.replyNum.orEmpty()
+        }
     val shareUrl: String get() = Protocol.shareLink("feed", id)
     val reportUrl: String get() = Protocol.reportLink(id)
 
@@ -293,6 +308,7 @@ class FeedDetailViewModel(
 
     private fun applyFeed(data: Entity) {
         feed = data
+        data.vote?.let { VoteActions.rememberVote(data.id, it) }
         val blocks = runCatching {
             FeedArticle.parse(data.string("message_raw_output"))
         }.getOrDefault(emptyList()).toMutableList()
@@ -355,6 +371,74 @@ class FeedDetailViewModel(
                 throw e
             } catch (e: Exception) {
                 notice = ApiFailure.from(e).message
+            }
+        }
+    }
+
+    fun submitVote(optionIds: Set<String>, anonymous: Boolean) {
+        if (submittingVote) return
+        val currentFeed = feed ?: return
+        val vote = currentFeed.vote ?: return
+        val voteId = vote.id.takeIf { it.isNotEmpty() } ?: return
+        val now = System.currentTimeMillis() / 1_000
+        if (vote.isVoteUpcoming(now) || vote.isVoteClosed(now) || vote.voteSelectedIds().isNotEmpty()) return
+        val limits = vote.voteSelectionRange()
+        val orderedOptionIds = vote.voteOptions().map { it.id }.filter(optionIds::contains)
+        if (orderedOptionIds.size !in limits) {
+            voteError = if (limits.first == limits.last) {
+                "请选择 ${limits.last} 项"
+            } else {
+                "请选择 ${limits.first}–${limits.last} 项"
+            }
+            return
+        }
+
+        submittingVote = true
+        voteError = null
+        viewModelScope.launch {
+            try {
+                val result = repository.createUserVote(
+                    voteId = voteId,
+                    feedId = id,
+                    optionIds = orderedOptionIds,
+                    anonymous = anonymous,
+                )
+                if (result.message.isNotEmpty()) {
+                    voteError = result.message
+                    notice = result.message
+                    return@launch
+                }
+                val baseJson = (result.data as? JsonObject) ?: vote.json
+                val mergedVoteJson = baseJson.toMutableMap().apply {
+                    if ((this["user_selected_option"] as? JsonPrimitive)?.content.isNullOrEmpty()) {
+                        put("user_selected_option", JsonPrimitive(orderedOptionIds.joinToString(",")))
+                    }
+                    if ((this["user_anonymous_status"] as? JsonPrimitive)?.content.isNullOrEmpty()) {
+                        put("user_anonymous_status", JsonPrimitive(if (anonymous) "1" else "0"))
+                    }
+                }
+                val confirmedVote = Entity(JsonObject(mergedVoteJson))
+                VoteActions.rememberVote(currentFeed.id, confirmedVote)
+                feed = Entity(JsonObject(currentFeed.json + ("vote" to confirmedVote.json)))
+                notice = "投票成功"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val message = ApiFailure.from(e).message
+                voteError = message
+                notice = message
+            } finally {
+                submittingVote = false
+            }
+        }
+    }
+
+    fun onVoteCommentPosted() {
+        refreshReplies()
+        viewModelScope.launch {
+            runCatching { repository.feedDetail(id, verify = false) }.onSuccess { detail ->
+                applyFeed(detail.feed)
+                isPublic = detail.isPublic
             }
         }
     }
@@ -427,23 +511,34 @@ class FeedDetailViewModel(
                 var attempts = 0
                 var raw: List<Entity> = emptyList()
                 var rows: List<Entity> = emptyList()
+                val isVote = feed?.isVoteFeed == true
                 while (true) {
-                    raw = repository.feedReply(
-                        id = id,
-                        listType = listType,
-                        page = fetchPage,
-                        firstItem = fetchFirst,
-                        lastItem = fetchLast,
-                        discussMode = 1,
-                        feedType = "feed",
-                        blockStatus = 0,
-                        fromFeedAuthor = fromFeedAuthor,
-                    )
+                    raw = if (isVote) {
+                        repository.voteComments(
+                            fid = id,
+                            page = fetchPage,
+                            firstItem = fetchFirst,
+                            lastItem = fetchLast,
+                        )
+                    } else {
+                        repository.feedReply(
+                            id = id,
+                            listType = listType,
+                            page = fetchPage,
+                            firstItem = fetchFirst,
+                            lastItem = fetchLast,
+                            discussMode = 1,
+                            feedType = "feed",
+                            blockStatus = 0,
+                            fromFeedAuthor = fromFeedAuthor,
+                        )
+                    }
                     attempts++
                     if (raw.isEmpty()) break
                     fetchFirst = fetchFirst ?: raw.first().id
                     fetchLast = raw.last().id
-                    rows = raw.filter { gate.isVisible(it, FilterScope.Comment) }
+                    val scope = if (isVote) FilterScope.Feed else FilterScope.Comment
+                    rows = raw.filter { gate.isVisible(it, scope) }
                     if (rows.isNotEmpty() || attempts >= FilteredReplyRequests) break
                     fetchPage++
                 }
@@ -514,7 +609,7 @@ class FeedDetailViewModel(
     }
 
     private fun decorate(rows: List<Entity>, requestPage: Int): List<Entity> {
-        val injected = if (requestPage == 1 && listType == "lastupdate_desc") {
+        val injected = if (feed?.isVoteFeed != true && requestPage == 1 && listType == "lastupdate_desc") {
             listOfNotNull(anchor, topReply, replyMe)
         } else {
             emptyList()

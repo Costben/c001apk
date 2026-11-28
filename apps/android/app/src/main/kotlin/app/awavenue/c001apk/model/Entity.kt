@@ -100,6 +100,9 @@ class Entity(val json: JsonObject) {
     val dyhId get() = string("dyhId")
     val collectionInfo get() = obj("collectionInfo")
     val status get() = string("status")
+    val feedType get() = string("feedType")
+    val vote get() = obj("vote")
+    val isVoteFeed get() = feedType == "vote" || vote != null
 
     /**
      * The official visibility of a feed: `"1"` means only the author can see it, `"0"` is public.

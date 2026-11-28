@@ -268,6 +268,32 @@ class CoolapkRepository(
     suspend fun collectionItems(id: String, page: Int, firstItem: String?, lastItem: String?): List<Entity> =
         listFromUrl("/v6/collection/itemList", pageParams(page, firstItem, lastItem) + ("id" to id))
 
+    suspend fun voteComments(fid: String, page: Int, firstItem: String?, lastItem: String?): List<Entity> = parse(
+        api.get(
+            Api.VOTE_COMMENT_LIST,
+            pageParams(page, firstItem, lastItem) + ("fid" to fid),
+        ),
+    )
+
+    suspend fun createUserVote(
+        voteId: String,
+        feedId: String,
+        optionIds: List<String>,
+        anonymous: Boolean,
+    ): ActionResult {
+        val fields = buildList {
+            add("id" to voteId)
+            optionIds.forEachIndexed { index, optionId ->
+                add("select_option[$index]" to optionId)
+            }
+            add("anonymous_status" to if (anonymous) "1" else "0")
+        }
+        val response = api.post(Api.VOTE_CREATE_USER_VOTE, body = Body.Form(fields))
+        val result = actionResult(readActionObject(response))
+        if (feedId.isNotEmpty()) synchronized(detailCacheLock) { detailCache.remove(feedId) }
+        return result
+    }
+
     /**
      * The account's cloud browse history. Read-only: the client never uploads the local list, so
      * this answers what the signed-in account browsed on any device.

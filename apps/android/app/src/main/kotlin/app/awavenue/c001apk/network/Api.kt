@@ -30,6 +30,8 @@ object Api {
     const val FEED_CANCEL_REPLY_TOP = "$API/v6/feed/cancelReplyTopFromFeed"
     const val FEED_FOLLOW_TAG = "$API/v6/feed/followTag"
     const val FEED_UNFOLLOW_TAG = "$API/v6/feed/unFollowTag"
+    const val VOTE_CREATE_USER_VOTE = "$API/v6/vote/createUserVote"
+    const val VOTE_COMMENT_LIST = "$API/v6/vote/commentList"
 
     const val USER_SPACE = "$API/v6/user/space"
     const val USER_FEED = "$API/v6/user/feedList"

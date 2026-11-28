@@ -1,14 +1,20 @@
 package app.awavenue.c001apk.ui.feed.detail
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -19,7 +25,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,37 +41,159 @@ import app.awavenue.c001apk.data.Protocol
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.network.ApiFailure
 import app.awavenue.c001apk.ui.LocalApp
+import app.awavenue.c001apk.ui.common.TopBarIconButton
 import app.awavenue.c001apk.ui.common.glassSource
 import app.awavenue.c001apk.ui.common.rememberGlassBackdrop
+import app.awavenue.c001apk.ui.common.rememberHapticClick
+import app.awavenue.c001apk.ui.common.rememberSquircleShape
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.ReplyCard
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
 import app.awavenue.c001apk.ui.nav.LocalNavigator
 import app.awavenue.c001apk.ui.nav.Route
 import app.awavenue.c001apk.ui.nav.rememberPageListState
 import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
-import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.EmptyState
+import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
-import app.awavenue.c001apk.ui.common.TopBarIconButton
 import io.github.suqi8.coui.kmp.basic.InfiniteProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Scaffold
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
+import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
 import io.github.suqi8.coui.kmp.blur.LocalBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.ChevronBackward
+import io.github.suqi8.coui.kmp.icon.extended.Close
+import io.github.suqi8.coui.kmp.layout.SheetActionButton
+import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.overScrollVertical
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * Modal bottom-sheet view of a reply thread so readers inspect high-floor nested replies without
+ * leaving the current feed context.
+ */
+@Composable
+fun Reply2ReplySheet(
+    id: String,
+    replyId: String = "",
+    originUid: String = "",
+    origin: Entity? = null,
+    onDismiss: () -> Unit,
+) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val viewModel = viewModel(key = "reply2reply-sheet-$id") {
+        Reply2ReplyViewModel(id, origin, app.repository, app.blacklist)
+    }
+    val listState = rememberLazyListState()
+    var replyTarget by remember { mutableStateOf<ReplyTarget?>(null) }
+
+    LaunchedEffect(viewModel.notice) {
+        viewModel.notice?.let {
+            context.toast(it)
+            viewModel.notice = null
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            layout.totalItemsCount > 0 && last >= layout.totalItemsCount - 3
+        }.distinctUntilChanged().filter { it }.collect { viewModel.loadMore() }
+    }
+
+    OverlayBottomSheet(
+        show = true,
+        title = "共 ${origin?.replyNum?.takeIf { it.isNotEmpty() } ?: viewModel.replies.size} 回复",
+        showDragHandle = true,
+        insideMargin = DpSize(0.dp, 0.dp),
+        endAction = {
+            SheetActionButton(onClick = onDismiss) {
+                Icon(COUIIcons.Close, contentDescription = "关闭")
+            }
+        },
+        onDismissRequest = onDismiss,
+    ) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.84f)) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Reply2ReplyContent(
+                    viewModel = viewModel,
+                    replyId = replyId,
+                    originUid = originUid,
+                    origin = origin,
+                    listState = listState,
+                    contentPadding = PaddingValues(bottom = 12.dp),
+                    onReply = { rid, username ->
+                        replyTarget = ReplyTarget(
+                            id = rid,
+                            type = "reply",
+                            title = username,
+                            feedType = "feed",
+                        )
+                    },
+                )
+            }
+            if (app.session.isLogin) {
+                val quickTargetId = origin?.id?.ifEmpty { id } ?: id
+                val quickTargetName = origin?.username.orEmpty().ifEmpty { "评论" }
+                HorizontalDivider()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(rememberSquircleShape(20.dp))
+                            .background(COUITheme.colorScheme.secondaryContainer)
+                            .clickable(
+                                onClick = rememberHapticClick {
+                                    replyTarget = ReplyTarget(
+                                        id = quickTargetId,
+                                        type = "reply",
+                                        title = quickTargetName,
+                                        feedType = "feed",
+                                    )
+                                },
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            "回复 $quickTargetName…",
+                            style = COUITheme.textStyles.body2,
+                            color = COUITheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    replyTarget?.let { target ->
+        ReplyComposerSheet(
+            target = target,
+            onDismiss = { replyTarget = null },
+            onPosted = {
+                replyTarget = null
+                viewModel.load()
+            },
+        )
+    }
+}
 
 /**
  * The answers to one reply. [id] is the reply being listed and [replyId] the feed it belongs to.
@@ -118,91 +250,26 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
     ) { innerPadding ->
         CompositionLocalProvider(LocalBackdrop provides backdrop) {
             Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-                when (val status = viewModel.status) {
-                    ListStatus.Loading -> Box(
-                        Modifier.fillMaxSize().padding(innerPadding),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        InfiniteProgressIndicator()
-                    }
-
-                    ListStatus.Empty -> Box(
-                        Modifier.fillMaxSize().padding(innerPadding),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        EmptyState(
-                            title = "暂无内容",
-                            actionText = "刷新",
-                            onActionClick = { viewModel.load() },
+                Reply2ReplyContent(
+                    viewModel = viewModel,
+                    replyId = replyId,
+                    originUid = originUid,
+                    origin = origin,
+                    listState = listState,
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                    ),
+                    nestedScrollConnection = scrollBehavior.nestedScrollConnection,
+                    onReply = { rid, username ->
+                        replyTarget = ReplyTarget(
+                            id = rid,
+                            type = "reply",
+                            title = username,
+                            feedType = "feed",
                         )
-                    }
-
-                    is ListStatus.Error -> Box(
-                        Modifier.fillMaxSize().padding(innerPadding),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        EmptyState(
-                            title = status.message,
-                            actionText = "重试",
-                            onActionClick = { viewModel.load() },
-                        )
-                    }
-
-                    ListStatus.Content -> LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .overScrollVertical()
-                            .nestedScroll(scrollBehavior.nestedScrollConnection),
-                        contentPadding = PaddingValues(
-                            top = innerPadding.calculateTopPadding(),
-                            bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                        ),
-                    ) {
-                        itemsIndexed(
-                            viewModel.replies,
-                            key = { index, reply ->
-                                reply.entityId.takeIf { it.isNotEmpty() }?.let { "r:$it" } ?: "reply2reply-$index"
-                            },
-                            contentType = { _, _ -> "reply" },
-                        ) { index, reply ->
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 5.dp),
-                            ) {
-                                ReplyCard(
-                                    reply = reply,
-                                    onOpenFeed = {
-                                        navigator.push(
-                                            Route.Web(reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$replyId" }),
-                                        )
-                                    },
-                                    isReply2Reply = true,
-                                    isTopReply = origin != null && index == 0,
-                                    uid = originUid.ifEmpty { null },
-                                    onBlock = viewModel::onBlock,
-                                    onDelete = viewModel::onDelete,
-                                    onLike = viewModel::onLike,
-                                    onReply = { rid, username, _ ->
-                                        replyTarget = ReplyTarget(
-                                            id = rid,
-                                            type = "reply",
-                                            title = username,
-                                            feedType = "feed",
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                        item(contentType = "footer") {
-                            // A short list never leaves "near the end", so the scroll trigger alone
-                            // would leave this footer spinning; reaching it asks for the next page.
-                            LaunchedEffect(viewModel.replies) { viewModel.loadMore() }
-                            Reply2ReplyFooter(viewModel.footer, viewModel::retryFooter)
-                        }
-                    }
-                }
+                    },
+                )
             }
         }
     }
@@ -216,6 +283,95 @@ fun Reply2ReplyScreen(id: String, replyId: String, originUid: String = "", origi
                 viewModel.load()
             },
         )
+    }
+}
+
+@Composable
+private fun Reply2ReplyContent(
+    viewModel: Reply2ReplyViewModel,
+    replyId: String,
+    originUid: String,
+    origin: Entity?,
+    listState: LazyListState,
+    contentPadding: PaddingValues,
+    nestedScrollConnection: NestedScrollConnection? = null,
+    onReply: (replyId: String, username: String) -> Unit,
+) {
+    val navigator = LocalNavigator.current
+    when (val status = viewModel.status) {
+        ListStatus.Loading -> Box(
+            Modifier.fillMaxSize().padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            InfiniteProgressIndicator()
+        }
+
+        ListStatus.Empty -> Box(
+            Modifier.fillMaxSize().padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmptyState(
+                title = "暂无内容",
+                actionText = "刷新",
+                onActionClick = { viewModel.load() },
+            )
+        }
+
+        is ListStatus.Error -> Box(
+            Modifier.fillMaxSize().padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmptyState(
+                title = status.message,
+                actionText = "重试",
+                onActionClick = { viewModel.load() },
+            )
+        }
+
+        ListStatus.Content -> LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .overScrollVertical()
+                .then(if (nestedScrollConnection != null) Modifier.nestedScroll(nestedScrollConnection) else Modifier),
+            contentPadding = contentPadding,
+        ) {
+            itemsIndexed(
+                viewModel.replies,
+                key = { index, reply ->
+                    reply.entityId.takeIf { it.isNotEmpty() }?.let { "r:$it" } ?: "reply2reply-$index"
+                },
+                contentType = { _, _ -> "reply" },
+            ) { index, reply ->
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 5.dp),
+                ) {
+                    ReplyCard(
+                        reply = reply,
+                        onOpenFeed = {
+                            navigator.push(
+                                Route.Web(reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$replyId" }),
+                            )
+                        },
+                        isReply2Reply = true,
+                        isTopReply = origin != null && index == 0,
+                        uid = originUid.ifEmpty { null },
+                        onBlock = viewModel::onBlock,
+                        onDelete = viewModel::onDelete,
+                        onLike = viewModel::onLike,
+                        onReply = { rid, username, _ -> onReply(rid, username) },
+                    )
+                }
+            }
+            item(contentType = "footer") {
+                // A short list never leaves "near the end", so the scroll trigger alone
+                // would leave this footer spinning; reaching it asks for the next page.
+                LaunchedEffect(viewModel.replies) { viewModel.loadMore() }
+                Reply2ReplyFooter(viewModel.footer, viewModel::retryFooter)
+            }
+        }
     }
 }
 

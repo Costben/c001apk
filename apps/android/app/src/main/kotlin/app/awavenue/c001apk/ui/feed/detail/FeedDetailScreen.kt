@@ -69,10 +69,14 @@ import app.awavenue.c001apk.ui.common.shareText
 import app.awavenue.c001apk.ui.common.toast
 import app.awavenue.c001apk.ui.feed.AccountCollectionsSheet
 import app.awavenue.c001apk.ui.feed.FeedActions
+import app.awavenue.c001apk.ui.feed.FeedCard
+import app.awavenue.c001apk.ui.feed.FeedVoteContent
 import app.awavenue.c001apk.ui.feed.FooterStatus
 import app.awavenue.c001apk.ui.feed.ImageGrid
 import app.awavenue.c001apk.ui.feed.ListStatus
 import app.awavenue.c001apk.ui.feed.ReplyCard
+import app.awavenue.c001apk.ui.feed.VoteActions
+import app.awavenue.c001apk.ui.feed.voteSelectedIds
 import app.awavenue.c001apk.ui.feed.reply.EditFeedInput
 import app.awavenue.c001apk.ui.feed.reply.ReplyComposerSheet
 import app.awavenue.c001apk.ui.feed.reply.ReplyTarget
@@ -84,6 +88,7 @@ import app.awavenue.c001apk.ui.nav.rememberPageScrollBehavior
 import app.awavenue.c001apk.ui.text.FeedText
 import app.awavenue.c001apk.ui.text.HtmlText
 import app.awavenue.c001apk.ui.text.HtmlTextDefaults
+import app.awavenue.c001apk.ui.theme.CappedChromeFontDensity
 import io.github.suqi8.coui.kmp.basic.BindScrollToTop
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.EmptyState
@@ -132,6 +137,7 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
     val listState = rememberPageListState("feed-detail")
     BindScrollToTop(listState)
     val scope = rememberCoroutineScope()
+    var replySheetTarget by remember { mutableStateOf<Route.Reply2Reply?>(null) }
 
     var menuOpen by remember { mutableStateOf(false) }
     var collectionsOpen by remember { mutableStateOf(false) }
@@ -335,7 +341,27 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                 visible = viewModel.feed != null && fabVisible,
                 backdrop = backdrop,
                 onClick = {
-                    if (app.session.isLogin) {
+                    val currentFeed = viewModel.feed
+                    val vote = currentFeed?.let { VoteActions.voteFor(it) ?: it.vote }
+                    if (!app.session.isLogin) {
+                        context.toast("请先登录后回复")
+                    } else if (
+                        currentFeed?.isVoteFeed == true &&
+                        vote != null &&
+                        vote.voteSelectedIds().isNotEmpty() &&
+                        vote.int("user_vote_comment_status") != 1
+                    ) {
+                        replyTarget = ReplyTarget(
+                            id = "",
+                            type = "voteComment",
+                            targetType = "",
+                            targetId = "",
+                            title = "发表投票观点",
+                            feedType = "voteComment",
+                            fid = currentFeed.id,
+                            isAnonymous = vote.int("user_anonymous_status") == 1,
+                        )
+                    } else {
                         replyTarget = ReplyTarget(
                             id = viewModel.id,
                             type = "feed",
@@ -344,8 +370,6 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                             title = viewModel.feedUsername,
                             feedType = "feed",
                         )
-                    } else {
-                        context.toast("请先登录后回复")
                     }
                 },
                 onLongClick = {
@@ -445,63 +469,70 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
                                             key = { index, reply ->
                                                 reply.entityId.takeIf { it.isNotEmpty() }?.let { "r:$it" } ?: "reply-$index"
                                             },
-                                            contentType = { _, _ -> "reply" },
+                                            contentType = { _, item ->
+                                                if (item.entityType == "feed") "feed-comment" else "reply"
+                                            },
                                         ) { _, reply ->
-                                            val highlight = remember { Animatable(0f) }
-                                            if (reply.id == viewModel.highlightReplyId) {
-                                                LaunchedEffect(Unit) {
-                                                    highlight.snapTo(1f)
-                                                    delay(1200)
-                                                    highlight.animateTo(0f, tween(600))
-                                                    viewModel.onAnchorHighlighted()
-                                                }
-                                            }
-                                            val highlightColor = COUITheme.colorScheme.primary
-                                            Column(
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .drawBehind {
-                                                        drawRect(highlightColor.copy(alpha = 0.12f * highlight.value))
+                                            if (reply.entityType == "feed") {
+                                                FeedCard(
+                                                    feed = reply,
+                                                    modifier = Modifier.padding(horizontal = CardPadding),
+                                                )
+                                            } else {
+                                                val highlight = remember { Animatable(0f) }
+                                                if (reply.id == viewModel.highlightReplyId) {
+                                                    LaunchedEffect(Unit) {
+                                                        highlight.snapTo(1f)
+                                                        delay(1200)
+                                                        highlight.animateTo(0f, tween(600))
+                                                        viewModel.onAnchorHighlighted()
                                                     }
-                                                    .padding(vertical = 5.dp),
-                                            ) {
-                                                ReplyCard(
-                                                    reply = reply,
-                                                    onOpenFeed = {
-                                                        val url = reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$id" }
-                                                        navigator.push(Route.Web(url))
-                                                    },
-                                                    isTopReply = reply.id == viewModel.pinnedReplyId,
-                                                    canPin = viewModel.feedUid.isNotEmpty() &&
-                                                        viewModel.feedUid == app.session.uid,
-                                                    onTogglePin = {
-                                                        val pinned = viewModel.pinnedReplyId == reply.id
-                                                        viewModel.onTogglePinReply(reply.id, !pinned)
-                                                    },
-                                                    onBlock = viewModel::onBlockReply,
-                                                    onReply = { replyId, username, _ ->
-                                                        replyTarget = ReplyTarget(
-                                                            id = replyId,
-                                                            type = "reply",
-                                                            title = username,
-                                                            feedType = "feed",
-                                                        )
-                                                    },
-                                                    onDelete = viewModel::onDeleteReply,
-                                                    onLike = { replyId, liked ->
-                                                        viewModel.onLike(replyId, liked, isFeed = false)
-                                                    },
-                                                    onShowReplies = {
-                                                        navigator.push(
-                                                            Route.Reply2Reply(
+                                                }
+                                                val highlightColor = COUITheme.colorScheme.primary
+                                                Column(
+                                                    Modifier
+                                                        .fillMaxWidth()
+                                                        .drawBehind {
+                                                            drawRect(highlightColor.copy(alpha = 0.12f * highlight.value))
+                                                        }
+                                                        .padding(vertical = 5.dp),
+                                                ) {
+                                                    ReplyCard(
+                                                        reply = reply,
+                                                        onOpenFeed = {
+                                                            val url = reply.url.ifEmpty { "${Protocol.URL_COOLAPK}/feed/$id" }
+                                                            navigator.push(Route.Web(url))
+                                                        },
+                                                        isTopReply = reply.id == viewModel.pinnedReplyId,
+                                                        canPin = viewModel.feedUid.isNotEmpty() &&
+                                                            viewModel.feedUid == app.session.uid,
+                                                        onTogglePin = {
+                                                            val pinned = viewModel.pinnedReplyId == reply.id
+                                                            viewModel.onTogglePinReply(reply.id, !pinned)
+                                                        },
+                                                        onBlock = viewModel::onBlockReply,
+                                                        onReply = { replyId, username, _ ->
+                                                            replyTarget = ReplyTarget(
+                                                                id = replyId,
+                                                                type = "reply",
+                                                                title = username,
+                                                                feedType = "feed",
+                                                            )
+                                                        },
+                                                        onDelete = viewModel::onDeleteReply,
+                                                        onLike = { replyId, liked ->
+                                                            viewModel.onLike(replyId, liked, isFeed = false)
+                                                        },
+                                                        onShowReplies = {
+                                                            replySheetTarget = Route.Reply2Reply(
                                                                 id = it.id,
                                                                 replyId = viewModel.id,
                                                                 originUid = it.uid,
                                                                 origin = it,
-                                                            ),
-                                                        )
-                                                    },
-                                                )
+                                                            )
+                                                        },
+                                                    )
+                                                }
                                             }
                                         }
                                         item(contentType = "footer") {
@@ -550,8 +581,13 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
             target = target,
             onDismiss = { replyTarget = null },
             onPosted = {
+                val isVoteComment = target.feedType == "voteComment"
                 replyTarget = null
-                viewModel.refreshReplies()
+                if (isVoteComment) {
+                    viewModel.onVoteCommentPosted()
+                } else {
+                    viewModel.refreshReplies()
+                }
             },
         )
     }
@@ -563,6 +599,16 @@ fun FeedDetailScreen(id: String, preview: Entity? = null, replyId: String = "") 
             onDismiss = { editingFeed = null },
             onEdited = { updated -> viewModel.onFeedEdited(updated) },
             onPosted = { editingFeed = null },
+        )
+    }
+
+    replySheetTarget?.let { sheet ->
+        Reply2ReplySheet(
+            id = sheet.id,
+            replyId = sheet.replyId,
+            originUid = sheet.originUid,
+            origin = sheet.origin,
+            onDismiss = { replySheetTarget = null },
         )
     }
 
@@ -583,9 +629,34 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(
     viewModel: FeedDetailViewModel,
     forcePlain: Boolean,
 ) {
+    val vote = VoteActions.voteFor(feed) ?: feed.vote
+    val voteContent: (@Composable () -> Unit)? = if (feed.isVoteFeed) {
+        {
+            val app = LocalApp.current
+            val voteTitle = vote?.string("message_title")?.takeIf {
+                it.isNotEmpty() && it != feed.messageTitle && it != feed.title
+            }
+            FeedVoteContent(
+                vote = vote,
+                title = voteTitle,
+                canVote = app.session.isLogin,
+                submitting = viewModel.submittingVote,
+                refreshing = viewModel.isRefreshing,
+                error = viewModel.voteError,
+                onSubmit = viewModel::submitVote,
+            )
+        }
+    } else {
+        null
+    }
     if (viewModel.articles.isEmpty()) {
         item(contentType = "feed") {
-            FeedDetailBody(feed, Modifier.padding(horizontal = CardPadding), forcePlain = forcePlain)
+            FeedDetailBody(
+                feed = feed,
+                modifier = Modifier.padding(horizontal = CardPadding),
+                forcePlain = forcePlain,
+                voteContent = voteContent,
+            )
         }
         return
     }
@@ -599,6 +670,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(
     }
     item(contentType = "feed-footer") {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            voteContent?.invoke()
             FeedCounters(
                 feed,
                 onLike = { viewModel.onLike(feed.id, feed.isLiked, isFeed = true) },
@@ -610,6 +682,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.feedBody(
 
 @Composable
 private fun ReplyHeader(viewModel: FeedDetailViewModel) {
+    val isVoteFeed = viewModel.feed?.isVoteFeed == true
     Column(
         Modifier
             .fillMaxWidth()
@@ -620,31 +693,40 @@ private fun ReplyHeader(viewModel: FeedDetailViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "共 ${viewModel.replyCount} 回复",
+                if (isVoteFeed) "共 ${viewModel.replyCount} 条观点" else "共 ${viewModel.replyCount} 回复",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.width(10.dp))
-            // The same segmented capsule as the home bar, in the tiny style: three labels plus
-            // the reply count have to share one line, so the count is measured first and the
-            // capsule takes what is left.
-            TabRowWithContour(
-                tabs = ReplySortType.entries.map { it.label },
-                selectedTabIndex = viewModel.replySort.ordinal,
-                onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
-                colors = appTabRowColors(),
-                height = TabRowDefaults.TabRowWithContourTinyHeight,
-                cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
-                contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,
-                modifier = Modifier.weight(1f),
-            )
+            if (!isVoteFeed) {
+                Spacer(Modifier.width(10.dp))
+                // The same segmented capsule as the home bar, in the tiny style: three labels plus
+                // the reply count have to share one line, so the count is measured first and the
+                // capsule takes what is left.
+                CappedChromeFontDensity {
+                    TabRowWithContour(
+                        tabs = ReplySortType.entries.map { it.label },
+                        selectedTabIndex = viewModel.replySort.ordinal,
+                        onTabSelected = { viewModel.selectReplySort(ReplySortType.entries[it]) },
+                        colors = appTabRowColors(),
+                        height = TabRowDefaults.TabRowWithContourTinyHeight,
+                        cornerRadius = TabRowDefaults.TabRowWithContourTinyCornerRadius,
+                        contourPadding = TabRowDefaults.TabRowWithContourTinyPadding,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }
 
 /** The body of the detail page without its reply list, reused wherever a feed is shown in full. */
 @Composable
-fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier, forcePlain: Boolean = false) {
+fun FeedDetailBody(
+    feed: Entity,
+    modifier: Modifier = Modifier,
+    forcePlain: Boolean = false,
+    voteContent: (@Composable () -> Unit)? = null,
+) {
     val navigator = LocalNavigator.current
     // Upstream's feed content card copies its text on a long press but has no tap or ripple.
     Column(
@@ -701,7 +783,11 @@ fun FeedDetailBody(feed: Entity, modifier: Modifier = Modifier, forcePlain: Bool
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        if (voteContent != null) {
+            voteContent()
+        } else {
+            Spacer(Modifier.height(10.dp))
+        }
         FeedCounters(feed, onLike = null)
         SectionBadgeRow(feed, Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(10.dp))
@@ -779,7 +865,7 @@ private fun ForwardSource(source: Entity?) {
             Text("动态已被删除", color = COUITheme.colorScheme.onSurfaceVariantSummary, maxLines = 1)
             return@InsetBlock
         }
-        val author = "<a href=\"/u/${source.uid}\">@${source.username}</a>: "
+        val author = "<a href=\"/u/${source.uid}\">@${app.awavenue.c001apk.ui.text.escapeHtml(source.username)}</a>: "
         if (source.messageTitle.isNotEmpty()) {
             HtmlText(author + source.messageTitle, maxLines = 2)
             FeedText(source.message, preview = true, previewMaxLines = 6)

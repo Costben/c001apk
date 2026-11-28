@@ -24,10 +24,16 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.awavenue.c001apk.model.Entity
 import app.awavenue.c001apk.ui.common.NetworkImage
+import app.awavenue.c001apk.ui.common.imageSize
 import app.awavenue.c001apk.ui.common.rememberHapticClick
 import app.awavenue.c001apk.ui.common.rememberLinkOpener
 import app.awavenue.c001apk.ui.common.rememberSquircleShape
@@ -61,18 +68,9 @@ private val IconTileSize = 40.dp
 private val IconTileRadius = 12.dp
 private val appCardTypes = setOf("apk", "product", "topic")
 private const val ICON_GRID_COLUMNS = 5
-
-/**
- * The shortcut artwork ships with its own coloured margin: the white glyph covers only about half
- * the image, so it reads as a small logo floating in a large tile. Drawing the artwork larger than
- * the tile and letting the tile crop it enlarges the glyph without growing the 40dp footprint. It
- * also pushes the artwork's own rounded corners off screen — they used to leave a sliver of the
- * card's background showing in each corner.
- *
- * Kept deliberately small: the CDN only serves these icons at 96×96, which the tile already scales
- * up by 1.6× on a 40dp tile. Every extra percent of zoom is paid for in soft edges.
- */
-private const val ICON_TILE_ZOOM = 1.15f
+private const val DEFAULT_BANNER_ASPECT = 3f
+private const val MIN_BANNER_ASPECT = 1.5f
+private const val MAX_BANNER_ASPECT = 5.5f
 
 private const val INFINITE_LOOP_RESET_DELAY = 500L
 
@@ -124,7 +122,7 @@ fun EntityItem(
         item.entityType == "feed_reply" && item.likeUserInfo != null -> LikeCard(item, padded)
         item.entityType == "feed_reply" -> {
             val openLink = rememberLinkOpener()
-            val navigator = LocalNavigator.current
+            var replySheetOrigin by remember { mutableStateOf<Entity?>(null) }
             ReplyCard(
                 reply = item,
                 onOpenFeed = { openLink(item.url, "") },
@@ -132,10 +130,16 @@ fun EntityItem(
                 onBlock = onBlock,
                 onDelete = onDelete,
                 onLike = onLike,
-                onShowReplies = { origin ->
-                    navigator.push(Route.Reply2Reply(id = origin.id, originUid = origin.uid))
-                },
+                onShowReplies = { origin -> replySheetOrigin = origin },
             )
+            replySheetOrigin?.let { origin ->
+                app.awavenue.c001apk.ui.feed.detail.Reply2ReplySheet(
+                    id = origin.id,
+                    originUid = origin.uid,
+                    origin = origin,
+                    onDismiss = { replySheetOrigin = null },
+                )
+            }
         }
         item.entityType in UserRowTypes -> {
             val navigator = LocalNavigator.current
@@ -312,7 +316,7 @@ private fun CollectionRow(item: Entity, modifier: Modifier) {
 
 @Composable
 private fun CarouselCard(item: Entity, modifier: Modifier) {
-    val entries = item.entities.filter { it.pic.isNotEmpty() && !it.url.startsWith("http") }
+    val entries = item.entities.filter { it.pic.isNotEmpty() }
     if (entries.isEmpty()) return
     val openLink = rememberLinkOpener()
     val pages = if (entries.size == 1) entries else listOf(entries.last()) + entries + listOf(entries.first())
@@ -331,11 +335,29 @@ private fun CarouselCard(item: Entity, modifier: Modifier) {
             }
         }
     }
-    Box(modifier.fillMaxWidth().aspectRatio(3f).clip(rememberSquircleShape(17.dp))) {
+    val declaredAspect = remember(entries) {
+        val (w, h) = imageSize(entries.first().pic)
+        if (w == 1f && h == 1f) null else (w / h).takeIf { it.isFinite() && it > 0f }?.coerceIn(MIN_BANNER_ASPECT, MAX_BANNER_ASPECT)
+    }
+    var measuredAspect by remember(entries) { mutableStateOf<Float?>(null) }
+    val cardAspect = declaredAspect ?: measuredAspect ?: DEFAULT_BANNER_ASPECT
+    Box(modifier.fillMaxWidth().aspectRatio(cardAspect).clip(rememberSquircleShape(17.dp))) {
         HorizontalPager(state = pagerState) { page ->
             val entry = pages[page]
             Card(cornerRadius = 0.dp, onClick = rememberHapticClick { openLink(entry.url, entry.title) }) {
-                NetworkImage(entry.pic, Modifier.fillMaxWidth().aspectRatio(3f), contentDescription = entry.title)
+                NetworkImage(
+                    entry.pic,
+                    Modifier.fillMaxWidth().aspectRatio(cardAspect),
+                    contentDescription = entry.title,
+                    onSuccess = { state ->
+                        if (declaredAspect == null && measuredAspect == null) {
+                            val s = state.painter.intrinsicSize
+                            if (s.width.isFinite() && s.height.isFinite() && s.width > 0f && s.height > 0f) {
+                                measuredAspect = (s.width / s.height).coerceIn(MIN_BANNER_ASPECT, MAX_BANNER_ASPECT)
+                            }
+                        }
+                    },
+                )
             }
         }
         if (pages.size > 1) {
@@ -369,30 +391,29 @@ private fun IconGridCard(item: Entity, modifier: Modifier) {
                     Column(
                         Modifier.weight(1f)
                             .clip(tileShape)
-                            .padding(vertical = 6.dp),
+                            .clickable(onClick = rememberHapticClick { openLink(entry.url, entry.title) })
+                            .padding(vertical = 6.dp, horizontal = 2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Card(
-                            modifier = Modifier.size(IconTileSize),
-                            cornerRadius = IconTileRadius,
-                            onClick = rememberHapticClick { openLink(entry.url, entry.title) },
+                        Box(
+                            Modifier.size(IconTileSize).clip(tileShape),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Box(
-                                Modifier.fillMaxSize().clip(tileShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                NetworkImage(
-                                    entry.pic.ifEmpty { entry.logo },
-                                    Modifier.requiredSize(IconTileSize * ICON_TILE_ZOOM),
-                                    contentDescription = entry.title,
-                                )
-                            }
+                            NetworkImage(
+                                entry.pic.ifEmpty { entry.logo },
+                                Modifier.fillMaxSize(),
+                                contentDescription = entry.title,
+                                contentScale = ContentScale.Fit,
+                                placeholderColor = Color.Transparent,
+                                filterQuality = FilterQuality.High,
+                            )
                         }
                         Spacer(Modifier.size(6.dp))
                         Text(
                             entry.title,
                             style = COUITheme.textStyles.footnote1,
-                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -516,7 +537,7 @@ private fun IconScrollCard(item: Entity, modifier: Modifier) {
 }
 
 @Composable
-private fun MiniItem(entry: Entity, modifier: Modifier = Modifier) {
+private fun MiniItem(entry: Entity, modifier: Modifier = Modifier, maxLines: Int = 2) {
     val openLink = rememberLinkOpener()
     Row(
         modifier
@@ -527,7 +548,7 @@ private fun MiniItem(entry: Entity, modifier: Modifier = Modifier) {
     ) {
         NetworkImage(entry.logo.ifEmpty { entry.pic }, Modifier.size(18.dp).clip(rememberSquircleShape(4.dp)))
         Spacer(Modifier.width(6.dp))
-        Text(entry.title, style = COUITheme.textStyles.footnote1, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(entry.title, style = COUITheme.textStyles.footnote1, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -539,7 +560,7 @@ private fun MiniGridCard(item: Entity, modifier: Modifier) {
         if (item.title.isNotEmpty()) SmallTitle(item.title)
         entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth()) {
-                row.forEach { MiniItem(it, Modifier.weight(1f)) }
+                row.forEach { MiniItem(it, Modifier.weight(1f), maxLines = 2) }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
@@ -555,7 +576,7 @@ private fun MiniScrollCard(item: Entity, horizontalPadding: Dp = ItemPadding) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(entries) { entry ->
-            Card(cornerRadius = 8.dp) { MiniItem(entry) }
+            Card(cornerRadius = 8.dp) { MiniItem(entry, maxLines = 1) }
         }
     }
 }
